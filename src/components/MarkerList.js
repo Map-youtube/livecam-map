@@ -458,6 +458,10 @@ export default function MarkerList({ refreshSignal }) {
   // 재생 확인(verify) 진행 중인 마커 id + 실패 안내 배너 메시지
   const [verifyingId, setVerifyingId] = useState(null);
   const [verifyMessage, setVerifyMessage] = useState("");
+  // 링크 확인(oEmbed) 상태: 전체 진행 여부 / 개별 진행 중인 마커 id / 결과 안내 배너
+  const [checkingAll, setCheckingAll] = useState(false);
+  const [checkingRowId, setCheckingRowId] = useState(null);
+  const [checkMessage, setCheckMessage] = useState("");
 
   // ─── 목록 불러오기 (Firestore만 사용, 유튜브 API 호출 없음) ──
   const loadMarkers = useCallback(async () => {
@@ -581,6 +585,57 @@ export default function MarkerList({ refreshSignal }) {
       }
     },
     [verifyingId, loadMarkers]
+  );
+
+  // ─── 링크 확인(oEmbed) → 존재하지 않는 영상 자동 비활성화 ────
+  // markerIds 가 배열이면 그 마커들만, null 이면 전체(is_active!=false) 대상.
+  const handleCheckStatus = useCallback(
+    async (markerIds) => {
+      const isAll = !markerIds; // null → 전체
+      // 진행 중이면 무시
+      if (isAll ? checkingAll : checkingRowId) return;
+
+      if (isAll) setCheckingAll(true);
+      else setCheckingRowId(markerIds[0]);
+      setCheckMessage("");
+
+      try {
+        // 관리자 전용 API → 토큰 첨부
+        const token = await getAdminIdToken();
+        if (!token) {
+          window.alert("로그인이 만료되었습니다. 다시 로그인해주세요");
+          window.location.href = "/admin/login";
+          return;
+        }
+
+        const res = await fetch("/api/markers/check-status", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(markerIds ? { markerIds } : {}),
+        });
+        const data = await res.json();
+
+        if (res.ok && data.ok && typeof data.checked === "number") {
+          setCheckMessage(
+            `점검 완료: ${data.checked}개 확인, ${data.disabled}개 재생불가로 표시됨`
+          );
+          // 배지/상태 반영을 위해 목록 재조회
+          await loadMarkers();
+        } else {
+          setCheckMessage(data.error || "링크 확인에 실패했습니다.");
+        }
+      } catch (error) {
+        console.error("[MarkerList] 링크 확인 실패:", error); // TODO: 배포 전 제거
+        setCheckMessage("링크 확인 중 오류가 발생했습니다.");
+      } finally {
+        if (isAll) setCheckingAll(false);
+        else setCheckingRowId(null);
+      }
+    },
+    [checkingAll, checkingRowId, loadMarkers]
   );
 
   // ─── 드롭다운 옵션: 실제 데이터에 존재하는 대륙/국가만 추출 ───
@@ -735,6 +790,42 @@ export default function MarkerList({ refreshSignal }) {
         </div>
       </div>
 
+      {/* 전체 링크 확인 버튼 (oEmbed 무료 존재 확인) */}
+      <div className="mb-3 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => handleCheckStatus(null)}
+          disabled={checkingAll}
+          title="링크 확인 = 삭제/비공개 여부만 빠르게 확인 (무료, oEmbed)"
+          className={
+            "rounded-md px-3 py-1.5 text-sm font-medium text-white " +
+            (checkingAll
+              ? "cursor-not-allowed bg-gray-300"
+              : "bg-teal-600 hover:bg-teal-700")
+          }
+        >
+          {checkingAll ? "확인 중... (전체 영상 존재 여부 점검)" : "전체 링크 확인"}
+        </button>
+        <span className="text-xs text-gray-500">
+          삭제/비공개/지역제한 영상을 빠르게 찾아 재생불가로 표시합니다 (무료).
+        </span>
+      </div>
+
+      {/* 링크 확인 결과 안내 배너 */}
+      {checkMessage && (
+        <div className="mb-3 flex items-center justify-between rounded border border-teal-300 bg-teal-50 px-3 py-2 text-sm text-teal-800">
+          <span>ℹ️ {checkMessage}</span>
+          <button
+            type="button"
+            onClick={() => setCheckMessage("")}
+            className="ml-2 rounded px-1 text-teal-600 hover:bg-teal-100"
+            aria-label="안내 닫기"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* 재생 확인 실패 안내 배너 */}
       {verifyMessage && (
         <div className="mb-3 flex items-center justify-between rounded border border-orange-300 bg-orange-50 px-3 py-2 text-sm text-orange-800">
@@ -859,12 +950,29 @@ export default function MarkerList({ refreshSignal }) {
                         >
                           {badge.text}
                         </span>
+                        {/* 링크 확인: 삭제/비공개 여부만 빠르게 확인 (무료, oEmbed) */}
+                        <button
+                          type="button"
+                          onClick={() => handleCheckStatus([marker.id])}
+                          disabled={checkingRowId === marker.id || checkingAll}
+                          title="링크 확인 = 삭제/비공개 여부만 빠르게 확인 (무료)"
+                          className={
+                            "whitespace-nowrap rounded border px-2 py-0.5 text-xs " +
+                            (checkingRowId === marker.id || checkingAll
+                              ? "cursor-not-allowed border-gray-200 text-gray-400"
+                              : "border-teal-300 text-teal-700 hover:bg-teal-50")
+                          }
+                        >
+                          {checkingRowId === marker.id ? "확인 중..." : "링크 확인"}
+                        </button>
+                        {/* 재생 확인: videos.list 기반 상세 재확인 및 복원 (재생불가 마커만) */}
                         {(marker.auto_disabled === true ||
                           marker.is_active === false) && (
                           <button
                             type="button"
                             onClick={() => handleVerify(marker)}
                             disabled={verifyingId === marker.id}
+                            title="재생 확인 = 상세 정보 갱신 및 복원 시도 (videos.list)"
                             className={
                               "whitespace-nowrap rounded border px-2 py-0.5 text-xs " +
                               (verifyingId === marker.id

@@ -166,3 +166,48 @@ export async function getYoutubeInfo(videoId) {
     throw error;
   }
 }
+
+// ─── 영상 존재 여부 빠른 확인 (oEmbed, 무료) ──────────────────
+// 엑셀 매크로(location.xlsm) IsYouTubeVideoValid() 와 동일한 방식.
+//   https://www.youtube.com/oembed?url=...&format=json 에 GET 요청 →
+//   200 이면 재생 가능(존재), 그 외(404 등)면 재생 불가(삭제/비공개/지역제한).
+//
+// ⚠️ 이 방식은 YouTube Data API(videos.list) 와 완전히 다른 별도의 공개 프로토콜이다.
+//    API 키(YOUTUBE_API_KEY)가 필요 없고, Data API 월 유닛 한도와 무관하다. 완전 무료.
+// ⚠️ 한계: 이 방식은 "삭제/비공개/지역제한"만 정확히 감지한다.
+//    "라이브 방송은 끝났지만 영상 자체는 남아있는 경우"는 200 을 반환할 수 있어 감지하지 못할 수 있다.
+//
+// 반환:
+//   - 존재:        { exists: true, statusCode: 200 }
+//   - 존재 안 함:  { exists: false, statusCode: 실제코드 }
+//   - 예외(네트워크 등): { exists: false, statusCode: null, error: true } (throw 하지 않음)
+export async function checkVideoExists(videoId) {
+  try {
+    if (!videoId || typeof videoId !== "string") {
+      return { exists: false, statusCode: null, error: true };
+    }
+
+    // oEmbed 엔드포인트 구성 (API 키 불필요)
+    const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const oembedUrl =
+      "https://www.youtube.com/oembed?url=" +
+      encodeURIComponent(watchUrl) +
+      "&format=json";
+
+    const res = await fetch(oembedUrl, {
+      method: "GET",
+      // 실시간 상태 확인이므로 캐시하지 않는다.
+      cache: "no-store",
+    });
+
+    if (res.status === 200) {
+      return { exists: true, statusCode: 200 };
+    }
+    return { exists: false, statusCode: res.status };
+  } catch (error) {
+    // 네트워크 오류 등 → 안전하게 실패 처리(throw 안 함).
+    // 확인 실패를 곧바로 "존재 안 함"으로 단정하지 않도록 error 플래그를 함께 반환한다.
+    console.error("[youtubeUtils] checkVideoExists 에러:", error); // TODO: 배포 전 제거
+    return { exists: false, statusCode: null, error: true };
+  }
+}
