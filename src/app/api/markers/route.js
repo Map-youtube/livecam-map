@@ -39,6 +39,9 @@ export async function GET(request) {
     const country = searchParams.get("country");
     const city = searchParams.get("city");
     const isActiveParam = searchParams.get("is_active");
+    // all=true 이면 is_active 필터를 적용하지 않고 전체(비활성 포함)를 반환한다.
+    // 관리자 목록 화면에서 비활성/재생불가 마커까지 관리하기 위해 사용한다. (Firestore만 사용, 추가 비용 없음)
+    const includeAll = searchParams.get("all") === "true";
 
     // 기본 컬렉션 참조에서 쿼리 빌드 시작
     let query = adminDb.collection(COLLECTION);
@@ -57,9 +60,12 @@ export async function GET(request) {
     }
 
     // is_active 처리:
+    //   - all=true 이면 필터를 걸지 않고 전체 반환 (비활성/재생불가 포함, 관리자용)
     //   - 파라미터가 명시되면 그 값(true/false)으로 필터
     //   - 파라미터가 없으면 is_active !== false 인 것만 (기본적으로 활성 마커)
-    if (isActiveParam === "true" || isActiveParam === "false") {
+    if (includeAll) {
+      // 필터 없음 (전체 반환)
+    } else if (isActiveParam === "true" || isActiveParam === "false") {
       const boolValue = isActiveParam === "true";
       query = query.where("is_active", "==", boolValue);
     } else {

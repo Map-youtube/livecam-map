@@ -108,7 +108,7 @@ function extractVideoIdClient(url) {
   }
 }
 
-export default function MarkerForm() {
+export default function MarkerForm({ onRegistered }) {
   // ─── 유튜브 관련 상태 ────────────────────────────────────────
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [videoId, setVideoId] = useState(null);
@@ -305,6 +305,10 @@ export default function MarkerForm() {
         // 성공 → 폼 초기화 + 안내
         setSubmitMessage(data.message || "등록되었습니다.");
         resetForm();
+        // 상위(관리자 페이지)에 등록 완료를 알려 목록을 갱신하게 한다.
+        if (typeof onRegistered === "function") {
+          onRegistered();
+        }
       } else {
         // 서버가 돌려준 한국어 에러 메시지 표시
         setSubmitError(data.error || "등록에 실패했습니다. 입력값을 확인해 주세요.");
