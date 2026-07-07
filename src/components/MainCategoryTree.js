@@ -78,9 +78,21 @@ export default function MainCategoryTree({
   tags,
   onSelectLocation,
   onSelectTag,
+  selectedCity,
+  selectedTag,
 }) {
   const markerList = Array.isArray(markers) ? markers : [];
   const tagList = Array.isArray(tags) ? tags : [];
+
+  // 현재 선택된 도시인지 판별 (대륙+국가+도시까지 정확히 일치할 때만 강조)
+  function isCitySelected(continent, country, city) {
+    return (
+      selectedCity &&
+      selectedCity.continent === continent &&
+      selectedCity.country === country &&
+      selectedCity.city === city
+    );
+  }
 
   // ─── 대륙 → 국가 → 도시 트리 구성 (개수 포함) ────────────────
   const tree = useMemo(() => {
@@ -175,27 +187,40 @@ export default function MainCategoryTree({
                         >
                           {Object.keys(countryObj)
                             .sort((a, b) => a.localeCompare(b, "ko"))
-                            .map((city) => (
+                            .map((city) => {
                               // 도시는 말단 노드 → 자식 없이 클릭 시 해당 도시 선택
-                              <button
-                                key={city}
-                                type="button"
-                                onClick={() =>
-                                  typeof onSelectLocation === "function" &&
-                                  onSelectLocation({ continent, country, city })
-                                }
-                                style={{ paddingLeft: "24px" }}
-                                className="flex w-full items-center gap-1 py-0.5 text-left text-xs hover:bg-gray-100"
-                              >
-                                <span className="w-3 text-gray-300">·</span>
-                                <span className="truncate text-gray-700">
-                                  {city}
-                                </span>
-                                <span className="ml-auto pr-1 text-gray-400">
-                                  ({countryObj[city]})
-                                </span>
-                              </button>
-                            ))}
+                              // 현재 선택된 도시면 배경 강조
+                              const active = isCitySelected(
+                                continent,
+                                country,
+                                city
+                              );
+                              return (
+                                <button
+                                  key={city}
+                                  type="button"
+                                  onClick={() =>
+                                    typeof onSelectLocation === "function" &&
+                                    onSelectLocation({ continent, country, city })
+                                  }
+                                  style={{ paddingLeft: "24px" }}
+                                  className={
+                                    "flex w-full items-center gap-1 py-0.5 text-left text-xs hover:bg-gray-100 " +
+                                    (active
+                                      ? "bg-blue-100 font-semibold text-blue-800"
+                                      : "")
+                                  }
+                                >
+                                  <span className="w-3 text-gray-300">·</span>
+                                  <span className="truncate text-gray-700">
+                                    {city}
+                                  </span>
+                                  <span className="ml-auto pr-1 text-gray-400">
+                                    ({countryObj[city]})
+                                  </span>
+                                </button>
+                              );
+                            })}
                         </CollapsibleRow>
                       );
                     })}
@@ -213,19 +238,27 @@ export default function MainCategoryTree({
           <p className="px-1 text-xs text-gray-400">등록된 태그가 없습니다.</p>
         ) : (
           <div className="flex flex-col">
-            {tagList.map((tag) => (
+            {tagList.map((tag) => {
               // 각 태그는 자신의 고유 id 를 key 로, 자신의 name 을 콜백에 넘긴다.
-              <button
-                key={tag.id != null ? tag.id : tag.name}
-                type="button"
-                onClick={() =>
-                  typeof onSelectTag === "function" && onSelectTag(tag.name)
-                }
-                className="w-full px-2 py-0.5 text-left text-xs text-blue-700 hover:bg-gray-100"
-              >
-                #{tag.name}
-              </button>
-            ))}
+              const active = selectedTag === tag.name;
+              return (
+                <button
+                  key={tag.id != null ? tag.id : tag.name}
+                  type="button"
+                  onClick={() =>
+                    typeof onSelectTag === "function" && onSelectTag(tag.name)
+                  }
+                  className={
+                    "w-full px-2 py-0.5 text-left text-xs hover:bg-gray-100 " +
+                    (active
+                      ? "bg-blue-100 font-semibold text-blue-800"
+                      : "text-blue-700")
+                  }
+                >
+                  #{tag.name}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>

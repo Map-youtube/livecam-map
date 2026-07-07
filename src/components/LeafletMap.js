@@ -129,6 +129,44 @@ function ChangeView({ center, zoom }) {
   return null;
 }
 
+// ─── 컨테이너 크기 변경 감지 → invalidateSize (내부 헬퍼) ─────
+// 지도 컨테이너의 너비/높이가 바뀌면(예: 메인 화면에서 영상 패널이 열리고 닫혀
+// 지도 영역 너비가 90% ↔ 60% 로 변할 때) Leaflet 은 타일이 어긋나는 렌더링 버그가 있다.
+// ResizeObserver 로 컨테이너 크기 변경을 감지해 map.invalidateSize() 를 호출한다.
+// (관리자 폼 등 다른 화면에서도 안전하게 동작하는 일반 로직)
+function MapResizeHandler() {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map || typeof ResizeObserver === "undefined") return undefined;
+
+    let observer = null;
+    try {
+      const container = map.getContainer();
+      observer = new ResizeObserver(() => {
+        try {
+          map.invalidateSize();
+        } catch (innerError) {
+          console.error("[LeafletMap] invalidateSize 실패:", innerError); // TODO: 배포 전 제거
+        }
+      });
+      observer.observe(container);
+    } catch (error) {
+      console.error("[LeafletMap] ResizeObserver 설정 실패:", error); // TODO: 배포 전 제거
+    }
+
+    return () => {
+      try {
+        if (observer) observer.disconnect();
+      } catch (cleanupError) {
+        console.error("[LeafletMap] ResizeObserver 정리 실패:", cleanupError); // TODO: 배포 전 제거
+      }
+    };
+  }, [map]);
+
+  return null;
+}
+
 // ─── 마커 클러스터 레이어 (내부 헬퍼 컴포넌트, imperative) ─────
 // react-leaflet 의 <Marker> 대신, L.markerClusterGroup 을 map 인스턴스에 직접 추가한다.
 // markers 가 바뀔 때마다 기존 그룹을 제거(map.removeLayer)한 뒤 새로 그려 메모리 누수를 막는다.
@@ -237,6 +275,9 @@ export default function LeafletMap({
 
           {/* center/zoom 변경 시 지도 이동 */}
           <ChangeView center={center} zoom={zoom} />
+
+          {/* 컨테이너 크기 변경 시 invalidateSize */}
+          <MapResizeHandler />
 
           {/* onMapClick 이 있을 때만 클릭 이벤트 감지 */}
           {onMapClick ? <MapClickHandler onMapClick={onMapClick} /> : null}
