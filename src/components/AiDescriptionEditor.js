@@ -17,6 +17,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { useState } from "react";
+import { getAdminIdToken } from "@/lib/clientAuth";
 
 export default function AiDescriptionEditor({ marker, onSaved, onClose }) {
   // 기존 설명 안전하게 읽기 (description 이 없을 수도 있음)
@@ -47,9 +48,20 @@ export default function AiDescriptionEditor({ marker, onSaved, onClose }) {
     setSavedMsg("");
 
     try {
+      // 로그인 토큰 확보 (세션 없으면 로그인 페이지로 이동)
+      const token = await getAdminIdToken();
+      if (!token) {
+        window.alert("로그인이 만료되었습니다. 다시 로그인해주세요");
+        window.location.href = "/admin/login";
+        return;
+      }
+
       const res = await fetch(`/api/markers/${marker.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           description: { ko: ko, en: en },
           description_confirmed: true,

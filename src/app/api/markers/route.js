@@ -13,6 +13,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { extractVideoId, getYoutubeInfo } from "@/lib/youtubeUtils";
 import { getContinentByCountry } from "@/lib/continentUtils";
 import { generatePlaceDescription } from "@/lib/aiUtils";
+import { verifyAdminRequest } from "@/lib/authUtils";
 
 // firebase-admin(Node 전용) 사용 → Edge 런타임 금지, Node.js 런타임 명시
 export const runtime = "nodejs";
@@ -109,6 +110,16 @@ export async function GET(request) {
 // ─────────────────────────────────────────────────────────────
 export async function POST(request) {
   try {
+    // ─── 0) 로그인 관리자 검증 (맨 앞에서 차단) ────────────────
+    // 유효한 관리자 토큰이 아니면 이후 로직(유튜브 조회/AI 생성/저장)을 실행하지 않는다.
+    const authResult = await verifyAdminRequest(request);
+    if (!authResult.valid) {
+      return Response.json(
+        { ok: false, error: "로그인이 필요합니다" },
+        { status: 401 }
+      );
+    }
+
     // ─── 요청 body 파싱 ────────────────────────────────────────
     let body;
     try {

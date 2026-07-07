@@ -19,6 +19,7 @@
 import { useEffect, useMemo, useState } from "react";
 import LeafletMapWrapper from "@/components/LeafletMapWrapper";
 import { getContinentByCountry } from "@/lib/continentUtils";
+import { getAdminIdToken } from "@/lib/clientAuth";
 
 // ─── 국가 목록 (ISO 3166-1 alpha-2) ───────────────────────────
 // value = 국가코드(대문자), label = 한국어 국가명.
@@ -284,9 +285,20 @@ export default function MarkerForm({ onRegistered }) {
     setSubmitError("");
 
     try {
+      // 로그인 토큰 확보 (세션 없으면 로그인 페이지로 이동)
+      const token = await getAdminIdToken();
+      if (!token) {
+        window.alert("로그인이 만료되었습니다. 다시 로그인해주세요");
+        window.location.href = "/admin/login";
+        return;
+      }
+
       const res = await fetch("/api/markers", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           youtube_url: youtubeUrl.trim(),
           location: location.trim(),

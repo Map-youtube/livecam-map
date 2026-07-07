@@ -20,6 +20,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import LeafletMapWrapper from "@/components/LeafletMapWrapper";
 import AiDescriptionEditor from "@/components/AiDescriptionEditor";
 import { getContinentByCountry } from "@/lib/continentUtils";
+import { getAdminIdToken } from "@/lib/clientAuth";
 
 // ─── 국가 목록 (코드 → 한국어명) ──────────────────────────────
 const COUNTRIES = [
@@ -240,9 +241,20 @@ function EditModal({ marker, onClose, onSaved }) {
     setErrorMsg("");
 
     try {
+      // 로그인 토큰 확보 (세션 없으면 로그인 페이지로 이동)
+      const token = await getAdminIdToken();
+      if (!token) {
+        window.alert("로그인이 만료되었습니다. 다시 로그인해주세요");
+        window.location.href = "/admin/login";
+        return;
+      }
+
       const res = await fetch(`/api/markers/${marker.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           location: location.trim(),
           city: city.trim(),
@@ -498,7 +510,18 @@ export default function MarkerList({ refreshSignal }) {
       );
       if (!ok) return;
 
-      const res = await fetch(`/api/markers/${marker.id}`, { method: "DELETE" });
+      // 로그인 토큰 확보 (세션 없으면 로그인 페이지로 이동)
+      const token = await getAdminIdToken();
+      if (!token) {
+        window.alert("로그인이 만료되었습니다. 다시 로그인해주세요");
+        window.location.href = "/admin/login";
+        return;
+      }
+
+      const res = await fetch(`/api/markers/${marker.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const data = await res.json();
 
       if (res.ok && data.ok) {

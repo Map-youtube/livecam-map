@@ -16,6 +16,7 @@ import { adminDb } from "@/lib/firebaseAdmin";
 import { FieldValue } from "firebase-admin/firestore";
 import { extractVideoId, getYoutubeInfo } from "@/lib/youtubeUtils";
 import { getContinentByCountry } from "@/lib/continentUtils";
+import { verifyAdminRequest } from "@/lib/authUtils";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +28,15 @@ const COLLECTION = "markers";
 // ─────────────────────────────────────────────────────────────
 export async function PATCH(request, context) {
   try {
+    // ─── 0) 로그인 관리자 검증 (맨 앞에서 차단) ────────────────
+    const authResult = await verifyAdminRequest(request);
+    if (!authResult.valid) {
+      return Response.json(
+        { ok: false, error: "로그인이 필요합니다" },
+        { status: 401 }
+      );
+    }
+
     // Next.js 16 App Router: 동적 세그먼트 params 는 비동기이므로 await 한다.
     const { id } = await context.params;
     if (!id) {
@@ -212,6 +222,15 @@ export async function PATCH(request, context) {
 // ─────────────────────────────────────────────────────────────
 export async function DELETE(request, context) {
   try {
+    // ─── 0) 로그인 관리자 검증 (맨 앞에서 차단) ────────────────
+    const authResult = await verifyAdminRequest(request);
+    if (!authResult.valid) {
+      return Response.json(
+        { ok: false, error: "로그인이 필요합니다" },
+        { status: 401 }
+      );
+    }
+
     const { id } = await context.params;
     if (!id) {
       return Response.json(
