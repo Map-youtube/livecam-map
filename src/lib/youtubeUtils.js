@@ -85,7 +85,7 @@ export function getThumbnailUrl(videoId) {
 
 // ─── 영상 메타데이터 수집 (videos.list, 1유닛) ─────────────────
 // part=snippet 만 요청하여 1유닛만 소모한다.
-// 반환: { title, description, channelName, thumbnailUrl }
+// 반환: { title, description, channelName, thumbnailUrl, channelId, channelUrl }
 // 실패(키 없음/네트워크 오류/영상 없음) 시 에러를 throw 하여 호출부에서 처리하도록 한다.
 export async function getYoutubeInfo(videoId) {
   try {
@@ -144,11 +144,21 @@ export async function getYoutubeInfo(videoId) {
     // 설명은 첫 500자만 저장 (Firestore 문서 크기 절약 + 표시용)
     const description = (snippet.description || "").slice(0, 500);
 
+    // ─── 채널 정보 추출 ───────────────────────────────────────
+    // snippet 안에 이미 channelId 가 포함되어 있으므로 추가 API 호출/유닛 소모가 없다.
+    // channelId 로 채널 URL을 만들어, 나중에 재생불가 점검 시 채널로 바로 이동할 수 있게 한다.
+    const channelId = snippet.channelId || "";
+    const channelUrl = channelId
+      ? `https://www.youtube.com/channel/${channelId}`
+      : "";
+
     return {
       title: snippet.title || "",
       description,
       channelName: snippet.channelTitle || "",
       thumbnailUrl,
+      channelId,
+      channelUrl,
     };
   } catch (error) {
     // 호출부(API Route)에서 500 처리할 수 있도록 그대로 전파

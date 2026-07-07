@@ -222,6 +222,9 @@ export async function POST(request) {
       youtube_description: ytInfo.description,
       youtube_channel_name: ytInfo.channelName,
       youtube_thumbnail_url: ytInfo.thumbnailUrl,
+      // 채널 정보 (재생불가 점검 시 채널로 바로 이동하기 위해 저장)
+      youtube_channel_id: ytInfo.channelId,
+      youtube_channel_url: ytInfo.channelUrl,
 
       // 상태 기본값
       is_active: true, // 지도/목록 표시 여부 (기본 활성)
