@@ -86,6 +86,24 @@ const CONTINENT_LABELS = {
   middleeast: "중동",
 };
 
+// 대륙 표시 순서 (필터 드롭다운 정렬용)
+const CONTINENT_ORDER = [
+  "asia",
+  "europe",
+  "americas",
+  "africa",
+  "oceania",
+  "middleeast",
+];
+
+// ─── 상태 필터 옵션 (값 → 라벨) ───────────────────────────────
+// 값(key)은 getStatusKey 가 돌려주는 값과 일치해야 한다.
+const STATUS_OPTIONS = [
+  { value: "live", label: "🔴 LIVE" },
+  { value: "inactive", label: "⚫ 비활성" },
+  { value: "disabled", label: "⚫ 재생불가" },
+];
+
 // 지도 기본 중심 (좌표가 없을 때)
 const DEFAULT_CENTER = { lat: 35.68, lng: 139.76 };
 
@@ -135,6 +153,15 @@ function getStatusBadge(marker) {
     return { text: "⚫ 재생불가", className: "bg-orange-100 text-orange-700" };
   }
   return { text: "🔴 LIVE", className: "bg-red-100 text-red-700" };
+}
+
+// ─── 상태 필터용 키 계산 ───────────────────────────────────────
+// 배지(getStatusBadge)와 "동일한 우선순위 기준"으로 상태 키를 돌려준다.
+//   is_active===false → "inactive", auto_disabled===true → "disabled", 그 외 → "live"
+function getStatusKey(marker) {
+  if (marker.is_active === false) return "inactive";
+  if (marker.auto_disabled === true) return "disabled";
+  return "live";
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -428,6 +455,11 @@ export default function MarkerList({ refreshSignal }) {
   const [loadError, setLoadError] = useState("");
   const [editingMarker, setEditingMarker] = useState(null);
   const [filterText, setFilterText] = useState("");
+  // 드롭다운 필터 상태 ("all" 이면 해당 조건 미적용)
+  const [filterContinent, setFilterContinent] = useState("all");
+  const [filterCountry, setFilterCountry] = useState("all");
+  const [filterCategory, setFilterCategory] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
 
   // ─── 목록 불러오기 (Firestore만 사용, 유튜브 API 호출 없음) ──
   const loadMarkers = useCallback(async () => {
@@ -489,28 +521,102 @@ export default function MarkerList({ refreshSignal }) {
     loadMarkers();
   }, [loadMarkers]);
 
-  // ─── 검색 필터 (장소명/도시/국가) ────────────────────────────
+  // ─── 드롭다운 옵션: 실제 데이터에 존재하는 대륙/국가만 추출 ───
+  // (카테고리/상태는 고정 목록을 쓰므로 여기서 계산하지 않는다.)
+  const availableContinents = useMemo(() => {
+    const set = new Set();
+    for (const m of markers) {
+      if (m.continent) set.add(m.continent);
+    }
+    // 정해진 대륙 순서 우선, 목록에 없는 값은 뒤로
+    return Array.from(set).sort((a, b) => {
+      const ia = CONTINENT_ORDER.indexOf(a);
+      const ib = CONTINENT_ORDER.indexOf(b);
+      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+    });
+  }, [markers]);
+
+  const availableCountries = useMemo(() => {
+    const set = new Set();
+    for (const m of markers) {
+      if (m.country) set.add(m.country);
+    }
+    // 한국어 국가명 기준 정렬
+    return Array.from(set).sort((a, b) => {
+      const na = COUNTRY_NAME_BY_CODE[a] || a;
+      const nb = COUNTRY_NAME_BY_CODE[b] || b;
+      return na.localeCompare(nb, "ko");
+    });
+  }, [markers]);
+
+  // ─── 필터 적용 (텍스트 검색 + 4개 드롭다운, 모두 AND 조건) ───
+  // 이미 불러온 markers 배열만 걸러낸다 → 추가 API 호출/비용 없음.
   const filteredMarkers = useMemo(() => {
     const q = filterText.trim().toLowerCase();
-    if (!q) return markers;
+
     return markers.filter((m) => {
-      const loc = (m.location || "").toLowerCase();
-      const city = (m.city || "").toLowerCase();
-      const countryCode = (m.country || "").toLowerCase();
-      const countryName = (COUNTRY_NAME_BY_CODE[m.country] || "").toLowerCase();
-      return (
-        loc.includes(q) ||
-        city.includes(q) ||
-        countryCode.includes(q) ||
-        countryName.includes(q)
-      );
+      // 1) 텍스트 검색 (장소명/도시/국가코드/국가명) — 비어 있으면 통과
+      if (q) {
+        const loc = (m.location || "").toLowerCase();
+        const city = (m.city || "").toLowerCase();
+        const countryCode = (m.country || "").toLowerCase();
+        const countryName = (
+          COUNTRY_NAME_BY_CODE[m.country] || ""
+        ).toLowerCase();
+        const textMatch =
+          loc.includes(q) ||
+          city.includes(q) ||
+          countryCode.includes(q) ||
+          countryName.includes(q);
+        if (!textMatch) return false;
+      }
+
+      // 2) 대륙 필터 ("all" 이면 통과)
+      if (filterContinent !== "all" && m.continent !== filterContinent) {
+        return false;
+      }
+
+      // 3) 국가 필터
+      if (filterCountry !== "all" && m.country !== filterCountry) {
+        return false;
+      }
+
+      // 4) 카테고리 필터
+      if (filterCategory !== "all" && (m.category || "") !== filterCategory) {
+        return false;
+      }
+
+      // 5) 상태 필터 (배지와 동일 기준의 상태 키로 비교)
+      if (filterStatus !== "all" && getStatusKey(m) !== filterStatus) {
+        return false;
+      }
+
+      // 모든 조건 통과
+      return true;
     });
-  }, [markers, filterText]);
+  }, [
+    markers,
+    filterText,
+    filterContinent,
+    filterCountry,
+    filterCategory,
+    filterStatus,
+  ]);
+
+  // ─── 필터 초기화 (모두 "전체"로) ─────────────────────────────
+  function resetFilters() {
+    setFilterText("");
+    setFilterContinent("all");
+    setFilterCountry("all");
+    setFilterCategory("all");
+    setFilterStatus("all");
+  }
 
   return (
     <div>
-      {/* 검색창 */}
-      <div className="mb-3">
+      {/* 검색창 + 드롭다운 필터 */}
+      <div className="mb-3 space-y-2">
+        {/* 텍스트 검색 (기존 유지) */}
         <input
           type="text"
           value={filterText}
@@ -518,6 +624,74 @@ export default function MarkerList({ refreshSignal }) {
           placeholder="검색 (장소명 · 도시 · 국가)"
           className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
         />
+
+        {/* 드롭다운 필터 4종 + 초기화 버튼 */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* 대륙 필터 */}
+          <select
+            value={filterContinent}
+            onChange={(e) => setFilterContinent(e.target.value)}
+            className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+          >
+            <option value="all">대륙 전체</option>
+            {availableContinents.map((cont) => (
+              <option key={cont} value={cont}>
+                {CONTINENT_LABELS[cont] || cont}
+              </option>
+            ))}
+          </select>
+
+          {/* 국가 필터 */}
+          <select
+            value={filterCountry}
+            onChange={(e) => setFilterCountry(e.target.value)}
+            className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+          >
+            <option value="all">국가 전체</option>
+            {availableCountries.map((code) => (
+              <option key={code} value={code}>
+                {(COUNTRY_NAME_BY_CODE[code] || code) + ` (${code})`}
+              </option>
+            ))}
+          </select>
+
+          {/* 카테고리 필터 (고정 목록) */}
+          <select
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+            className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+          >
+            <option value="all">카테고리 전체</option>
+            {CATEGORIES.map((cat) => (
+              <option key={cat.value} value={cat.value}>
+                {cat.label}
+              </option>
+            ))}
+          </select>
+
+          {/* 상태 필터 (고정 목록) */}
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+          >
+            <option value="all">상태 전체</option>
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+
+          {/* 필터 초기화 */}
+          <button
+            type="button"
+            onClick={resetFilters}
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+          >
+            필터 초기화
+          </button>
+        </div>
       </div>
 
       {/* 로딩 / 에러 / 빈 상태 */}
