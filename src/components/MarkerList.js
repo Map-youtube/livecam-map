@@ -18,6 +18,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import LeafletMapWrapper from "@/components/LeafletMapWrapper";
+import AiDescriptionEditor from "@/components/AiDescriptionEditor";
 import { getContinentByCountry } from "@/lib/continentUtils";
 
 // ─── 국가 목록 (코드 → 한국어명) ──────────────────────────────
@@ -454,6 +455,8 @@ export default function MarkerList({ refreshSignal }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [editingMarker, setEditingMarker] = useState(null);
+  // AI 설명 편집 대상 마커 (null 이면 모달 닫힘)
+  const [aiEditingMarker, setAiEditingMarker] = useState(null);
   const [filterText, setFilterText] = useState("");
   // 드롭다운 필터 상태 ("all" 이면 해당 조건 미적용)
   const [filterContinent, setFilterContinent] = useState("all");
@@ -518,6 +521,17 @@ export default function MarkerList({ refreshSignal }) {
   // ─── 수정 저장 완료 → 목록 갱신 + 모달 닫기 ─────────────────
   const handleSaved = useCallback(() => {
     setEditingMarker(null);
+    loadMarkers();
+  }, [loadMarkers]);
+
+  // ─── AI 설명 버튼 → 모달 열기 ────────────────────────────────
+  const handleOpenAi = useCallback((marker) => {
+    setAiEditingMarker(marker);
+  }, []);
+
+  // ─── AI 설명 확정 저장 완료 → 목록 갱신 + 모달 닫기 ─────────
+  const handleAiSaved = useCallback(() => {
+    setAiEditingMarker(null);
     loadMarkers();
   }, [loadMarkers]);
 
@@ -725,6 +739,7 @@ export default function MarkerList({ refreshSignal }) {
                 <th className="px-2 py-2">상태</th>
                 <th className="px-2 py-2">채널명</th>
                 <th className="px-2 py-2">마지막 확인</th>
+                <th className="px-2 py-2">AI 설명</th>
                 <th className="px-2 py-2">수정</th>
                 <th className="px-2 py-2">삭제</th>
               </tr>
@@ -810,6 +825,33 @@ export default function MarkerList({ refreshSignal }) {
                     <td className="whitespace-nowrap px-2 py-2 text-gray-500">
                       {lastChecked}
                     </td>
+                    {/* AI 설명 (확정 여부 배지 + 편집 버튼) */}
+                    <td className="whitespace-nowrap px-2 py-2">
+                      <div className="flex items-center gap-1">
+                        {marker.description_confirmed === true ? (
+                          <span
+                            className="rounded bg-green-100 px-1 py-0.5 text-xs text-green-700"
+                            title="설명 확정됨"
+                          >
+                            확정✅
+                          </span>
+                        ) : (
+                          <span
+                            className="rounded bg-yellow-100 px-1 py-0.5 text-xs text-yellow-700"
+                            title="설명 미확정"
+                          >
+                            미확정⏳
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAi(marker)}
+                          className="rounded border border-indigo-300 px-2 py-1 text-xs text-indigo-600 hover:bg-indigo-50"
+                        >
+                          AI 설명
+                        </button>
+                      </div>
+                    </td>
                     {/* 수정 */}
                     <td className="px-2 py-2">
                       <button
@@ -844,6 +886,15 @@ export default function MarkerList({ refreshSignal }) {
           marker={editingMarker}
           onClose={() => setEditingMarker(null)}
           onSaved={handleSaved}
+        />
+      )}
+
+      {/* AI 설명 검토/확정 모달 */}
+      {aiEditingMarker && (
+        <AiDescriptionEditor
+          marker={aiEditingMarker}
+          onClose={() => setAiEditingMarker(null)}
+          onSaved={handleAiSaved}
         />
       )}
     </div>

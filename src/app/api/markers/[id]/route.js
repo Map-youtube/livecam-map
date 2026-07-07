@@ -59,14 +59,36 @@ export async function PATCH(request, context) {
     const existing = snap.data() || {};
 
     // 허용된 필드만 골라 updates 구성
-    const { location, city, country, category, is_live, youtube_url, lat, lng } =
-      body || {};
+    const {
+      location,
+      city,
+      country,
+      category,
+      is_live,
+      youtube_url,
+      lat,
+      lng,
+      description,
+      description_confirmed,
+    } = body || {};
     const updates = {};
 
     if (typeof location === "string") updates.location = location;
     if (typeof city === "string") updates.city = city;
     if (typeof category === "string") updates.category = category;
     if (typeof is_live === "boolean") updates.is_live = is_live;
+
+    // ─── AI 설명(ko/en) 및 확정 여부 처리 ──────────────────────
+    // 단순 텍스트/플래그 저장이므로 유튜브 API 재호출과 무관하다. (아래 youtube_url 로직은 그대로)
+    if (description && typeof description === "object") {
+      updates.description = {
+        ko: typeof description.ko === "string" ? description.ko : "",
+        en: typeof description.en === "string" ? description.en : "",
+      };
+    }
+    if (typeof description_confirmed === "boolean") {
+      updates.description_confirmed = description_confirmed;
+    }
 
     // ─── 위도/경도 처리 (지도 클릭/직접 입력으로 위치 변경 가능) ──
     // 값이 전달되면 숫자로 변환해 저장한다. (0도 유효하므로 undefined/null 만 무시)

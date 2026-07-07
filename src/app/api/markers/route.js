@@ -12,6 +12,7 @@ import { adminDb } from "@/lib/firebaseAdmin";
 import { FieldValue } from "firebase-admin/firestore";
 import { extractVideoId, getYoutubeInfo } from "@/lib/youtubeUtils";
 import { getContinentByCountry } from "@/lib/continentUtils";
+import { generatePlaceDescription } from "@/lib/aiUtils";
 
 // firebase-admin(Node 전용) 사용 → Edge 런타임 금지, Node.js 런타임 명시
 export const runtime = "nodejs";
@@ -207,6 +208,34 @@ export async function POST(request) {
       );
     }
 
+    // ─── 3.5) AI 장소 설명 생성 (등록당 정확히 1회 호출) ───────
+    // getYoutubeInfo 로 제목/설명을 확보한 직후, AI로 ko/en 소개를 생성한다.
+    // ⚠️ AI 호출이 실패해도 등록 자체는 진행되어야 하므로, 실패 시 빈 값으로 저장한다.
+    //    generatePlaceDescription 은 내부적으로 실패해도 throw 하지 않고 { ko:"", en:"" }를 반환하지만,
+    //    만일을 대비해 try-catch 로 한 번 더 감싼다.
+    let aiDescription = { ko: "", en: "" };
+    let aiGenerated = false;
+    try {
+      aiDescription = await generatePlaceDescription({
+        title: ytInfo.title,
+        description: ytInfo.description,
+        location: location,
+        city: city || "",
+        country: countryCode,
+        category: category || "other",
+      });
+      // ko/en 중 하나라도 채워졌으면 생성 성공으로 간주
+      aiGenerated = !!(
+        aiDescription &&
+        ((aiDescription.ko && aiDescription.ko.length > 0) ||
+          (aiDescription.en && aiDescription.en.length > 0))
+      );
+    } catch (aiError) {
+      console.error("[api/markers][POST] AI 설명 생성 실패:", aiError); // TODO: 배포 전 제거
+      aiDescription = { ko: "", en: "" };
+      aiGenerated = false;
+    }
+
     // ─── 4) Firestore 저장 문서 구성 ───────────────────────────
     const now = FieldValue.serverTimestamp();
     const markerData = {
@@ -232,11 +261,17 @@ export async function POST(request) {
       youtube_channel_id: ytInfo.channelId,
       youtube_channel_url: ytInfo.channelUrl,
 
+      // AI 자동 생성 소개 (관리자 확정 전 상태)
+      description: {
+        ko: aiDescription.ko || "",
+        en: aiDescription.en || "",
+      },
+
       // 상태 기본값
       is_active: true, // 지도/목록 표시 여부 (기본 활성)
       auto_disabled: false, // 자동 비활성화 여부 (재생 불가 자동 감지 시 true)
       is_live: is_live === undefined || is_live === null ? true : Boolean(is_live),
-      description_confirmed: false, // 관리자 설명 확정 여부
+      description_confirmed: false, // 관리자 설명 확정 여부 (AI 생성 직후 false)
 
       // 타임스탬프 (서버 기준)
       created_at: now,
@@ -251,6 +286,8 @@ export async function POST(request) {
         ok: true,
         id: docRef.id,
         message: "마커가 등록되었습니다.",
+        // AI 설명이 실제로 생성됐는지 관리자에게 알려준다 (실패해도 등록은 성공).
+        ai_description_generated: aiGenerated,
       },
       { status: 201 }
     );
