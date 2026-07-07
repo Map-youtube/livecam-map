@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────
 // AI 유틸리티 (서버 전용) — 장소 소개 설명 자동 생성
 //
-// generatePlaceDescription({ title, description, location, city, country, category })
+// generatePlaceDescription({ title, description, location, city, country, tags })
 //   - OpenAI gpt-4.1-mini 로 한국어(ko)/영어(en) 짧은 소개를 생성한다.
 //   - 반환: { ko: "...", en: "..." }
 //   - 파싱 실패 시 1회 재시도, 그래도 실패하면 { ko: "", en: "" } 반환(등록은 막지 않음).
@@ -83,7 +83,7 @@ export async function generatePlaceDescription({
   location,
   city,
   country,
-  category,
+  tags,
 } = {}) {
   try {
     // 서버 전용 키
@@ -109,7 +109,9 @@ export async function generatePlaceDescription({
       `- 장소명: ${location || "(없음)"}`,
       `- 도시: ${city || "(없음)"}`,
       `- 국가(코드): ${country || "(없음)"}`,
-      `- 카테고리: ${category || "(없음)"}`,
+      `- 특성 태그: ${
+        Array.isArray(tags) && tags.length > 0 ? tags.join(", ") : "(없음)"
+      }`,
       `- 유튜브 제목: ${title || "(없음)"}`,
       `- 유튜브 설명(일부): ${shortDesc || "(없음)"}`,
     ].join("\n");

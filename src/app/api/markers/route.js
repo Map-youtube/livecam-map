@@ -100,7 +100,7 @@ export async function GET(request) {
 
 // ─────────────────────────────────────────────────────────────
 // POST: 관리자 마커 등록
-//   body(JSON): youtube_url, location, lat, lng, city, country, category, is_live
+//   body(JSON): youtube_url, location, lat, lng, city, country, is_live, tags
 //   처리 순서:
 //     1) youtube_url → video_id 추출 (실패 시 400)
 //     2) getYoutubeInfo 로 제목/설명/채널명/썸네일 자동 수집 (1유닛)
@@ -138,7 +138,6 @@ export async function POST(request) {
       lng,
       city,
       country,
-      category,
       is_live,
       tags,
     } = body || {};
@@ -248,7 +247,7 @@ export async function POST(request) {
         location: location,
         city: city || "",
         country: countryCode,
-        category: category || "other",
+        tags: tagsArr,
       });
       // ko/en 중 하나라도 채워졌으면 생성 성공으로 간주
       aiGenerated = !!(
@@ -273,10 +272,8 @@ export async function POST(request) {
       country: countryCode,
       continent: continent,
 
-      // 분류 (미지정 시 other)
-      category: category || "other",
-
       // 장소 특성 태그 (지역 분류와 별개, 최대 3개, 기본 빈 배열)
+      // (옛 category 필드는 태그로 통합되어 삭제됨)
       tags: tagsArr,
 
       // YouTube 정보 (입력 + 자동 수집)

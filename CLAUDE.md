@@ -247,7 +247,8 @@ Japan 클릭 → /asia/jp 정적 페이지로 이동
   continent: "asia",               // asia | europe | americas | africa | oceania | middleeast
 
   // ─── 분류 ─────────────────────────────────────────────
-  category: "landmark",            // landmark | road | nature | city | beach | wildlife | other
+  // (구) category 필드는 장소 특성 태그(tags)로 통합되어 삭제됨. 더 이상 사용하지 않음.
+  tags: ["해변", "서핑"],          // 장소 특성 태그 (지역 분류와 별개, 최대 3개)
 
   // ─── YouTube 정보 (관리자 입력 + 자동 수집) ───────────
   youtube_url: "https://www.youtube.com/watch?v=xxxxx",
@@ -388,7 +389,7 @@ YouTube Search API (100유닛/회) 절대 사용하지 않는다.
 | 도시 | 직접 입력 | |
 | 국가 | 드롭다운 | ISO 코드 자동 매핑 |
 | 대륙 | 국가 선택 시 자동 입력 | 수동 수정 가능 |
-| 카테고리 | 드롭다운 | landmark / road / nature / city / beach / wildlife / other |
+| 장소 특성 태그 | 체크박스 (최대 3개) | 기존 태그 목록에서 선택하거나 새 태그 추가 (구 '카테고리' 필드는 이 태그로 통합되어 삭제됨) |
 | is_live | 토글 | 기본값: true |
 
 **등록 시 자동 처리:**

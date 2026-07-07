@@ -8,7 +8,7 @@
 //   - 트리(접기/펼치기) 대신 모든 마커를 하나의 표로 한 화면에 나열
 //   - 상단 검색창(장소명/도시/국가)으로 클라이언트 필터링 (추가 API 호출 없음)
 //   - 표 헤더 sticky 고정
-//   - 각 행: 썸네일/장소명/도시/국가/대륙/카테고리/상태배지/채널명/마지막확인/수정·삭제
+//   - 각 행: 썸네일/장소명/도시/국가/대륙/특성태그/상태배지/채널명/마지막확인/수정·삭제
 //   - 삭제: confirm 후 DELETE → 표에서 즉시 제거
 //   - 수정: 모달(작은 지도 포함)에서 편집 → PATCH (lat/lng 포함)
 //
@@ -60,22 +60,6 @@ const COUNTRIES = [
 // 코드 → 한국어명 빠른 조회 맵
 const COUNTRY_NAME_BY_CODE = COUNTRIES.reduce((acc, c) => {
   acc[c.code] = c.name;
-  return acc;
-}, {});
-
-// ─── 카테고리 (값 → 한국어 라벨) ──────────────────────────────
-const CATEGORIES = [
-  { value: "landmark", label: "랜드마크" },
-  { value: "road", label: "도로" },
-  { value: "nature", label: "자연" },
-  { value: "city", label: "도시" },
-  { value: "beach", label: "해변" },
-  { value: "wildlife", label: "야생동물" },
-  { value: "other", label: "기타" },
-];
-
-const CATEGORY_LABEL_BY_VALUE = CATEGORIES.reduce((acc, c) => {
-  acc[c.value] = c.label;
   return acc;
 }, {});
 
@@ -175,7 +159,6 @@ function EditModal({ marker, onClose, onSaved }) {
   const [location, setLocation] = useState(marker.location || "");
   const [city, setCity] = useState(marker.city || "");
   const [country, setCountry] = useState(marker.country || "");
-  const [category, setCategory] = useState(marker.category || "other");
   const [isLive, setIsLive] = useState(marker.is_live !== false);
   const [youtubeUrl, setYoutubeUrl] = useState(marker.youtube_url || "");
   // 위도/경도는 문자열로 관리해 입력창 편집을 허용 (등록 폼과 동일 방식)
@@ -264,7 +247,6 @@ function EditModal({ marker, onClose, onSaved }) {
           location: location.trim(),
           city: city.trim(),
           country: country,
-          category: category,
           is_live: isLive,
           youtube_url: youtubeUrl.trim(),
           // 지도/입력으로 변경된 좌표도 함께 전송
@@ -350,22 +332,6 @@ function EditModal({ marker, onClose, onSaved }) {
             {country && (
               <p className="mt-1 text-xs text-gray-600">대륙: {continentLabel}</p>
             )}
-          </div>
-
-          {/* 카테고리 */}
-          <div>
-            <label className="block text-xs text-gray-600">카테고리</label>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            >
-              {CATEGORIES.map((cat) => (
-                <option key={cat.value} value={cat.value}>
-                  {cat.label}
-                </option>
-              ))}
-            </select>
           </div>
 
           {/* 장소 특성 태그 (최대 3개) */}
@@ -488,7 +454,6 @@ export default function MarkerList({ refreshSignal }) {
   // 드롭다운 필터 상태 ("all" 이면 해당 조건 미적용)
   const [filterContinent, setFilterContinent] = useState("all");
   const [filterCountry, setFilterCountry] = useState("all");
-  const [filterCategory, setFilterCategory] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
 
   // ─── 목록 불러오기 (Firestore만 사용, 유튜브 API 호출 없음) ──
@@ -574,7 +539,7 @@ export default function MarkerList({ refreshSignal }) {
   }, [loadMarkers]);
 
   // ─── 드롭다운 옵션: 실제 데이터에 존재하는 대륙/국가만 추출 ───
-  // (카테고리/상태는 고정 목록을 쓰므로 여기서 계산하지 않는다.)
+  // (상태는 고정 목록을 쓰므로 여기서 계산하지 않는다.)
   const availableContinents = useMemo(() => {
     const set = new Set();
     for (const m of markers) {
@@ -633,12 +598,7 @@ export default function MarkerList({ refreshSignal }) {
         return false;
       }
 
-      // 4) 카테고리 필터
-      if (filterCategory !== "all" && (m.category || "") !== filterCategory) {
-        return false;
-      }
-
-      // 5) 상태 필터 (배지와 동일 기준의 상태 키로 비교)
+      // 4) 상태 필터 (배지와 동일 기준의 상태 키로 비교)
       if (filterStatus !== "all" && getStatusKey(m) !== filterStatus) {
         return false;
       }
@@ -651,7 +611,6 @@ export default function MarkerList({ refreshSignal }) {
     filterText,
     filterContinent,
     filterCountry,
-    filterCategory,
     filterStatus,
   ]);
 
@@ -660,7 +619,6 @@ export default function MarkerList({ refreshSignal }) {
     setFilterText("");
     setFilterContinent("all");
     setFilterCountry("all");
-    setFilterCategory("all");
     setFilterStatus("all");
   }
 
@@ -677,7 +635,7 @@ export default function MarkerList({ refreshSignal }) {
           className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
         />
 
-        {/* 드롭다운 필터 4종 + 초기화 버튼 */}
+        {/* 드롭다운 필터 3종 + 초기화 버튼 */}
         <div className="flex flex-wrap items-center gap-2">
           {/* 대륙 필터 */}
           <select
@@ -703,20 +661,6 @@ export default function MarkerList({ refreshSignal }) {
             {availableCountries.map((code) => (
               <option key={code} value={code}>
                 {(COUNTRY_NAME_BY_CODE[code] || code) + ` (${code})`}
-              </option>
-            ))}
-          </select>
-
-          {/* 카테고리 필터 (고정 목록) */}
-          <select
-            value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
-            className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-          >
-            <option value="all">카테고리 전체</option>
-            {CATEGORIES.map((cat) => (
-              <option key={cat.value} value={cat.value}>
-                {cat.label}
               </option>
             ))}
           </select>
@@ -773,7 +717,6 @@ export default function MarkerList({ refreshSignal }) {
                 <th className="px-2 py-2">도시</th>
                 <th className="px-2 py-2">국가</th>
                 <th className="px-2 py-2">대륙</th>
-                <th className="px-2 py-2">카테고리</th>
                 <th className="px-2 py-2">특성 태그</th>
                 <th className="px-2 py-2">상태</th>
                 <th className="px-2 py-2">채널명</th>
@@ -793,10 +736,6 @@ export default function MarkerList({ refreshSignal }) {
                   marker.youtube_channel_name || "(채널 정보 없음)";
                 const continentLabel =
                   CONTINENT_LABELS[marker.continent] || marker.continent || "-";
-                const categoryLabel =
-                  CATEGORY_LABEL_BY_VALUE[marker.category] ||
-                  marker.category ||
-                  "-";
                 const countryLabel = marker.country
                   ? `${COUNTRY_NAME_BY_CODE[marker.country] || marker.country} (${marker.country})`
                   : "-";
@@ -832,8 +771,6 @@ export default function MarkerList({ refreshSignal }) {
                     <td className="px-2 py-2 text-gray-700">{countryLabel}</td>
                     {/* 대륙 */}
                     <td className="px-2 py-2 text-gray-700">{continentLabel}</td>
-                    {/* 카테고리 */}
-                    <td className="px-2 py-2 text-gray-700">{categoryLabel}</td>
                     {/* 특성 태그 (없으면 -) */}
                     <td className="px-2 py-2">
                       {Array.isArray(marker.tags) && marker.tags.length > 0 ? (

@@ -2,7 +2,7 @@
 // 마커 단건 수정/삭제 API (서버 전용 Route Handler)
 //
 // - PATCH  /api/markers/[id] : 전달된 필드만 골라 수정
-//     · location, city, country, category, is_live, youtube_url 만 허용
+//     · location, city, country, is_live, youtube_url, lat, lng, tags 등만 허용
 //     · youtube_url 이 "기존 저장값과 다를 때만" videos.list(1유닛) 재호출 → 비용 절약
 //     · country 가 바뀐 경우에만 continent 재계산
 //     · updated_at 은 항상 서버 타임스탬프로 갱신
@@ -73,7 +73,6 @@ export async function PATCH(request, context) {
       location,
       city,
       country,
-      category,
       is_live,
       youtube_url,
       lat,
@@ -86,7 +85,6 @@ export async function PATCH(request, context) {
 
     if (typeof location === "string") updates.location = location;
     if (typeof city === "string") updates.city = city;
-    if (typeof category === "string") updates.category = category;
     if (typeof is_live === "boolean") updates.is_live = is_live;
 
     // ─── 특성 태그 처리 (선택적, 최대 3개) ─────────────────────

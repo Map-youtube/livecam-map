@@ -1,24 +1,29 @@
 "use client";
 
 // ─────────────────────────────────────────────────────────────
-// TagSelector — 재사용 가능한 장소 특성 태그 선택 컴포넌트
+// TagSelector — 재사용 가능한 장소 특성 태그 선택 컴포넌트 (체크박스 방식)
 //
 // props:
 //   - value    : 현재 선택된 태그 문자열 배열 (예: ["해변", "서핑"])
 //   - onChange : 변경된 배열을 전달하는 콜백
 //
 // 기능:
-//   - 마운트 시 GET /api/tags 로 전체 태그를 불러와 드롭다운 옵션 준비
-//   - 드롭다운에서 선택 → value 에 추가 (이미 선택된 태그는 옵션에서 제외 → 중복 불가)
-//   - 선택된 태그는 칩(배지)으로 표시, x 로 제거
-//   - 3개면 드롭다운/새 태그 추가 비활성화 + 안내
-//   - "새 태그 추가": POST /api/tags (관리자 토큰 첨부) → 성공 시 선택 + 옵션 갱신
-//   - 로그인 만료 시 안내 후 로그인 페이지로 이동
+//   - 마운트 시 GET /api/tags 로 전체 태그를 불러와 체크박스 목록으로 "한 번에" 펼쳐 보여준다.
+//   - 체크하면 선택(value 에 추가), 다시 체크 해제하면 제거.
+//   - 최대 3개까지 선택 가능. 3개가 차면 "선택되지 않은" 체크박스는 비활성화(흐릿하게)하고,
+//     "이미 선택된" 체크박스는 계속 해제할 수 있게 둔다. (실수로 3개 채웠을 때 해제 가능)
+//   - 현재 선택 개수 표시 (예: "2/3개 선택됨").
+//   - 목록이 길어질 수 있으므로 스크롤 영역(max-height + overflow-auto) 적용.
+//   - "새 태그 추가": POST /api/tags (관리자 토큰 첨부) → 성공 시 목록에 추가되고 바로 선택됨.
+//     3개가 차 있으면 새 태그 추가도 비활성화.
+//   - 로그인 만료 시 안내 후 로그인 페이지로 이동.
 //
-// ⚠️ 최대 3개 제한은 이 컴포넌트(클라이언트)와 서버(POST/PATCH) 양쪽에서 모두 검증한다.
+// ⚠️ 최대 3개 제한은 이 컴포넌트(클라이언트)와 서버(POST/PATCH) 양쪽에서 검증한다.
+// ⚠️ 각 체크박스는 그 태그의 고유 id 를 key 로, 고유 이름을 클릭 핸들러에 사용한다.
+//    (CLAUDE.md 버그 예방 규칙 — 엉뚱한 태그가 선택되지 않도록)
 // ─────────────────────────────────────────────────────────────
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { getAdminIdToken } from "@/lib/clientAuth";
 
 const MAX_TAGS = 3;
@@ -64,39 +69,25 @@ export default function TagSelector({ value, onChange }) {
     };
   }, []);
 
-  // ─── 드롭다운 옵션: 이미 선택된 태그는 제외 ─────────────────
-  const availableOptions = useMemo(() => {
-    return allTags.filter((t) => !selected.includes(t.name));
-  }, [allTags, selected]);
-
-  // ─── 태그 추가(선택) ─────────────────────────────────────────
-  function addTag(name) {
+  // ─── 체크박스 토글 ───────────────────────────────────────────
+  // 이미 선택된 태그는 언제나 해제 가능(3개 상태에서도).
+  // 선택 안 된 태그는 3개 미만일 때만 추가.
+  function toggleTag(name) {
     try {
       const trimmed = String(name || "").trim();
       if (!trimmed) return;
-      if (selected.includes(trimmed)) return; // 중복 방지
-      if (selected.length >= MAX_TAGS) return; // 3개 초과 방지
-      onChange([...selected, trimmed]);
-    } catch (error) {
-      console.error("[TagSelector] 태그 추가 실패:", error); // TODO: 배포 전 제거
-    }
-  }
 
-  // ─── 태그 제거 ───────────────────────────────────────────────
-  function removeTag(name) {
-    try {
-      onChange(selected.filter((t) => t !== name));
+      if (selected.includes(trimmed)) {
+        // 해제
+        onChange(selected.filter((t) => t !== trimmed));
+      } else {
+        // 추가 (3개 초과 방지)
+        if (selected.length >= MAX_TAGS) return;
+        onChange([...selected, trimmed]);
+      }
     } catch (error) {
-      console.error("[TagSelector] 태그 제거 실패:", error); // TODO: 배포 전 제거
+      console.error("[TagSelector] 태그 토글 실패:", error); // TODO: 배포 전 제거
     }
-  }
-
-  // ─── 드롭다운 선택 처리 ──────────────────────────────────────
-  function handleSelect(e) {
-    const name = e.target.value;
-    if (name) addTag(name);
-    // 선택 후 다시 기본값으로 (같은 항목 재선택 가능하게 하려는 게 아니라 placeholder 유지)
-    e.target.value = "";
   }
 
   // ─── 새 태그 추가 (POST /api/tags) ───────────────────────────
@@ -141,8 +132,10 @@ export default function TagSelector({ value, onChange }) {
           const exists = prev.some((t) => t.name === created.name);
           return exists ? prev : [...prev, created];
         });
-        // 선택 목록에 추가
-        addTag(created.name);
+        // 선택 목록에 추가 (3개 미만일 때만 — 위에서 isFull 을 이미 걸렀음)
+        if (!selected.includes(created.name) && selected.length < MAX_TAGS) {
+          onChange([...selected, created.name]);
+        }
         setNewTagName("");
       } else {
         setAddError(data.error || "태그 추가에 실패했습니다.");
@@ -157,57 +150,55 @@ export default function TagSelector({ value, onChange }) {
 
   return (
     <div className="space-y-2">
-      {/* 선택된 태그 칩 */}
-      <div className="flex flex-wrap gap-2">
-        {selected.length === 0 ? (
-          <span className="text-xs text-gray-400">선택된 태그가 없습니다.</span>
-        ) : (
-          selected.map((name) => (
-            <span
-              key={name}
-              className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800"
-            >
-              #{name}
-              <button
-                type="button"
-                onClick={() => removeTag(name)}
-                className="text-blue-500 hover:text-blue-700"
-                aria-label={`${name} 태그 제거`}
-              >
-                ×
-              </button>
-            </span>
-          ))
+      {/* 선택 개수 표시 */}
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-gray-600">
+          {selected.length}/{MAX_TAGS}개 선택됨
+        </span>
+        {isFull && (
+          <span className="text-xs text-orange-600">
+            최대 3개까지 선택할 수 있습니다.
+          </span>
         )}
       </div>
 
-      {/* 3개 제한 안내 */}
-      {isFull && (
-        <p className="text-xs text-orange-600">
-          최대 3개까지 선택할 수 있습니다.
-        </p>
+      {/* 체크박스 목록 (스크롤 영역) */}
+      {loading ? (
+        <p className="text-xs text-gray-500">태그 불러오는 중...</p>
+      ) : loadError ? (
+        <p className="text-xs text-red-600">{loadError}</p>
+      ) : allTags.length === 0 ? (
+        <p className="text-xs text-gray-500">등록된 태그가 없습니다.</p>
+      ) : (
+        <div className="max-h-48 overflow-auto rounded-md border border-gray-200 p-2">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1 sm:grid-cols-3">
+            {allTags.map((t) => {
+              // 각 체크박스는 이 태그의 고유 id/이름만 참조한다.
+              const checked = selected.includes(t.name);
+              // 선택 안 됐고 이미 3개면 비활성화 (선택된 건 해제 가능하므로 활성)
+              const disabled = !checked && isFull;
+              return (
+                <label
+                  key={t.id}
+                  className={
+                    "flex cursor-pointer items-center gap-1.5 text-sm " +
+                    (disabled ? "cursor-not-allowed text-gray-300" : "text-gray-700")
+                  }
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={disabled}
+                    onChange={() => toggleTag(t.name)}
+                    className="h-4 w-4"
+                  />
+                  <span className="truncate">{t.name}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
       )}
-
-      {/* 드롭다운 (기존 태그 선택) */}
-      <div className="flex flex-wrap items-center gap-2">
-        <select
-          onChange={handleSelect}
-          defaultValue=""
-          disabled={isFull || loading}
-          className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none disabled:bg-gray-100"
-        >
-          <option value="">
-            {loading ? "태그 불러오는 중..." : "기존 태그 선택"}
-          </option>
-          {availableOptions.map((t) => (
-            <option key={t.id} value={t.name}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {loadError && <p className="text-xs text-red-600">{loadError}</p>}
 
       {/* 새 태그 추가 */}
       <div className="flex flex-wrap items-center gap-2">

@@ -58,17 +58,6 @@ const COUNTRIES = [
   { code: "ZA", name: "남아프리카공화국" },
 ];
 
-// ─── 카테고리 목록 ─────────────────────────────────────────────
-const CATEGORIES = [
-  { value: "landmark", label: "랜드마크" },
-  { value: "road", label: "도로" },
-  { value: "nature", label: "자연" },
-  { value: "city", label: "도시" },
-  { value: "beach", label: "해변" },
-  { value: "wildlife", label: "야생동물" },
-  { value: "other", label: "기타" },
-];
-
 // ─── 대륙 코드 → 한국어 라벨 ───────────────────────────────────
 const CONTINENT_LABELS = {
   asia: "아시아",
@@ -127,7 +116,6 @@ export default function MarkerForm({ onRegistered }) {
   const [location, setLocation] = useState("");
   const [city, setCity] = useState("");
   const [country, setCountry] = useState("");
-  const [category, setCategory] = useState("landmark");
   const [isLive, setIsLive] = useState(true);
   // 장소 특성 태그 (지역 분류와 별개, 최대 3개)
   const [tags, setTags] = useState([]);
@@ -251,7 +239,7 @@ export default function MarkerForm({ onRegistered }) {
   const mapCenter = hasValidCoord ? { lat: latNum, lng: lngNum } : DEFAULT_CENTER;
 
   // ─── 등록 버튼 활성화 조건 ───────────────────────────────────
-  // 필수: 유튜브 URL(중복 아님 & 유효), 장소명, 위도/경도, 도시, 국가, 카테고리
+  // 필수: 유튜브 URL(중복 아님 & 유효), 장소명, 위도/경도, 도시, 국가
   const canSubmit =
     urlStatus === "available" && // 유효하고 중복 아님
     !!videoId &&
@@ -259,7 +247,6 @@ export default function MarkerForm({ onRegistered }) {
     hasValidCoord &&
     city.trim() !== "" &&
     country !== "" &&
-    category !== "" &&
     !submitting;
 
   // ─── 폼 초기화 ───────────────────────────────────────────────
@@ -274,7 +261,6 @@ export default function MarkerForm({ onRegistered }) {
     setLocation("");
     setCity("");
     setCountry("");
-    setCategory("landmark");
     setIsLive(true);
     setTags([]);
   }
@@ -310,7 +296,6 @@ export default function MarkerForm({ onRegistered }) {
           lng: lngNum,
           city: city.trim(),
           country: country,
-          category: category,
           is_live: isLive,
           tags: tags,
         }),
@@ -516,23 +501,6 @@ export default function MarkerForm({ onRegistered }) {
           {country && (
             <p className="mt-1 text-sm text-gray-600">대륙: {continentLabel}</p>
           )}
-        </div>
-
-        {/* 카테고리 드롭다운 */}
-        <div>
-          <label className="block text-xs text-gray-600">카테고리</label>
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-          >
-            {CATEGORIES.map((cat) => (
-              // 각 옵션은 자신의 고유 value(cat.value)를 사용한다.
-              <option key={cat.value} value={cat.value}>
-                {cat.label}
-              </option>
-            ))}
-          </select>
         </div>
 
         {/* 장소 특성 태그 (지역 분류와 별개, 최대 3개) */}
