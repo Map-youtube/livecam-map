@@ -4,7 +4,7 @@
 
 ## 0. 서비스 컨셉 및 핵심 철학
 
-이 서비스는 **구글맵 위에 관리자가 직접 등록한 마커를 클릭하면 해당 위치의 YouTube 라이브 스트림 영상이 말풍선 정보창 형태로 재생되는 실시간 여행 탐색 서비스**다.
+이 서비스는 **지도 위에 관리자가 직접 등록한 마커를 클릭하면 해당 위치의 YouTube 라이브 스트림 영상이 말풍선 정보창 형태로 재생되는 실시간 여행 탐색 서비스**다.
 
 유사 사이트: webcamtaxi.com, skylinewebcams.com, earthcam.com
 
@@ -24,7 +24,7 @@
 ## 1. 개발자 역할 및 기술 스택
 
 - HTML, JavaScript, Visual Studio Code 전문가로서 코드를 작성한다
-- Next.js(App Router), Firebase, Google Maps API에 능숙한 풀스택 웹 개발 전문가로서 코드를 작성한다
+- Next.js(App Router), Firebase, Leaflet에 능숙한 풀스택 웹 개발 전문가로서 코드를 작성한다
 - 웹페이지 디자인은 사용자 편의성에 중점을 두고, 깔끔하고 직관적인 디자인을 추구한다
 - 모든 코드는 Visual Studio Code 환경 기준으로 작성하며, 복사-붙여넣기 즉시 실행 가능한 완성 코드를 제공한다
 
@@ -32,6 +32,7 @@
 - 프레임워크: Next.js 14+ (App Router, `/src/app` 구조)
 - 언어: JavaScript (TypeScript 사용 안 함, .js 확장자 유지)
 - 데이터베이스: Firebase Firestore (Firebase v9 모듈식 SDK)
+- 지도 렌더링: Leaflet + react-leaflet (지도 렌더링), OpenStreetMap 무료 타일 사용 — 지도 라이브러리·타일 모두 무료이며, 향후 트래픽 증가 시 유료 타일(MapTiler 등)로 타일 URL만 교체하면 되는 구조
 - 호스팅: Vercel
 - 스타일링: Tailwind CSS
 - 상태관리: React useState / useEffect
@@ -81,11 +82,13 @@ src/lib/utils.js                             ← 유틸리티 함수
 ### 환경변수 네이밍 규칙
 
 ```
-NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=     ← 클라이언트 (지도 렌더링, HTTP 레퍼러 제한)
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=     ← 클라이언트 (현재 Leaflet+OSM 사용으로 지도 렌더링에는 불필요, 향후 유료 타일 전환 시 NEXT_PUBLIC_MAP_TILE_URL 등으로 대체 예정)
+NEXT_PUBLIC_MAP_TILE_URL=            ← 클라이언트 (Leaflet 타일 URL, 기본값 OSM: https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png — 향후 유료 타일로 교체용)
+NEXT_PUBLIC_MAP_ATTRIBUTION=         ← 클라이언트 (지도 저작권 표기 문구, 기본값: © OpenStreetMap contributors)
 YOUTUBE_API_KEY=                     ← 서버 전용 (videos.list, 절대 NEXT_PUBLIC 금지)
 AI_API_KEY=                          ← 서버 전용 (OpenAI)
 GOOGLE_PLACES_API_KEY=               ← 서버 전용 (마커 등록 시 선택적)
-GOOGLE_STATIC_MAPS_API_KEY=          ← 서버 전용 (SNS 공유 지도 이미지)
+GOOGLE_STATIC_MAPS_API_KEY=          ← 서버 전용 (SNS 공유용 정적 지도 이미지 전용 — 지도 렌더링과 무관하게 계속 필요)
 NEXT_PUBLIC_FIREBASE_API_KEY=
 NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
 NEXT_PUBLIC_FIREBASE_PROJECT_ID=
@@ -121,7 +124,7 @@ NEXT_PUBLIC_SITE_URL=                ← 정규 도메인 (https://www.tripbycli
 └──────────────────────────────┴──────────────────────────┘
 ```
 
-- **지도(왼쪽 70%)**: 구글맵, 등록된 마커들이 표시됨
+- **지도(왼쪽 70%)**: Leaflet 지도, 등록된 마커들이 표시됨
 - **카테고리 트리(오른쪽 30%)**: 대륙 → 국가 → 도시 → 마커 목록, 펼치기/접기 가능
 - **상단 헤더**: 로고 + 대륙별 정적 페이지로 연결되는 네비게이션 메뉴 (webcamtaxi.com 방식)
 - **모바일**: 카테고리 트리가 하단 드로어(drawer) 방식으로 전환
@@ -132,7 +135,7 @@ NEXT_PUBLIC_SITE_URL=                ← 정규 도메인 (https://www.tripbycli
 
 ```
 사용자가 오른쪽 카테고리 트리에서 장소명 클릭
-→ 지도가 해당 위치로 부드럽게 이동 (panTo + zoom)
+→ 지도가 해당 위치로 부드럽게 이동 (flyTo / setView)
 → 해당 마커가 자동 선택 (선택 상태로 강조 표시)
 → 마커 위에 말풍선 정보창(InfoWindow) 자동 표시
 → 정보창 안에 영상 제목 + 설명 + YouTube 라이브 영상 재생
@@ -323,13 +326,16 @@ YouTube Search API (100유닛/회) 절대 사용하지 않는다.
 | 이후 사용자 조회 | 영구 0유닛 |
 | YouTube Search API | **사용 안 함** |
 
-### Google Maps API
+### 지도 렌더링 (Leaflet + OpenStreetMap)
+
+- Leaflet + OpenStreetMap 무료 타일 사용으로 **지도 렌더링 비용 $0** (단, 대량 트래픽 시 유료 타일 서비스로 전환 권장 — MapTiler 등으로 타일 URL만 교체)
+- 지도 타입 전환 (위성/일반): Leaflet의 레이어 전환(TileLayer 교체)으로 지원 가능, 추가 비용 없음
+
+### Google Static Maps API (SNS 공유 이미지 전용)
 
 | SKU | 무료 한도/월 | 단가 |
 |---|---|---|
-| Dynamic Maps (지도 로드) | 10,000건 | $7.00/1,000건 |
 | Static Maps (SNS 공유) | 10,000건 | $2.00/1,000건 |
-| 지도 타입 전환 (위성/일반) | 추가 비용 없음 | - |
 
 ### AI (OpenAI gpt-4.1-mini)
 
@@ -509,7 +515,7 @@ YouTube Search API (100유닛/회) 절대 사용하지 않는다.
 | `src/app/[continent]/[country]/page.js` | 국가별 정적 목록 |
 | `src/app/[continent]/[country]/[city]/page.js` | 도시별 정적 목록 |
 | `src/app/marker/[markerId]/page.js` | 마커 상세 SEO 페이지 |
-| `src/components/GoogleMap.js` | 구글맵 (마커 표시, 클릭 이벤트, panTo) |
+| `src/components/LeafletMap.js` | Leaflet 지도 (마커 표시, 클릭 이벤트, flyTo) |
 | `src/components/MarkerInfoWindow.js` | 마커 말풍선 정보창 (영상 + 관련 영상 썸네일) |
 | `src/components/RelatedVideos.js` | 관련 영상 썸네일 목록 (같은 도시/국가) |
 | `src/components/CategoryTree.js` | 오른쪽 카테고리 트리 (대륙/국가/도시/마커) |
