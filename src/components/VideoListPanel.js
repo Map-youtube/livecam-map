@@ -4,15 +4,68 @@
 // VideoListPanel — 영상 목록 패널 (클라이언트)
 //
 // props:
-//   - markers        : 현재 필터링된 마커 배열
-//   - onClose        : 닫기 콜백
-//   - onSelectMarker : 카드 클릭 콜백 (이번 단계는 자리만 — 콘솔 로그)
-//   - title          : 패널 상단 제목 (예: "도쿄 (5)" 또는 "#야경 (12)")
+//   - markers          : 현재 필터링된 마커 배열
+//   - onClose          : 닫기 콜백
+//   - onSelectMarker   : 카드 클릭 콜백 (펼치기/접기 + 지도 이동은 부모가 결정)
+//   - title            : 패널 상단 제목
+//   - expandedMarkerId : 현재 펼쳐진(재생 중인) 마커 id
 //
-// 이번 단계: 목록 카드 표시 + 열기/닫기만. 카드 클릭 시 지도 이동/영상 재생은 다음 단계.
+// 재생불가 자동 감지:
+//   - 펼쳐진 영상은 유튜브 IFrame Player API 로 만들어 onError 를 구독한다.
+//   - 에러 발생 시 코드에 맞는 reason 으로 POST /api/markers/{id}/report-error 신고.
+//   - 신고 성공 시 안내를 표시하고 잠시 후 그 카드를 목록에서 제거(새로고침 없이).
+//   - 유튜브 API(videos.list) 를 호출하지 않는다(플레이어 에러 신호만 서버에 기록) → 무료.
 // ─────────────────────────────────────────────────────────────
 
+import { useCallback, useEffect, useRef, useState } from "react";
 import { COUNTRY_NAME_BY_CODE } from "@/lib/countryList";
+
+// ─── 유튜브 IFrame API 로더 (전역, 한 번만 로드) ──────────────
+let ytApiPromise = null;
+function loadYouTubeApi() {
+  try {
+    if (typeof window === "undefined") return Promise.resolve();
+    // 이미 로드 완료된 경우 즉시 resolve
+    if (window.YT && window.YT.Player) return Promise.resolve();
+    // 로딩 중이면 같은 프로미스 재사용
+    if (ytApiPromise) return ytApiPromise;
+
+    ytApiPromise = new Promise((resolve) => {
+      // 기존 콜백을 보존해 체이닝 (다른 곳에서 설정했을 수도 있으므로)
+      const prevCallback = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => {
+        try {
+          if (typeof prevCallback === "function") prevCallback();
+        } catch (e) {
+          // 이전 콜백 오류는 무시
+        }
+        resolve();
+      };
+
+      // 스크립트 중복 로드 방지 (window 전역 플래그)
+      if (!window.__ytIframeApiLoading) {
+        window.__ytIframeApiLoading = true;
+        const tag = document.createElement("script");
+        tag.src = "https://www.youtube.com/iframe_api";
+        tag.async = true;
+        document.head.appendChild(tag);
+      }
+    });
+    return ytApiPromise;
+  } catch (error) {
+    console.error("[VideoListPanel] YT API 로드 실패:", error); // TODO: 배포 전 제거
+    return Promise.resolve();
+  }
+}
+
+// ─── 유튜브 에러 코드 → 신고 reason 매핑 ──────────────────────
+// 2: 잘못된 파라미터, 5: HTML5 플레이어 에러,
+// 100: 영상을 찾을 수 없음(삭제/비공개), 101 또는 150: 퍼가기(임베드) 차단
+function mapErrorToReason(code) {
+  if (code === 101 || code === 150) return "embed_blocked";
+  if (code === 100 || code === 2 || code === 5) return "video_error";
+  return "unknown";
+}
 
 // ─── 썸네일 URL (저장값 우선, 없으면 video_id 로 생성) ────────
 function getThumb(marker) {
@@ -34,6 +87,90 @@ function getStatusBadge(marker) {
   return { text: "🔴 LIVE", className: "bg-red-100 text-red-700" };
 }
 
+// ─────────────────────────────────────────────────────────────
+// InlinePlayer — 유튜브 IFrame Player API 로 만든 인라인 플레이어
+//   - onError(reason) 콜백으로 에러를 상위에 알린다.
+//   - 언마운트/전환 시 player.destroy() 로 정리 (메모리 누수 방지).
+// ─────────────────────────────────────────────────────────────
+function InlinePlayer({ videoId, title, onError }) {
+  // iframe 요소에 부여할 고유 id (마커/랜덤 조합)
+  const iframeIdRef = useRef(
+    `yt-player-${videoId}-${Math.random().toString(36).slice(2, 8)}`
+  );
+  const iframeId = iframeIdRef.current;
+  const playerRef = useRef(null);
+  // 최신 onError 를 참조로 유지 → 부모 리렌더로 player 를 재생성하지 않음
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
+
+  useEffect(() => {
+    let destroyed = false;
+
+    async function setup() {
+      try {
+        await loadYouTubeApi();
+        if (destroyed) return;
+        if (!window.YT || !window.YT.Player) return;
+
+        // 이미 렌더된 iframe(enablejsapi=1) 에 바인딩
+        playerRef.current = new window.YT.Player(iframeId, {
+          events: {
+            onError: (event) => {
+              try {
+                const reason = mapErrorToReason(event && event.data);
+                if (typeof onErrorRef.current === "function") {
+                  onErrorRef.current(reason);
+                }
+              } catch (e) {
+                console.error("[VideoListPanel] onError 처리 실패:", e); // TODO: 배포 전 제거
+              }
+            },
+          },
+        });
+      } catch (e) {
+        console.error("[VideoListPanel] YT 플레이어 초기화 실패:", e); // TODO: 배포 전 제거
+      }
+    }
+    setup();
+
+    // 정리: 플레이어 파괴
+    return () => {
+      destroyed = true;
+      try {
+        if (
+          playerRef.current &&
+          typeof playerRef.current.destroy === "function"
+        ) {
+          playerRef.current.destroy();
+        }
+      } catch (e) {
+        console.error("[VideoListPanel] YT 플레이어 정리 실패:", e); // TODO: 배포 전 제거
+      }
+      playerRef.current = null;
+    };
+  }, [videoId, iframeId]);
+
+  return (
+    <div
+      style={{ aspectRatio: "16 / 9" }}
+      className="w-full overflow-hidden rounded bg-black"
+    >
+      <iframe
+        id={iframeId}
+        // enablejsapi=1 로 IFrame API 제어/이벤트 구독 가능
+        src={`https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1`}
+        title={title || "youtube video"}
+        className="h-full w-full"
+        style={{ border: 0 }}
+        allow="autoplay; encrypted-media; picture-in-picture"
+        allowFullScreen
+      />
+    </div>
+  );
+}
+
 export default function VideoListPanel({
   markers,
   onClose,
@@ -42,6 +179,64 @@ export default function VideoListPanel({
   expandedMarkerId,
 }) {
   const list = Array.isArray(markers) ? markers : [];
+
+  // 재생불가로 신고되어 안내를 표시할 마커 (id → 메시지)
+  const [noticeIds, setNoticeIds] = useState({});
+  // 목록에서 제거된 마커 id 집합 (신고 성공 후 잠시 뒤 숨김)
+  const [removedIds, setRemovedIds] = useState(() => new Set());
+  // 중복 신고 방지용 (이미 신고한 마커 id)
+  const reportedRef = useRef(new Set());
+  // 지연 제거 타이머 정리용
+  const timersRef = useRef([]);
+
+  // 언마운트 시 타이머 정리
+  useEffect(() => {
+    return () => {
+      try {
+        timersRef.current.forEach((t) => clearTimeout(t));
+      } catch (e) {
+        // 무시
+      }
+      timersRef.current = [];
+    };
+  }, []);
+
+  // ─── 재생불가 신고 처리 (onError → report-error) ─────────────
+  const handleUnplayable = useCallback(async (marker, reason) => {
+    try {
+      if (!marker || !marker.id) return;
+      // 같은 마커 중복 신고 방지 (여러 번 onError 가 와도 1회만)
+      if (reportedRef.current.has(marker.id)) return;
+      reportedRef.current.add(marker.id);
+
+      const res = await fetch(`/api/markers/${marker.id}/report-error`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: reason || "unknown" }),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.ok) {
+        // 안내 표시
+        setNoticeIds((prev) => ({
+          ...prev,
+          [marker.id]:
+            "이 영상은 현재 재생할 수 없어 목록에서 제외 처리되었습니다.",
+        }));
+        // 잠시 후 목록에서 제거 (새로고침 없이 사라지게)
+        const t = setTimeout(() => {
+          setRemovedIds((prev) => {
+            const next = new Set(prev);
+            next.add(marker.id);
+            return next;
+          });
+        }, 2500);
+        timersRef.current.push(t);
+      }
+    } catch (error) {
+      console.error("[VideoListPanel] 재생불가 신고 실패:", error); // TODO: 배포 전 제거
+    }
+  }, []);
 
   // 카드 클릭 처리 → 부모가 펼치기/접기 + 지도 이동을 결정
   function handleCardClick(marker) {
@@ -73,6 +268,9 @@ export default function VideoListPanel({
     }
   }
 
+  // 화면에 실제로 보일 목록 (신고로 제거된 것 제외)
+  const visibleList = list.filter((m) => m && !removedIds.has(m.id));
+
   return (
     <div className="flex h-full flex-col">
       {/* 상단: 제목 + 닫기 버튼 */}
@@ -92,13 +290,13 @@ export default function VideoListPanel({
 
       {/* 카드 목록 (세로 스크롤) */}
       <div className="flex-1 overflow-auto p-2">
-        {list.length === 0 ? (
+        {visibleList.length === 0 ? (
           <p className="mt-4 text-center text-sm text-gray-400">
             등록된 영상이 없습니다.
           </p>
         ) : (
           <div className="flex flex-col gap-3">
-            {list.map((marker) => {
+            {visibleList.map((marker) => {
               // 각 카드는 이 marker 의 고유 데이터만 참조한다.
               const thumb = getThumb(marker);
               const badge = getStatusBadge(marker);
@@ -115,6 +313,8 @@ export default function VideoListPanel({
                 expandedMarkerId != null && marker.id === expandedMarkerId;
               // 이미 저장된 video_id 를 그대로 사용 (유튜브 API 재호출 없음)
               const videoId = marker.youtube_video_id || "";
+              // 재생불가 신고 안내 메시지 (있으면 표시)
+              const notice = noticeIds[marker.id];
 
               return (
                 <div
@@ -195,21 +395,18 @@ export default function VideoListPanel({
                           ✕
                         </button>
 
-                        {videoId ? (
-                          // 16:9 비율의 인라인 iframe (이미 저장된 video_id 사용)
-                          <div
-                            style={{ aspectRatio: "16 / 9" }}
-                            className="w-full overflow-hidden rounded bg-black"
-                          >
-                            <iframe
-                              src={`https://www.youtube.com/embed/${videoId}?autoplay=1`}
-                              title={marker.location || "youtube video"}
-                              className="h-full w-full"
-                              style={{ border: 0 }}
-                              allow="autoplay; encrypted-media; picture-in-picture"
-                              allowFullScreen
-                            />
+                        {notice ? (
+                          // 재생불가 신고 안내 (영상 대신 표시)
+                          <div className="flex min-h-24 w-full items-center justify-center rounded bg-yellow-50 px-3 py-4 text-center text-xs text-yellow-800">
+                            {notice}
                           </div>
+                        ) : videoId ? (
+                          // 유튜브 IFrame Player API 기반 인라인 플레이어 (에러 감지)
+                          <InlinePlayer
+                            videoId={videoId}
+                            title={marker.location || "youtube video"}
+                            onError={(reason) => handleUnplayable(marker, reason)}
+                          />
                         ) : (
                           <div className="flex h-24 w-full items-center justify-center rounded bg-gray-100 text-xs text-gray-500">
                             영상 정보가 없습니다.

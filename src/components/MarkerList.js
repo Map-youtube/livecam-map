@@ -455,6 +455,9 @@ export default function MarkerList({ refreshSignal }) {
   const [filterContinent, setFilterContinent] = useState("all");
   const [filterCountry, setFilterCountry] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  // 재생 확인(verify) 진행 중인 마커 id + 실패 안내 배너 메시지
+  const [verifyingId, setVerifyingId] = useState(null);
+  const [verifyMessage, setVerifyMessage] = useState("");
 
   // ─── 목록 불러오기 (Firestore만 사용, 유튜브 API 호출 없음) ──
   const loadMarkers = useCallback(async () => {
@@ -537,6 +540,48 @@ export default function MarkerList({ refreshSignal }) {
     setAiEditingMarker(null);
     loadMarkers();
   }, [loadMarkers]);
+
+  // ─── 재생 확인(verify) → 정상이면 복원, 실패면 안내 ──────────
+  // 관리자 전용 API 이므로 토큰을 붙여 호출한다. 성공 시 목록을 다시 불러와 배지 갱신.
+  const handleVerify = useCallback(
+    async (marker) => {
+      if (verifyingId) return; // 다른 확인 진행 중이면 무시
+      setVerifyingId(marker.id);
+      setVerifyMessage("");
+      try {
+        // 로그인 토큰 확보 (세션 없으면 로그인 페이지로 이동)
+        const token = await getAdminIdToken();
+        if (!token) {
+          window.alert("로그인이 만료되었습니다. 다시 로그인해주세요");
+          window.location.href = "/admin/login";
+          return;
+        }
+
+        const res = await fetch(`/api/markers/${marker.id}/verify`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+
+        if (res.ok && data.ok) {
+          // 정상 확인 → 목록 재조회 (배지가 🔴 LIVE 로 갱신됨)
+          await loadMarkers();
+        } else {
+          // 실패 → 상태 유지 + 안내 배너
+          setVerifyMessage(
+            (marker.location ? `[${marker.location}] ` : "") +
+              (data.error || "아직 재생할 수 없는 영상입니다")
+          );
+        }
+      } catch (error) {
+        console.error("[MarkerList] 재생 확인 실패:", error); // TODO: 배포 전 제거
+        setVerifyMessage("재생 확인 중 오류가 발생했습니다.");
+      } finally {
+        setVerifyingId(null);
+      }
+    },
+    [verifyingId, loadMarkers]
+  );
 
   // ─── 드롭다운 옵션: 실제 데이터에 존재하는 대륙/국가만 추출 ───
   // (상태는 고정 목록을 쓰므로 여기서 계산하지 않는다.)
@@ -690,6 +735,21 @@ export default function MarkerList({ refreshSignal }) {
         </div>
       </div>
 
+      {/* 재생 확인 실패 안내 배너 */}
+      {verifyMessage && (
+        <div className="mb-3 flex items-center justify-between rounded border border-orange-300 bg-orange-50 px-3 py-2 text-sm text-orange-800">
+          <span>⚠️ {verifyMessage}</span>
+          <button
+            type="button"
+            onClick={() => setVerifyMessage("")}
+            className="ml-2 rounded px-1 text-orange-600 hover:bg-orange-100"
+            aria-label="안내 닫기"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* 로딩 / 에러 / 빈 상태 */}
       {loading && <p className="text-sm text-gray-500">목록을 불러오는 중...</p>}
       {!loading && loadError && (
@@ -788,16 +848,34 @@ export default function MarkerList({ refreshSignal }) {
                         <span className="text-gray-400">-</span>
                       )}
                     </td>
-                    {/* 상태 배지 */}
+                    {/* 상태 배지 (+ 재생불가/비활성 마커에만 "재생 확인" 버튼) */}
                     <td className="px-2 py-2">
-                      <span
-                        className={
-                          "whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-semibold " +
-                          badge.className
-                        }
-                      >
-                        {badge.text}
-                      </span>
+                      <div className="flex flex-col items-start gap-1">
+                        <span
+                          className={
+                            "whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-semibold " +
+                            badge.className
+                          }
+                        >
+                          {badge.text}
+                        </span>
+                        {(marker.auto_disabled === true ||
+                          marker.is_active === false) && (
+                          <button
+                            type="button"
+                            onClick={() => handleVerify(marker)}
+                            disabled={verifyingId === marker.id}
+                            className={
+                              "whitespace-nowrap rounded border px-2 py-0.5 text-xs " +
+                              (verifyingId === marker.id
+                                ? "cursor-not-allowed border-gray-200 text-gray-400"
+                                : "border-green-300 text-green-700 hover:bg-green-50")
+                            }
+                          >
+                            {verifyingId === marker.id ? "확인 중..." : "재생 확인"}
+                          </button>
+                        )}
+                      </div>
                     </td>
                     {/* 채널명 */}
                     <td className="px-2 py-2 text-gray-700">
