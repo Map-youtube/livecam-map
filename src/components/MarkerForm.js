@@ -20,6 +20,7 @@ import { useEffect, useMemo, useState } from "react";
 import LeafletMapWrapper from "@/components/LeafletMapWrapper";
 import { getContinentByCountry } from "@/lib/continentUtils";
 import { getAdminIdToken } from "@/lib/clientAuth";
+import TagSelector from "@/components/TagSelector";
 
 // ─── 국가 목록 (ISO 3166-1 alpha-2) ───────────────────────────
 // value = 국가코드(대문자), label = 한국어 국가명.
@@ -128,6 +129,8 @@ export default function MarkerForm({ onRegistered }) {
   const [country, setCountry] = useState("");
   const [category, setCategory] = useState("landmark");
   const [isLive, setIsLive] = useState(true);
+  // 장소 특성 태그 (지역 분류와 별개, 최대 3개)
+  const [tags, setTags] = useState([]);
 
   // ─── 제출 상태 ───────────────────────────────────────────────
   const [submitting, setSubmitting] = useState(false);
@@ -273,6 +276,7 @@ export default function MarkerForm({ onRegistered }) {
     setCountry("");
     setCategory("landmark");
     setIsLive(true);
+    setTags([]);
   }
 
   // ─── 등록 처리 (POST /api/markers) ───────────────────────────
@@ -308,6 +312,7 @@ export default function MarkerForm({ onRegistered }) {
           country: country,
           category: category,
           is_live: isLive,
+          tags: tags,
         }),
       });
 
@@ -528,6 +533,14 @@ export default function MarkerForm({ onRegistered }) {
               </option>
             ))}
           </select>
+        </div>
+
+        {/* 장소 특성 태그 (지역 분류와 별개, 최대 3개) */}
+        <div>
+          <label className="block text-xs text-gray-600">
+            장소 특성 태그 (최대 3개)
+          </label>
+          <TagSelector value={tags} onChange={setTags} />
         </div>
 
         {/* 실시간 여부 토글 */}

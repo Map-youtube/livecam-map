@@ -140,7 +140,22 @@ export async function POST(request) {
       country,
       category,
       is_live,
+      tags,
     } = body || {};
+
+    // ─── 특성 태그 검증 (선택적, 최대 3개) ─────────────────────
+    // 지역 분류(continent/country/city)와는 별개인 평평한 태그 배열.
+    let tagsArr = Array.isArray(tags) ? tags : [];
+    if (tagsArr.length > 3) {
+      return Response.json(
+        { ok: false, error: "특성 태그는 최대 3개까지 가능합니다." },
+        { status: 400 }
+      );
+    }
+    // 문자열로 정리하고 빈 값 제거
+    tagsArr = tagsArr
+      .map((t) => String(t).trim())
+      .filter((t) => t.length > 0);
 
     // ─── 필수값 검증 ───────────────────────────────────────────
     if (!youtube_url) {
@@ -260,6 +275,9 @@ export async function POST(request) {
 
       // 분류 (미지정 시 other)
       category: category || "other",
+
+      // 장소 특성 태그 (지역 분류와 별개, 최대 3개, 기본 빈 배열)
+      tags: tagsArr,
 
       // YouTube 정보 (입력 + 자동 수집)
       youtube_url: youtube_url,

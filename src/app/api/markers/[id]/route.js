@@ -80,6 +80,7 @@ export async function PATCH(request, context) {
       lng,
       description,
       description_confirmed,
+      tags,
     } = body || {};
     const updates = {};
 
@@ -87,6 +88,25 @@ export async function PATCH(request, context) {
     if (typeof city === "string") updates.city = city;
     if (typeof category === "string") updates.category = category;
     if (typeof is_live === "boolean") updates.is_live = is_live;
+
+    // ─── 특성 태그 처리 (선택적, 최대 3개) ─────────────────────
+    if (tags !== undefined) {
+      if (!Array.isArray(tags)) {
+        return Response.json(
+          { ok: false, error: "tags 는 배열이어야 합니다." },
+          { status: 400 }
+        );
+      }
+      if (tags.length > 3) {
+        return Response.json(
+          { ok: false, error: "특성 태그는 최대 3개까지 가능합니다." },
+          { status: 400 }
+        );
+      }
+      updates.tags = tags
+        .map((t) => String(t).trim())
+        .filter((t) => t.length > 0);
+    }
 
     // ─── AI 설명(ko/en) 및 확정 여부 처리 ──────────────────────
     // 단순 텍스트/플래그 저장이므로 유튜브 API 재호출과 무관하다. (아래 youtube_url 로직은 그대로)

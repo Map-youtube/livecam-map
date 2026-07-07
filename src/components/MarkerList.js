@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import LeafletMapWrapper from "@/components/LeafletMapWrapper";
 import AiDescriptionEditor from "@/components/AiDescriptionEditor";
+import TagSelector from "@/components/TagSelector";
 import { getContinentByCountry } from "@/lib/continentUtils";
 import { getAdminIdToken } from "@/lib/clientAuth";
 
@@ -184,6 +185,10 @@ function EditModal({ marker, onClose, onSaved }) {
   const [lng, setLng] = useState(
     marker.lng !== undefined && marker.lng !== null ? String(marker.lng) : ""
   );
+  // 장소 특성 태그 (기존 tags 로 초기화, 배열 아니면 빈 배열)
+  const [tags, setTags] = useState(
+    Array.isArray(marker.tags) ? marker.tags : []
+  );
 
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -265,6 +270,8 @@ function EditModal({ marker, onClose, onSaved }) {
           // 지도/입력으로 변경된 좌표도 함께 전송
           lat: latNum,
           lng: lngNum,
+          // 장소 특성 태그
+          tags: tags,
         }),
       });
       const data = await res.json();
@@ -359,6 +366,14 @@ function EditModal({ marker, onClose, onSaved }) {
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* 장소 특성 태그 (최대 3개) */}
+          <div>
+            <label className="block text-xs text-gray-600">
+              장소 특성 태그 (최대 3개)
+            </label>
+            <TagSelector value={tags} onChange={setTags} />
           </div>
 
           {/* 위치 지정 지도 */}
@@ -759,6 +774,7 @@ export default function MarkerList({ refreshSignal }) {
                 <th className="px-2 py-2">국가</th>
                 <th className="px-2 py-2">대륙</th>
                 <th className="px-2 py-2">카테고리</th>
+                <th className="px-2 py-2">특성 태그</th>
                 <th className="px-2 py-2">상태</th>
                 <th className="px-2 py-2">채널명</th>
                 <th className="px-2 py-2">마지막 확인</th>
@@ -818,6 +834,23 @@ export default function MarkerList({ refreshSignal }) {
                     <td className="px-2 py-2 text-gray-700">{continentLabel}</td>
                     {/* 카테고리 */}
                     <td className="px-2 py-2 text-gray-700">{categoryLabel}</td>
+                    {/* 특성 태그 (없으면 -) */}
+                    <td className="px-2 py-2">
+                      {Array.isArray(marker.tags) && marker.tags.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {marker.tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="whitespace-nowrap rounded-full bg-blue-100 px-1.5 py-0.5 text-xs text-blue-800"
+                            >
+                              #{tag}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
                     {/* 상태 배지 */}
                     <td className="px-2 py-2">
                       <span
