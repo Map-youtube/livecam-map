@@ -16,7 +16,7 @@
 //   - selectedMarkerId : 강조 표시할 마커 id — 선택적
 // ─────────────────────────────────────────────────────────────
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -94,24 +94,53 @@ function MapClickHandler({ onMapClick }) {
 }
 
 // ─── 중심/줌 변경 반영 (내부 헬퍼 컴포넌트) ───────────────────
-// center/zoom props 가 바뀌면 지도를 해당 위치로 부드럽게 이동(flyTo)시킨다.
-// (예: 카테고리 트리에서 마커 선택 시 지도 이동 — 재사용성을 위해 포함)
+// center/zoom props 의 "실제 좌표 값"이 바뀔 때만 지도를 부드럽게 이동(flyTo)시킨다.
+// (예: 카테고리 트리에서 특정 마커를 선택해 center 를 바꾸는 경우)
+//
+// ⚠️ 버그 방지 포인트:
+//   부모가 center 를 객체 리터럴( {lat, lng} )로 넘기면 렌더링마다 "새 객체 참조"가 되어
+//   useEffect 의존성 배열이 매 렌더마다 변경된 것으로 인식된다. 그러면 flyTo 가 매 렌더마다
+//   실행되어, 마커 클릭으로 다른 곳으로 이동시켜도 곧바로 center 로 되돌아가 버린다.
+//   → 참조가 아니라 "위도/경도/줌 값"을 이전 값과 비교하여, 값이 실제로 바뀐 경우에만 이동한다.
+//   → 최초 마운트 시에는 MapContainer 가 이미 center/zoom 으로 초기화되므로 이동을 생략한다.
 function ChangeView({ center, zoom }) {
   const map = useMap();
+  // 직전에 적용한 center/zoom 값을 저장 (참조가 아닌 값 비교용)
+  const prevViewRef = useRef(null);
 
   useEffect(() => {
     try {
+      // center 값이 유효하지 않으면 아무것도 하지 않는다
       if (
-        center &&
-        typeof center.lat === "number" &&
-        typeof center.lng === "number"
+        !center ||
+        typeof center.lat !== "number" ||
+        typeof center.lng !== "number"
       ) {
+        return;
+      }
+
+      const prev = prevViewRef.current;
+      // 현재 center/zoom 값을 기록
+      prevViewRef.current = { lat: center.lat, lng: center.lng, zoom };
+
+      // 최초 실행(마운트)에는 이미 초기 center 로 표시된 상태이므로 이동을 생략한다
+      if (prev === null) {
+        return;
+      }
+
+      // 위도/경도/줌 중 하나라도 "값"이 실제로 바뀐 경우에만 이동
+      const changed =
+        prev.lat !== center.lat ||
+        prev.lng !== center.lng ||
+        prev.zoom !== zoom;
+
+      if (changed) {
         map.flyTo([center.lat, center.lng], zoom);
       }
     } catch (error) {
       console.error("[LeafletMap] 지도 이동(flyTo) 실패:", error); // TODO: 배포 전 제거
     }
-    // center/zoom 값이 바뀔 때만 실행
+    // center 객체 참조가 바뀌어도 내부에서 값 비교로 걸러내므로 안전하다
   }, [map, center, zoom]);
 
   return null;
@@ -134,11 +163,39 @@ export default function LeafletMap({
   const attribution =
     process.env.NEXT_PUBLIC_MAP_ATTRIBUTION || "© OpenStreetMap contributors";
 
+  // ─── Leaflet map 인스턴스 참조 ───────────────────────────────
+  // react-leaflet v5 에서 MapContainer 의 ref 는 Leaflet map 인스턴스를 가리킨다.
+  // 마커 클릭 시 이 인스턴스로 "클릭된 마커의 좌표"로 직접 flyTo 하기 위해 사용한다.
+  const mapRef = useRef(null);
+
+  // ─── 마커 클릭 처리 ────────────────────────────────────────────
+  // 반드시 "그 마커(clickedMarker) 자신의 좌표"로 이동시킨다.
+  // (반복문 밖의 center 나 첫 번째 마커 좌표를 참조하지 않도록 개별 인자로 받는다.)
+  const handleMarkerClick = (clickedMarker, markerLat, markerLng) => {
+    try {
+      // 1) 상위로 클릭된 마커 객체 전달 (기존 동작 유지)
+      if (typeof onMarkerClick === "function") {
+        onMarkerClick(clickedMarker);
+      }
+
+      // 2) 지도도 그 마커의 실제 좌표로 부드럽게 이동
+      //    현재 줌이 너무 낮으면(예: 5) 도시 구분이 안 되므로 최소 8까지 확대한다.
+      const map = mapRef.current;
+      if (map) {
+        const targetZoom = Math.max(map.getZoom(), 8);
+        map.flyTo([markerLat, markerLng], targetZoom);
+      }
+    } catch (error) {
+      console.error("[LeafletMap] 마커 클릭 처리 실패:", error); // TODO: 배포 전 제거
+    }
+  };
+
   try {
     return (
       // 컨테이너 높이는 부모가 정한다 (부모에서 height 지정 필수).
       <div style={{ height: "100%", width: "100%" }}>
         <MapContainer
+          ref={mapRef}
           center={[center.lat, center.lng]}
           zoom={zoom}
           scrollWheelZoom={true}
@@ -173,18 +230,9 @@ export default function LeafletMap({
                   icon={makeIcon(isSelected)}
                   zIndexOffset={isSelected ? 1000 : 0}
                   eventHandlers={{
-                    click: () => {
-                      try {
-                        if (typeof onMarkerClick === "function") {
-                          onMarkerClick(m);
-                        }
-                      } catch (error) {
-                        console.error(
-                          "[LeafletMap] 마커 클릭 처리 실패:",
-                          error
-                        ); // TODO: 배포 전 제거
-                      }
-                    },
+                    // 이 마커(m)와 이 반복의 고유 좌표(lat, lng)를 그대로 전달한다.
+                    // 각 Marker 는 자신만의 클로저를 가지므로 항상 자기 좌표로 이동한다.
+                    click: () => handleMarkerClick(m, lat, lng),
                   }}
                 >
                   {/* 마커 위 간단한 팝업 (장소명) */}
