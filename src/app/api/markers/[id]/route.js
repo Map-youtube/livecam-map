@@ -59,7 +59,7 @@ export async function PATCH(request, context) {
     const existing = snap.data() || {};
 
     // 허용된 필드만 골라 updates 구성
-    const { location, city, country, category, is_live, youtube_url } =
+    const { location, city, country, category, is_live, youtube_url, lat, lng } =
       body || {};
     const updates = {};
 
@@ -67,6 +67,29 @@ export async function PATCH(request, context) {
     if (typeof city === "string") updates.city = city;
     if (typeof category === "string") updates.category = category;
     if (typeof is_live === "boolean") updates.is_live = is_live;
+
+    // ─── 위도/경도 처리 (지도 클릭/직접 입력으로 위치 변경 가능) ──
+    // 값이 전달되면 숫자로 변환해 저장한다. (0도 유효하므로 undefined/null 만 무시)
+    if (lat !== undefined && lat !== null) {
+      const latNum = Number(lat);
+      if (Number.isNaN(latNum)) {
+        return Response.json(
+          { ok: false, error: "lat(위도) 값이 올바르지 않습니다." },
+          { status: 400 }
+        );
+      }
+      updates.lat = latNum;
+    }
+    if (lng !== undefined && lng !== null) {
+      const lngNum = Number(lng);
+      if (Number.isNaN(lngNum)) {
+        return Response.json(
+          { ok: false, error: "lng(경도) 값이 올바르지 않습니다." },
+          { status: 400 }
+        );
+      }
+      updates.lng = lngNum;
+    }
 
     // ─── country 처리: 바뀐 경우에만 continent 재계산 ──────────
     if (typeof country === "string" && country) {

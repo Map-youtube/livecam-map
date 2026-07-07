@@ -12,7 +12,7 @@
 
 import { useState } from "react";
 import MarkerForm from "@/components/MarkerForm";
-import MarkerTree from "@/components/MarkerTree";
+import MarkerList from "@/components/MarkerList";
 
 export default function AdminPage() {
   // 값이 바뀌면 MarkerTree 가 목록을 다시 불러온다 (등록 성공 시 +1).
@@ -34,7 +34,7 @@ export default function AdminPage() {
         <h2 className="mb-4 text-xl font-bold text-gray-900">
           등록된 마커 목록
         </h2>
-        <MarkerTree refreshSignal={refreshSignal} />
+        <MarkerList refreshSignal={refreshSignal} />
       </div>
     </main>
   );
