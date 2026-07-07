@@ -16,7 +16,7 @@
 //   - onSelectTag(tagName)
 // ─────────────────────────────────────────────────────────────
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { COUNTRY_NAME_BY_CODE } from "@/lib/countryList";
 
 // 대륙 코드 → 한국어 라벨
@@ -41,9 +41,27 @@ const CONTINENT_ORDER = [
 
 // ─── 접기/펼치기 그룹 (내부 헬퍼) ─────────────────────────────
 // 캐럿으로 펼치고, 라벨 클릭 시 onSelect 콜백 호출.
-function CollapsibleRow({ label, count, depth, defaultOpen, onSelect, children }) {
+function CollapsibleRow({
+  label,
+  count,
+  depth,
+  defaultOpen,
+  forceOpen,
+  onSelect,
+  children,
+}) {
   const [open, setOpen] = useState(!!defaultOpen);
   const hasChildren = Boolean(children);
+
+  // forceOpen 이 true 로 바뀌면(예: 지도에서 마커를 클릭해 그 도시가 선택된 경우)
+  // 이 노드를 자동으로 펼친다. (사용자가 이후 수동으로 접는 것은 그대로 허용)
+  useEffect(() => {
+    try {
+      if (forceOpen) setOpen(true);
+    } catch (error) {
+      console.error("[MainCategoryTree] 자동 펼침 실패:", error); // TODO: 배포 전 제거
+    }
+  }, [forceOpen]);
 
   function handleClick() {
     try {
@@ -158,6 +176,10 @@ export default function MainCategoryTree({
                   count={countContinent(continentObj)}
                   depth={0}
                   defaultOpen={false}
+                  // 선택된 도시가 이 대륙에 속하면 자동으로 펼친다
+                  forceOpen={Boolean(
+                    selectedCity && selectedCity.continent === continent
+                  )}
                   onSelect={() =>
                     typeof onSelectLocation === "function" &&
                     onSelectLocation({ continent })
@@ -180,6 +202,12 @@ export default function MainCategoryTree({
                           count={countCountry(countryObj)}
                           depth={1}
                           defaultOpen={false}
+                          // 선택된 도시가 이 국가에 속하면 자동으로 펼친다
+                          forceOpen={Boolean(
+                            selectedCity &&
+                              selectedCity.continent === continent &&
+                              selectedCity.country === country
+                          )}
                           onSelect={() =>
                             typeof onSelectLocation === "function" &&
                             onSelectLocation({ continent, country })

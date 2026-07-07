@@ -146,6 +146,27 @@ export default function MainMapView({ markers, tags }) {
     [expandedMarkerId]
   );
 
+  // ─── 지도 마커 직접 클릭 처리 (경로 B) ───────────────────────
+  // 트리에서 도시를 클릭한 것(경로 A)과 "동일한 결과 화면"이 되도록 통합한다:
+  //   1) 그 마커의 도시로 selectedCity 설정 → 트리 강조/자동 펼침 + 패널 열림
+  //   2) 그 마커를 expandedMarkerId 로 설정 → 카드 자동 펼침 + 영상 재생
+  // ⚠️ 이미 지도에서 클릭했으므로 mapCenter/mapZoom 은 다시 설정하지 않는다(화면 튐 방지).
+  //    selectedMarkerId 는 expandedMarkerId 를 통해 지도로 전달되어 강조가 갱신된다.
+  const handleMarkerClick = useCallback((marker) => {
+    try {
+      if (!marker) return;
+      setSelectedCity({
+        continent: marker.continent || "",
+        country: marker.country || "",
+        city: marker.city || "",
+      });
+      setSelectedTag(null);
+      setExpandedMarkerId(marker.id);
+    } catch (error) {
+      console.error("[MainMapView] 지도 마커 클릭 처리 실패:", error); // TODO: 배포 전 제거
+    }
+  }, []);
+
   // ─── 현재 선택 기준으로 필터링된 마커 ────────────────────────
   const filteredMarkers = useMemo(() => {
     try {
@@ -183,7 +204,11 @@ export default function MainMapView({ markers, tags }) {
   }, [selectedCity, selectedTag, filteredMarkers]);
 
   return (
-    <div className="flex h-screen w-full">
+    // ⚠️ 모바일 기초 안전장치: 각 패널에 min-width 를 두어 좁은 화면에서도 요소가
+    //    0폭으로 찌그러져 텍스트가 겹치거나 버튼이 사라지지 않게 한다. 폰트는 text-xs 로 작게.
+    //    좁으면 가로 스크롤이 생길 수 있으나 콘텐츠 자체는 깨지지 않는다.
+    //    (본격적인 모바일 전용 UI — 하단 드로어 방식 등 — 는 추후 디자인 작업에서 진행 예정)
+    <div className="flex h-screen w-full overflow-x-auto">
       {/* 왼쪽: 카테고리 트리 (10%, 최소 200px) */}
       <aside className="h-full w-[10%] min-w-[200px] overflow-auto border-r border-gray-200 bg-white">
         <MainCategoryTree
@@ -217,6 +242,7 @@ export default function MainMapView({ markers, tags }) {
           center={mapCenter || DEFAULT_CENTER}
           zoom={mapZoom || DEFAULT_ZOOM}
           onMapClick={handleMapClick}
+          onMarkerClick={handleMarkerClick}
           selectedMarkerId={expandedMarkerId}
         />
       </main>
