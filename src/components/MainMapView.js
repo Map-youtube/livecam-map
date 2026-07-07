@@ -41,8 +41,18 @@ export default function MainMapView({ markers, tags }) {
   const [selectedCity, setSelectedCity] = useState(null);
   const [selectedTag, setSelectedTag] = useState(null);
 
+  // 카드에서 펼쳐진(재생 중인) 마커 id (없으면 null)
+  const [expandedMarkerId, setExpandedMarkerId] = useState(null);
+  // 카드 클릭으로 지도를 이동시킬 때 사용할 중심/줌 (null 이면 기본값 유지)
+  const [mapCenter, setMapCenter] = useState(null);
+  const [mapZoom, setMapZoom] = useState(null);
+
   // 패널 열림 여부 = 둘 중 하나라도 선택됨
   const isPanelOpen = selectedCity !== null || selectedTag !== null;
+
+  // 지도 기본 중심/줌 (카드로 이동 지정 전)
+  const DEFAULT_CENTER = { lat: 20, lng: 0 };
+  const DEFAULT_ZOOM = 2;
 
   // ─── 지역(도시) 선택 → 도시 필터, 태그 선택 해제 ─────────────
   const handleSelectLocation = useCallback((selection) => {
@@ -55,6 +65,8 @@ export default function MainMapView({ markers, tags }) {
           city: selection.city,
         });
         setSelectedTag(null);
+        // 필터가 바뀌면 이전에 펼쳐진 영상 상태는 초기화 (지도 위치는 유지)
+        setExpandedMarkerId(null);
       }
     } catch (error) {
       console.error("[MainMapView] 지역 선택 처리 실패:", error); // TODO: 배포 전 제거
@@ -67,17 +79,21 @@ export default function MainMapView({ markers, tags }) {
       if (tagName) {
         setSelectedTag(tagName);
         setSelectedCity(null);
+        // 필터가 바뀌면 이전에 펼쳐진 영상 상태는 초기화 (지도 위치는 유지)
+        setExpandedMarkerId(null);
       }
     } catch (error) {
       console.error("[MainMapView] 태그 선택 처리 실패:", error); // TODO: 배포 전 제거
     }
   }, []);
 
-  // ─── 패널 닫기 (선택 상태 초기화) ────────────────────────────
+  // ─── 패널 닫기 (선택/영상 상태 초기화) ───────────────────────
   const closePanel = useCallback(() => {
     try {
       setSelectedCity(null);
       setSelectedTag(null);
+      // 패널을 닫으면 펼쳐진 영상 상태도 함께 초기화
+      setExpandedMarkerId(null);
     } catch (error) {
       console.error("[MainMapView] 패널 닫기 실패:", error); // TODO: 배포 전 제거
     }
@@ -93,14 +109,42 @@ export default function MainMapView({ markers, tags }) {
     }
   }, [closePanel]);
 
-  // ─── 카드 클릭 (다음 단계에서 실제 동작 구현) ────────────────
-  const handleSelectMarker = useCallback((marker) => {
-    try {
-      console.log("[MainMapView] 카드(마커) 선택:", marker && marker.id); // TODO: 다음 단계에서 실제 동작 구현
-    } catch (error) {
-      console.error("[MainMapView] 카드 선택 처리 실패:", error); // TODO: 배포 전 제거
-    }
-  }, []);
+  // ─── 카드 클릭 처리 (영상 펼치기 + 지도 이동) ────────────────
+  // - marker 가 null(접기 버튼): 영상만 접고 지도 위치는 그대로 유지.
+  // - 이미 펼쳐진 카드를 다시 클릭: 접기만 하고 지도 위치는 그대로 유지.
+  // - 새 카드 선택: 그 카드로 펼치고 지도를 그 마커의 좌표로 이동/확대.
+  const handleSelectMarker = useCallback(
+    (marker) => {
+      try {
+        // 접기 버튼(null) → 영상만 접기, 지도 유지
+        if (!marker) {
+          setExpandedMarkerId(null);
+          return;
+        }
+
+        // 같은 카드를 다시 클릭 → 접기, 지도 유지
+        if (marker.id === expandedMarkerId) {
+          setExpandedMarkerId(null);
+          return;
+        }
+
+        // 새 카드 선택 → 펼치기 + 그 마커의 "자기 좌표"로 지도 이동/확대
+        // (반복문 밖 고정 좌표가 아니라, 클릭된 marker 자신의 lat/lng 를 사용)
+        const lat = Number(marker.lat);
+        const lng = Number(marker.lng);
+
+        setExpandedMarkerId(marker.id);
+
+        if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
+          setMapCenter({ lat, lng });
+          setMapZoom(14); // 충분히 확대
+        }
+      } catch (error) {
+        console.error("[MainMapView] 카드 선택 처리 실패:", error); // TODO: 배포 전 제거
+      }
+    },
+    [expandedMarkerId]
+  );
 
   // ─── 현재 선택 기준으로 필터링된 마커 ────────────────────────
   const filteredMarkers = useMemo(() => {
@@ -160,18 +204,20 @@ export default function MainMapView({ markers, tags }) {
             title={panelTitle}
             onClose={closePanel}
             onSelectMarker={handleSelectMarker}
+            expandedMarkerId={expandedMarkerId}
           />
         </section>
       )}
 
       {/* 오른쪽: 지도 (패널 열림 시 60%, 닫힘 시 90%) */}
       <main className="h-full flex-1">
-        {/* 전 세계 마커를 보기 위해 낮은 줌으로 시작 */}
+        {/* 카드로 이동 지정이 있으면 그 좌표/줌을, 없으면 기본 세계 뷰를 사용 */}
         <LeafletMapWrapper
           markers={markerList}
-          center={{ lat: 20, lng: 0 }}
-          zoom={2}
+          center={mapCenter || DEFAULT_CENTER}
+          zoom={mapZoom || DEFAULT_ZOOM}
           onMapClick={handleMapClick}
+          selectedMarkerId={expandedMarkerId}
         />
       </main>
     </div>

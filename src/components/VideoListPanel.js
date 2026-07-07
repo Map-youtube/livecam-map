@@ -39,10 +39,11 @@ export default function VideoListPanel({
   onClose,
   onSelectMarker,
   title,
+  expandedMarkerId,
 }) {
   const list = Array.isArray(markers) ? markers : [];
 
-  // 카드 클릭 처리 (이번 단계는 콜백만)
+  // 카드 클릭 처리 → 부모가 펼치기/접기 + 지도 이동을 결정
   function handleCardClick(marker) {
     try {
       if (typeof onSelectMarker === "function") {
@@ -50,6 +51,17 @@ export default function VideoListPanel({
       }
     } catch (error) {
       console.error("[VideoListPanel] 카드 클릭 처리 실패:", error); // TODO: 배포 전 제거
+    }
+  }
+
+  // 영상 접기(X) → 부모에 null 전달 (지도 위치는 그대로)
+  function handleCollapse() {
+    try {
+      if (typeof onSelectMarker === "function") {
+        onSelectMarker(null);
+      }
+    } catch (error) {
+      console.error("[VideoListPanel] 영상 접기 실패:", error); // TODO: 배포 전 제거
     }
   }
 
@@ -98,64 +110,115 @@ export default function VideoListPanel({
                 .join(", ");
               const tags = Array.isArray(marker.tags) ? marker.tags : [];
 
+              // 이 카드가 현재 펼쳐진(재생 중인) 카드인지 — 반드시 자기 id 로 비교
+              const isExpanded =
+                expandedMarkerId != null && marker.id === expandedMarkerId;
+              // 이미 저장된 video_id 를 그대로 사용 (유튜브 API 재호출 없음)
+              const videoId = marker.youtube_video_id || "";
+
               return (
-                <button
+                <div
                   key={marker.id}
-                  type="button"
-                  onClick={() => handleCardClick(marker)}
-                  className="overflow-hidden rounded-lg border border-gray-200 bg-white text-left shadow-sm transition hover:shadow-md"
+                  className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition hover:shadow-md"
                 >
-                  {/* 썸네일 (카드 상단, 넓게) */}
-                  {thumb ? (
-                    // 원격 이미지라 next/image 대신 일반 img 사용
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={thumb}
-                      alt={marker.location || "썸네일"}
-                      className="h-32 w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-32 w-full items-center justify-center bg-gray-100 text-xs text-gray-400">
-                      썸네일 없음
-                    </div>
-                  )}
-
-                  {/* 본문 */}
-                  <div className="p-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="truncate text-sm font-bold text-gray-900">
-                        {marker.location || "(장소명 없음)"}
-                      </h3>
-                      <span
-                        className={
-                          "flex-shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold " +
-                          badge.className
-                        }
-                      >
-                        {badge.text}
-                      </span>
-                    </div>
-
-                    {/* 지역 정보 */}
-                    {regionText && (
-                      <p className="mt-0.5 text-xs text-gray-500">{regionText}</p>
-                    )}
-
-                    {/* 특성 태그 배지 */}
-                    {tags.length > 0 && (
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="rounded-full bg-blue-100 px-1.5 py-0.5 text-xs text-blue-800"
-                          >
-                            #{tag}
-                          </span>
-                        ))}
+                  {/* 클릭 영역(헤더): 썸네일 + 정보 */}
+                  <button
+                    type="button"
+                    onClick={() => handleCardClick(marker)}
+                    className="block w-full text-left"
+                  >
+                    {/* 썸네일 (카드 상단, 넓게) */}
+                    {thumb ? (
+                      // 원격 이미지라 next/image 대신 일반 img 사용
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={thumb}
+                        alt={marker.location || "썸네일"}
+                        className="h-32 w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-32 w-full items-center justify-center bg-gray-100 text-xs text-gray-400">
+                        썸네일 없음
                       </div>
                     )}
-                  </div>
-                </button>
+
+                    {/* 본문 */}
+                    <div className="p-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="truncate text-sm font-bold text-gray-900">
+                          {marker.location || "(장소명 없음)"}
+                        </h3>
+                        <span
+                          className={
+                            "flex-shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold " +
+                            badge.className
+                          }
+                        >
+                          {badge.text}
+                        </span>
+                      </div>
+
+                      {/* 지역 정보 */}
+                      {regionText && (
+                        <p className="mt-0.5 text-xs text-gray-500">
+                          {regionText}
+                        </p>
+                      )}
+
+                      {/* 특성 태그 배지 */}
+                      {tags.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="rounded-full bg-blue-100 px-1.5 py-0.5 text-xs text-blue-800"
+                            >
+                              #{tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </button>
+
+                  {/* 펼쳐진 경우: 카드 바로 아래 인라인 영상 (아코디언) */}
+                  {isExpanded && (
+                    <div className="border-t border-gray-200 p-2">
+                      <div className="relative">
+                        {/* 접기(X) 버튼 — 영상만 접고 지도 위치는 유지 */}
+                        <button
+                          type="button"
+                          onClick={handleCollapse}
+                          aria-label="영상 접기"
+                          className="absolute right-1 top-1 z-10 rounded bg-black/60 px-1.5 py-0.5 text-xs text-white hover:bg-black/80"
+                        >
+                          ✕
+                        </button>
+
+                        {videoId ? (
+                          // 16:9 비율의 인라인 iframe (이미 저장된 video_id 사용)
+                          <div
+                            style={{ aspectRatio: "16 / 9" }}
+                            className="w-full overflow-hidden rounded bg-black"
+                          >
+                            <iframe
+                              src={`https://www.youtube.com/embed/${videoId}?autoplay=1`}
+                              title={marker.location || "youtube video"}
+                              className="h-full w-full"
+                              style={{ border: 0 }}
+                              allow="autoplay; encrypted-media; picture-in-picture"
+                              allowFullScreen
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex h-24 w-full items-center justify-center rounded bg-gray-100 text-xs text-gray-500">
+                            영상 정보가 없습니다.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
