@@ -92,6 +92,23 @@ const STATUS_OPTIONS = [
   { value: "inactive", label: "⚫ 비활성" },
 ];
 
+// ─── 마커 목록 표 컬럼 정의 (기본 너비, px) ────────────────────
+// 장소명은 긴 제목도 한 줄에 보이도록 넉넉하게. 각 컬럼은 마우스로 너비 조절 가능(아래 로직).
+const MARKER_COLUMNS = [
+  { key: "thumb", label: "썸네일", width: 80 },
+  { key: "location", label: "장소명", width: 460 },
+  { key: "city", label: "도시", width: 120 },
+  { key: "country", label: "국가", width: 150 },
+  { key: "continent", label: "대륙", width: 90 },
+  { key: "tags", label: "특성 태그", width: 170 },
+  { key: "status", label: "상태", width: 120 },
+  { key: "channel", label: "채널명", width: 220 },
+  { key: "lastChecked", label: "마지막 확인", width: 170 },
+  { key: "ai", label: "AI 설명", width: 150 },
+  { key: "edit", label: "수정", width: 70 },
+  { key: "delete", label: "삭제", width: 70 },
+];
+
 // 지도 기본 중심 (좌표가 없을 때)
 const DEFAULT_CENTER = { lat: 35.68, lng: 139.76 };
 
@@ -471,6 +488,46 @@ export default function MarkerList({ refreshSignal }) {
   // 자동 재생가능 여부 검사(oEmbed) 진행 상태 + 결과 안내
   const [scanning, setScanning] = useState(false);
   const [scanMessage, setScanMessage] = useState("");
+  // 표 컬럼 너비(px) — 마우스로 조절 가능
+  const [colWidths, setColWidths] = useState(() => {
+    const o = {};
+    for (const c of MARKER_COLUMNS) o[c.key] = c.width;
+    return o;
+  });
+
+  // ─── 컬럼 너비 마우스 드래그 조절 ────────────────────────────
+  function startColResize(key, e) {
+    try {
+      e.preventDefault();
+      e.stopPropagation();
+      const startX = e.clientX;
+      const startWidth = colWidths[key];
+      function onMove(ev) {
+        const delta = ev.clientX - startX;
+        const next = Math.max(50, startWidth + delta); // 최소 50px
+        setColWidths((prev) => ({ ...prev, [key]: next }));
+      }
+      function onUp() {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      }
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+      // 드래그 중 커서/선택 방지
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    } catch (error) {
+      console.error("[MarkerList] 컬럼 크기 조절 실패:", error); // TODO: 배포 전 제거
+    }
+  }
+
+  // 표 전체 너비 = 각 컬럼 너비 합
+  const tableWidth = MARKER_COLUMNS.reduce(
+    (sum, c) => sum + (colWidths[c.key] || 0),
+    0
+  );
   // 이번 페이지 세션에서 자동 검사를 이미 1회 수행했는지 (재실행 방지)
   const autoScanDoneRef = useRef(false);
   // loadTick 을 "최초 로드 때만" 올리기 위한 플래그
@@ -947,25 +1004,38 @@ export default function MarkerList({ refreshSignal }) {
           <p className="text-sm text-gray-500">검색 결과가 없습니다.</p>
         )}
 
-      {/* 표 */}
+      {/* 표 (가로 스크롤 가능, 컬럼 너비 마우스 조절 가능) */}
       {!loading && !loadError && filteredMarkers.length > 0 && (
         <div className="max-h-[70vh] overflow-auto rounded-md border border-border">
-          <table className="min-w-full border-collapse text-left text-sm">
-            {/* sticky 헤더 */}
+          <table
+            className="border-collapse text-left text-sm"
+            style={{ tableLayout: "fixed", width: `${tableWidth}px` }}
+          >
+            {/* 컬럼 너비 지정 */}
+            <colgroup>
+              {MARKER_COLUMNS.map((c) => (
+                <col key={c.key} style={{ width: `${colWidths[c.key]}px` }} />
+              ))}
+            </colgroup>
+            {/* sticky 헤더 + 컬럼 크기 조절 핸들 */}
             <thead className="sticky top-0 z-10 bg-gray-100 text-xs text-gray-600">
               <tr>
-                <th className="px-2 py-2">썸네일</th>
-                <th className="px-2 py-2">장소명</th>
-                <th className="px-2 py-2">도시</th>
-                <th className="px-2 py-2">국가</th>
-                <th className="px-2 py-2">대륙</th>
-                <th className="px-2 py-2">특성 태그</th>
-                <th className="px-2 py-2">상태</th>
-                <th className="px-2 py-2">채널명</th>
-                <th className="px-2 py-2">마지막 확인</th>
-                <th className="px-2 py-2">AI 설명</th>
-                <th className="px-2 py-2">수정</th>
-                <th className="px-2 py-2">삭제</th>
+                {MARKER_COLUMNS.map((c) => (
+                  <th
+                    key={c.key}
+                    className="relative select-none px-2 py-2"
+                    style={{ width: `${colWidths[c.key]}px` }}
+                  >
+                    <span className="block truncate">{c.label}</span>
+                    {/* 오른쪽 경계 드래그 핸들 */}
+                    <span
+                      onMouseDown={(e) => startColResize(c.key, e)}
+                      className="absolute right-0 top-0 z-20 h-full w-1.5 cursor-col-resize hover:bg-brand/40"
+                      aria-hidden="true"
+                      title="드래그하여 컬럼 너비 조절"
+                    />
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -1001,18 +1071,28 @@ export default function MarkerList({ refreshSignal }) {
                         <div className="h-9 w-16 rounded bg-gray-100" />
                       )}
                     </td>
-                    {/* 장소명 */}
-                    <td className="px-2 py-2 font-medium text-ink">
+                    {/* 장소명 (한 줄, 컬럼보다 길면 …+툴팁, 컬럼 너비 조절로 더 넓게 볼 수 있음) */}
+                    <td
+                      className="truncate px-2 py-2 font-medium text-ink"
+                      title={marker.location || ""}
+                    >
                       {marker.location || "(장소명 없음)"}
                     </td>
                     {/* 도시 */}
-                    <td className="px-2 py-2 text-gray-700">
+                    <td
+                      className="truncate px-2 py-2 text-gray-700"
+                      title={marker.city || ""}
+                    >
                       {marker.city || "-"}
                     </td>
                     {/* 국가 */}
-                    <td className="px-2 py-2 text-gray-700">{countryLabel}</td>
+                    <td className="truncate px-2 py-2 text-gray-700" title={countryLabel}>
+                      {countryLabel}
+                    </td>
                     {/* 대륙 */}
-                    <td className="px-2 py-2 text-gray-700">{continentLabel}</td>
+                    <td className="truncate px-2 py-2 text-gray-700">
+                      {continentLabel}
+                    </td>
                     {/* 특성 태그 (없으면 -) */}
                     <td className="px-2 py-2">
                       {Array.isArray(marker.tags) && marker.tags.length > 0 ? (
@@ -1062,7 +1142,7 @@ export default function MarkerList({ refreshSignal }) {
                       </div>
                     </td>
                     {/* 채널명 */}
-                    <td className="px-2 py-2 text-gray-700">
+                    <td className="truncate px-2 py-2 text-gray-700" title={channelName}>
                       {channelUrl ? (
                         <a
                           href={channelUrl}
@@ -1077,7 +1157,7 @@ export default function MarkerList({ refreshSignal }) {
                       )}
                     </td>
                     {/* 마지막 확인 */}
-                    <td className="whitespace-nowrap px-2 py-2 text-gray-500">
+                    <td className="truncate whitespace-nowrap px-2 py-2 text-gray-500">
                       {lastChecked}
                     </td>
                     {/* AI 설명 (확정 여부 배지 + 편집 버튼) */}

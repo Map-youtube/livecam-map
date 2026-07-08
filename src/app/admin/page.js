@@ -54,8 +54,10 @@ export default function AdminPage() {
 
   return (
     <AdminGuard>
-      <main className="min-h-screen bg-bg px-4 py-8">
-        <div className="mx-auto max-w-2xl">
+      {/* 왼쪽 절반: 관리 콘텐츠 / 오른쪽 절반: 추후 측정 지표(접속자수·API 소비량 등) 영역 */}
+      <main className="flex min-h-screen bg-bg">
+        {/* 왼쪽 절반 (min-w-0 : 내부 표가 넘칠 때 가로 스크롤되게 함. 작은 화면에선 전체폭) */}
+        <div className="w-full min-w-0 px-4 py-8 lg:w-1/2">
           {/* 상단 바: 관리자 이메일 + 로그아웃 */}
           <div className="mb-6 flex items-center justify-between border-b border-border pb-3">
             <span className="text-xs text-gray-500">
@@ -70,21 +72,31 @@ export default function AdminPage() {
             </button>
           </div>
 
-          {/* 등록 영역 */}
-          <h1 className="mb-6 font-display text-2xl font-bold text-ink">
-            관리자 - 마커 등록
-          </h1>
-          <MarkerForm onRegistered={() => setRefreshSignal((n) => n + 1)} />
+          {/* 등록 영역 (폼은 읽기 좋게 최대폭 제한) */}
+          <div className="max-w-2xl">
+            <h1 className="mb-6 font-display text-2xl font-bold text-ink">
+              관리자 - 마커 등록
+            </h1>
+            <MarkerForm onRegistered={() => setRefreshSignal((n) => n + 1)} />
+          </div>
 
           {/* 구분선 */}
           <hr className="my-10 border-border" />
 
-          {/* 목록 영역 */}
+          {/* 목록 영역 (표는 왼쪽 절반 폭을 넓게 사용, 넘치면 가로 스크롤) */}
           <h2 className="mb-4 font-display text-xl font-bold text-ink">
             등록된 마커 목록
           </h2>
           <MarkerList refreshSignal={refreshSignal} />
         </div>
+
+        {/* 오른쪽 절반: 측정 지표 영역 (추후 구현 예정) */}
+        <aside className="hidden w-1/2 border-l border-border bg-surface p-8 lg:block">
+          <h2 className="font-display text-lg font-bold text-ink">측정 지표</h2>
+          <p className="mt-2 text-sm text-ink-muted">
+            접속자수 · API 소비량 등 통계 영역 (추후 구현 예정)
+          </p>
+        </aside>
       </main>
     </AdminGuard>
   );

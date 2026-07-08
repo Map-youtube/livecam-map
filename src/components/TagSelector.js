@@ -170,7 +170,7 @@ export default function TagSelector({ value, onChange }) {
       ) : allTags.length === 0 ? (
         <p className="text-xs text-gray-500">등록된 태그가 없습니다.</p>
       ) : (
-        <div className="max-h-48 overflow-auto rounded-md border border-border p-2">
+        <div className="rounded-md border border-border p-2">
           <div className="grid grid-cols-2 gap-x-3 gap-y-1 sm:grid-cols-3">
             {allTags.map((t) => {
               // 각 체크박스는 이 태그의 고유 id/이름만 참조한다.
