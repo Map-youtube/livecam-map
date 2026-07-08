@@ -114,6 +114,9 @@ const MARKER_COLUMNS = [
 const SCAN_COOLDOWN_MS = 10 * 60 * 1000; // 10분
 const SCAN_STORAGE_KEY = "livecam_last_scan_at";
 
+// 컬럼 너비(%) 저장키 — 관리자가 마지막으로 조절한 폭을 다음 접속 때 복원한다.
+const COL_WIDTHS_STORAGE_KEY = "livecam_marker_col_widths";
+
 // 지도 기본 중심 (좌표가 없을 때)
 const DEFAULT_CENTER = { lat: 35.68, lng: 139.76 };
 
@@ -190,6 +193,8 @@ function EditModal({ marker, onClose, onSaved }) {
   const [location, setLocation] = useState(marker.location || "");
   const [city, setCity] = useState(marker.city || "");
   const [country, setCountry] = useState(marker.country || "");
+  // 대륙 (국가 선택 시 자동으로 맞춰지되, 관리자가 직접 바꿀 수 있음)
+  const [continent, setContinent] = useState(marker.continent || "");
   const [isLive, setIsLive] = useState(marker.is_live !== false);
   const [youtubeUrl, setYoutubeUrl] = useState(marker.youtube_url || "");
   // 위도/경도는 문자열로 관리해 입력창 편집을 허용 (등록 폼과 동일 방식)
@@ -210,14 +215,6 @@ function EditModal({ marker, onClose, onSaved }) {
   // 원래 유튜브 주소 (변경 여부 판단 → 비용 안내 문구용)
   const originalUrl = marker.youtube_url || "";
   const urlChanged = youtubeUrl.trim() !== originalUrl;
-
-  // 국가 → 대륙 자동 표시
-  const continentLabel = useMemo(() => {
-    if (!country) return "";
-    const c = getContinentByCountry(country);
-    if (!c) return "알 수 없음";
-    return CONTINENT_LABELS[c] || c;
-  }, [country]);
 
   // ─── 좌표 유효성 + 지도용 값 ───────────────────────────────
   const latNum = Number(lat);
@@ -278,6 +275,7 @@ function EditModal({ marker, onClose, onSaved }) {
           location: location.trim(),
           city: city.trim(),
           country: country,
+          continent: continent,
           is_live: isLive,
           youtube_url: youtubeUrl.trim(),
           // 지도/입력으로 변경된 좌표도 함께 전송
@@ -334,23 +332,35 @@ function EditModal({ marker, onClose, onSaved }) {
             />
           </div>
 
-          {/* 도시 */}
+          {/* 대륙 (국가 선택 시 자동으로 채워지며, 직접 변경 가능) */}
           <div>
-            <label className="block text-xs text-gray-600">도시</label>
-            <input
-              type="text"
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
+            <label className="block text-xs text-gray-600">대륙</label>
+            <select
+              value={continent}
+              onChange={(e) => setContinent(e.target.value)}
               className="w-full rounded-md border border-border px-3 py-2 text-sm"
-            />
+            >
+              <option value="">대륙 선택</option>
+              {CONTINENT_ORDER.map((c) => (
+                <option key={c} value={c}>
+                  {CONTINENT_LABELS[c]}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {/* 국가 */}
+          {/* 국가 (선택 시 대륙 자동 설정) */}
           <div>
             <label className="block text-xs text-gray-600">국가</label>
             <select
               value={country}
-              onChange={(e) => setCountry(e.target.value)}
+              onChange={(e) => {
+                const code = e.target.value;
+                setCountry(code);
+                // 국가를 고르면 대륙을 자동으로 맞춰준다(관리자가 대륙을 바꿔 덮어쓸 수 있음).
+                const c = getContinentByCountry(code);
+                if (c) setContinent(c);
+              }}
               className="w-full rounded-md border border-border px-3 py-2 text-sm"
             >
               <option value="">국가를 선택하세요</option>
@@ -360,9 +370,17 @@ function EditModal({ marker, onClose, onSaved }) {
                 </option>
               ))}
             </select>
-            {country && (
-              <p className="mt-1 text-xs text-gray-600">대륙: {continentLabel}</p>
-            )}
+          </div>
+
+          {/* 도시 */}
+          <div>
+            <label className="block text-xs text-gray-600">도시</label>
+            <input
+              type="text"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              className="w-full rounded-md border border-border px-3 py-2 text-sm"
+            />
           </div>
 
           {/* 장소 특성 태그 (최대 3개) */}
@@ -504,6 +522,31 @@ export default function MarkerList({ refreshSignal }) {
   });
   // px → % 환산을 위해 표 실제 폭을 참조
   const tableRef = useRef(null);
+  // 최신 컬럼 너비를 항상 미러링(드래그 종료 시 localStorage 저장에 사용)
+  const colWidthsRef = useRef(colWidths);
+  colWidthsRef.current = colWidths;
+
+  // ─── 저장된 컬럼 너비 복원 (최초 마운트 시 1회, 클라이언트 전용) ─
+  // SSR 에서 window 접근을 피하려고 useState 초기화 대신 effect 에서 읽는다.
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(COL_WIDTHS_STORAGE_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (!saved || typeof saved !== "object") return;
+      // 저장본에 현재 모든 컬럼 키가 유효한 숫자로 들어있을 때만 적용
+      // (컬럼 구성이 바뀌면 저장본을 버리고 기본값을 쓴다 → 깨진 레이아웃 방지)
+      const valid = MARKER_COLUMNS.every(
+        (c) => typeof saved[c.key] === "number" && isFinite(saved[c.key])
+      );
+      if (!valid) return;
+      const next = {};
+      for (const c of MARKER_COLUMNS) next[c.key] = saved[c.key];
+      setColWidths(next);
+    } catch (error) {
+      console.error("[MarkerList] 컬럼 너비 복원 실패:", error); // TODO: 배포 전 제거
+    }
+  }, []);
 
   // ─── 컬럼 너비 마우스 드래그 조절 (이웃 컬럼과 폭을 주고받음) ─
   function startColResize(idx, e) {
@@ -538,6 +581,15 @@ export default function MarkerList({ refreshSignal }) {
         document.removeEventListener("mouseup", onUp);
         document.body.style.cursor = "";
         document.body.style.userSelect = "";
+        // 드래그 종료 시점의 최신 너비를 저장 → 다음 접속 때 복원
+        try {
+          window.localStorage.setItem(
+            COL_WIDTHS_STORAGE_KEY,
+            JSON.stringify(colWidthsRef.current)
+          );
+        } catch (e) {
+          // localStorage 사용 불가 시 무시
+        }
       }
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup", onUp);
@@ -949,6 +1001,22 @@ export default function MarkerList({ refreshSignal }) {
             ))}
           </select>
 
+          {/* 영상 상태 수동 새로고침 (누르면 즉시 점검 + 10분 자동점검 카운트 초기화) */}
+          <button
+            type="button"
+            onClick={() => runScan()}
+            disabled={scanning}
+            title="지금 바로 영상 재생 가능 여부를 다시 확인합니다. (누르면 자동 점검 10분 카운트가 초기화됩니다)"
+            className={
+              "rounded-md border px-3 py-1.5 text-sm " +
+              (scanning
+                ? "cursor-not-allowed border-border text-gray-400"
+                : "border-teal-300 text-teal-700 hover:bg-teal-50")
+            }
+          >
+            {scanning ? "확인 중..." : "🔄 영상 상태 새로고침"}
+          </button>
+
           {/* 필터 초기화 */}
           <button
             type="button"
@@ -1024,7 +1092,7 @@ export default function MarkerList({ refreshSignal }) {
 
       {/* 표 (가로 스크롤 없음 — 모든 컬럼이 한눈에. 컬럼 경계 드래그로 너비 조절) */}
       {!loading && !loadError && filteredMarkers.length > 0 && (
-        <div className="max-h-[70vh] overflow-x-hidden overflow-y-auto rounded-md border border-border">
+        <div className="overflow-x-hidden rounded-md border border-border">
           <table
             ref={tableRef}
             className="w-full table-fixed border-collapse text-left text-xs"

@@ -16,7 +16,7 @@
 //   - /api/markers (등록)
 // ─────────────────────────────────────────────────────────────
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import LeafletMapWrapper from "@/components/LeafletMapWrapper";
 import { getContinentByCountry } from "@/lib/continentUtils";
 import { getAdminIdToken } from "@/lib/clientAuth";
@@ -32,6 +32,16 @@ const CONTINENT_LABELS = {
   oceania: "오세아니아",
   middleeast: "중동",
 };
+
+// 대륙 선택 드롭다운 표시 순서
+const CONTINENT_ORDER = [
+  "asia",
+  "europe",
+  "americas",
+  "africa",
+  "oceania",
+  "middleeast",
+];
 
 // 지도 기본 중심 (좌표 미지정 시)
 const DEFAULT_CENTER = { lat: 35.68, lng: 139.76 };
@@ -81,6 +91,8 @@ export default function MarkerForm({ onRegistered }) {
   const [location, setLocation] = useState("");
   const [city, setCity] = useState("");
   const [country, setCountry] = useState("");
+  // 대륙 (국가 선택 시 자동으로 맞춰지되, 관리자가 직접 바꿀 수 있음)
+  const [continent, setContinent] = useState("");
   const [isLive, setIsLive] = useState(true);
   // 장소 특성 태그 (지역 분류와 별개, 최대 3개)
   const [tags, setTags] = useState([]);
@@ -183,14 +195,6 @@ export default function MarkerForm({ onRegistered }) {
     ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
     : null;
 
-  // ─── 국가 선택 → 대륙 자동 계산 (표시용) ─────────────────────
-  const continentLabel = useMemo(() => {
-    if (!country) return "";
-    const c = getContinentByCountry(country);
-    if (!c) return "알 수 없음";
-    return CONTINENT_LABELS[c] || c;
-  }, [country]);
-
   // ─── 지도에 표시할 "선택 위치" 마커 ──────────────────────────
   const latNum = Number(lat);
   const lngNum = Number(lng);
@@ -212,6 +216,7 @@ export default function MarkerForm({ onRegistered }) {
     hasValidCoord &&
     city.trim() !== "" &&
     country !== "" &&
+    continent !== "" &&
     !submitting;
 
   // ─── 폼 초기화 ───────────────────────────────────────────────
@@ -226,6 +231,7 @@ export default function MarkerForm({ onRegistered }) {
     setLocation("");
     setCity("");
     setCountry("");
+    setContinent("");
     setIsLive(true);
     setTags([]);
   }
@@ -261,6 +267,7 @@ export default function MarkerForm({ onRegistered }) {
           lng: lngNum,
           city: city.trim(),
           country: country,
+          continent: continent,
           is_live: isLive,
           tags: tags,
         }),
@@ -422,8 +429,8 @@ export default function MarkerForm({ onRegistered }) {
           3. 장소 정보 <span className="text-red-500">*</span>
         </label>
 
-        {/* 장소명 · 도시 · 국가 (한 줄) */}
-        <div className="grid grid-cols-3 gap-3">
+        {/* 장소명 · 대륙 · 국가 · 도시 (한 줄) */}
+        <div className="grid grid-cols-4 gap-3">
           {/* 장소명 */}
           <div>
             <label className="block text-xs text-gray-600">장소명</label>
@@ -436,24 +443,35 @@ export default function MarkerForm({ onRegistered }) {
             />
           </div>
 
-          {/* 도시 */}
+          {/* 대륙 드롭다운 (국가 선택 시 자동으로 채워지며, 직접 변경 가능) */}
           <div>
-            <label className="block text-xs text-gray-600">도시</label>
-            <input
-              type="text"
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              placeholder="예: Tokyo"
+            <label className="block text-xs text-gray-600">대륙</label>
+            <select
+              value={continent}
+              onChange={(e) => setContinent(e.target.value)}
               className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
-            />
+            >
+              <option value="">대륙 선택</option>
+              {CONTINENT_ORDER.map((c) => (
+                <option key={c} value={c}>
+                  {CONTINENT_LABELS[c]}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {/* 국가 드롭다운 */}
+          {/* 국가 드롭다운 (선택 시 대륙 자동 설정) */}
           <div>
             <label className="block text-xs text-gray-600">국가</label>
             <select
               value={country}
-              onChange={(e) => setCountry(e.target.value)}
+              onChange={(e) => {
+                const code = e.target.value;
+                setCountry(code);
+                // 국가를 고르면 대륙을 자동으로 맞춰준다(관리자가 대륙을 바꿔 덮어쓸 수 있음).
+                const c = getContinentByCountry(code);
+                if (c) setContinent(c);
+              }}
               className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
             >
               <option value="">국가를 선택하세요</option>
@@ -464,10 +482,18 @@ export default function MarkerForm({ onRegistered }) {
                 </option>
               ))}
             </select>
-            {/* 대륙 자동 표시 (수정 불가) */}
-            {country && (
-              <p className="mt-1 text-sm text-gray-600">대륙: {continentLabel}</p>
-            )}
+          </div>
+
+          {/* 도시 */}
+          <div>
+            <label className="block text-xs text-gray-600">도시</label>
+            <input
+              type="text"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              placeholder="예: Tokyo"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
+            />
           </div>
         </div>
 
@@ -511,7 +537,7 @@ export default function MarkerForm({ onRegistered }) {
         </button>
         {!canSubmit && !submitting && (
           <p className="mt-2 text-xs text-gray-500">
-            필수 항목(유튜브 링크·위치·장소명·도시·국가·카테고리)을 모두 채우고, 중복이 아니어야 등록할 수 있습니다.
+            필수 항목(유튜브 링크·위치·장소명·대륙·국가·도시)을 모두 채우고, 중복이 아니어야 등록할 수 있습니다.
           </p>
         )}
       </div>

@@ -138,6 +138,7 @@ export async function POST(request) {
       lng,
       city,
       country,
+      continent: continentInput,
       is_live,
       tags,
     } = body || {};
@@ -219,15 +220,33 @@ export async function POST(request) {
       );
     }
 
-    // ─── 3) country → continent 자동 계산 ──────────────────────
+    // ─── 3) continent 결정 (관리자 선택값 우선, 없으면 국가로 자동 계산) ──
+    // 폼에서 대륙을 직접 선택해 보내면 그 값을 저장하고,
+    // 값이 없거나 허용 목록에 없으면 국가코드로 자동 계산한다.
     const countryCode = String(country).toUpperCase();
-    const continent = getContinentByCountry(countryCode);
+    const VALID_CONTINENTS = [
+      "asia",
+      "europe",
+      "americas",
+      "africa",
+      "oceania",
+      "middleeast",
+    ];
+    let continent = null;
+    if (
+      typeof continentInput === "string" &&
+      VALID_CONTINENTS.includes(continentInput)
+    ) {
+      continent = continentInput;
+    } else {
+      continent = getContinentByCountry(countryCode);
+    }
     if (!continent) {
-      // 매핑에 없는 국가코드는 continent를 만들 수 없어 등록 불가
+      // 대륙 선택도 없고 국가 매핑도 없으면 등록 불가
       return Response.json(
         {
           ok: false,
-          error: `country '${countryCode}' 에 해당하는 대륙 매핑을 찾을 수 없습니다. 국가코드를 확인하세요.`,
+          error: `대륙을 선택했거나 country '${countryCode}' 로 대륙을 결정할 수 있어야 합니다. 대륙/국가를 확인하세요.`,
         },
         { status: 400 }
       );

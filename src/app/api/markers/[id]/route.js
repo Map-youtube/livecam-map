@@ -73,6 +73,7 @@ export async function PATCH(request, context) {
       location,
       city,
       country,
+      continent: continentInput,
       is_live,
       youtube_url,
       lat,
@@ -158,6 +159,26 @@ export async function PATCH(request, context) {
         }
         updates.continent = continent;
       }
+    }
+
+    // ─── continent 직접 지정 처리 (관리자 선택값이 국가 자동계산보다 우선) ──
+    // 폼에서 대륙을 직접 골라 보내면 그 값으로 덮어쓴다(위 country 자동계산 이후에 적용).
+    if (typeof continentInput === "string" && continentInput) {
+      const VALID_CONTINENTS = [
+        "asia",
+        "europe",
+        "americas",
+        "africa",
+        "oceania",
+        "middleeast",
+      ];
+      if (!VALID_CONTINENTS.includes(continentInput)) {
+        return Response.json(
+          { ok: false, error: `대륙 값 '${continentInput}' 이(가) 올바르지 않습니다.` },
+          { status: 400 }
+        );
+      }
+      updates.continent = continentInput;
     }
 
     // ─── youtube_url 처리: "실제로 바뀐 경우에만" videos.list 재호출 ──
