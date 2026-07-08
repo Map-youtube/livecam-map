@@ -86,7 +86,6 @@ export async function POST(request) {
 
     let checked = 0;
     let disabled = 0;
-    let anyChanged = false;
 
     for (const t of targets) {
       const status = statusMap.get(t.videoId);
@@ -111,21 +110,20 @@ export async function POST(request) {
           last_checked_at: FieldValue.serverTimestamp(),
         });
         disabled += 1;
-        anyChanged = true;
       }
       // 정상(현재 라이브/재생 가능) → 그대로 둠 (복원하지 않음)
     }
 
-    // 하나라도 바뀌었으면 공개 마커 캐시 즉시 무효화
-    if (anyChanged) {
-      try {
-        revalidateTag("public-markers");
-      } catch (revalidateError) {
-        console.error(
-          "[api/markers/check-status] 캐시 무효화 실패:",
-          revalidateError
-        ); // TODO: 배포 전 제거
-      }
+    // 점검 후에는 항상 공개 마커 캐시를 무효화한다.
+    // (이번에 바뀐 게 없어도, 이전에 다른 경로로 비활성화된 마커가 손님 화면 캐시에
+    //  남아있을 수 있으므로 관리자 점검 시점에 손님 화면을 최신 상태로 맞춘다.)
+    try {
+      revalidateTag("public-markers");
+    } catch (revalidateError) {
+      console.error(
+        "[api/markers/check-status] 캐시 무효화 실패:",
+        revalidateError
+      ); // TODO: 배포 전 제거
     }
 
     return Response.json({ ok: true, checked, disabled }, { status: 200 });

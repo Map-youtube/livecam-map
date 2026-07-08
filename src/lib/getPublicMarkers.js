@@ -1,8 +1,9 @@
 // ─────────────────────────────────────────────────────────────
 // getPublicMarkers — 공개(사용자용) 마커 조회 (서버 전용, 5분 캐싱)
 //
-// - firebaseAdmin 의 adminDb 로 markers 컬렉션에서 is_active !== false 인 마커만 조회.
-//   (관리자 페이지와 달리 비활성 마커는 절대 노출하지 않음)
+// - firebaseAdmin 의 adminDb 로 markers 컬렉션에서 is_active !== false 인 마커만 조회하고,
+//   추가로 auto_disabled === true (재생불가/방송종료) 인 마커도 방어적으로 제외한다.
+//   (관리자 페이지와 달리 비활성/재생불가/방송종료 마커는 절대 노출하지 않음)
 // - Next.js 의 unstable_cache 로 감싸 revalidate: 300(5분) 캐싱.
 //   → 5분 안에 여러 명이 접속해도 실제 Firestore 읽기는 한 번만 발생한다.
 // - 실패 시 빈 배열 반환 (사이트가 죽지 않도록).
@@ -51,7 +52,10 @@ async function fetchActiveMarkers() {
       .where("is_active", "!=", false)
       .get();
 
-    return snapshot.docs.map((doc) => serializeMarker(doc.id, doc.data()));
+    // is_active!=false 로 이미 걸렀지만, 방어적으로 auto_disabled(재생불가/방송종료)도 제외한다.
+    return snapshot.docs
+      .map((doc) => serializeMarker(doc.id, doc.data()))
+      .filter((m) => m.auto_disabled !== true);
   } catch (error) {
     console.error("[getPublicMarkers] Firestore 조회 실패:", error); // TODO: 배포 전 제거
     return [];

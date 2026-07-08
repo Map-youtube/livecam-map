@@ -857,13 +857,18 @@ export default function MarkerList({ refreshSignal }) {
 
       {/* 자동 재생가능 여부 검사 진행/결과 안내 (버튼 없이 페이지 로드 시 자동 실행) */}
       {scanning && (
-        <div className="mb-3 rounded border border-teal-300 bg-teal-50 px-3 py-2 text-sm text-teal-800">
-          ⏳ 영상 재생 가능 여부를 확인하는 중입니다... (마커가 많으면 다소 걸릴 수 있습니다)
+        <div className="mb-3 flex items-center gap-2 rounded border border-teal-300 bg-teal-50 px-3 py-2 text-sm text-teal-800">
+          {/* 회전 스피너 → "진행 중"임을 명확히 표시 */}
+          <span
+            className="inline-block h-4 w-4 flex-none animate-spin rounded-full border-2 border-teal-300 border-t-teal-700"
+            aria-hidden="true"
+          />
+          <span>영상 재생 가능 여부를 확인하는 중입니다... (완료되면 결과가 표시됩니다)</span>
         </div>
       )}
       {!scanning && scanMessage && (
         <div className="mb-3 flex items-center justify-between rounded border border-teal-300 bg-teal-50 px-3 py-2 text-sm text-teal-800">
-          <span>ℹ️ {scanMessage}</span>
+          <span>✅ {scanMessage}</span>
           <button
             type="button"
             onClick={() => setScanMessage("")}
