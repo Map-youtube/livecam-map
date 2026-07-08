@@ -519,10 +519,32 @@ export default function MarkerList({ refreshSignal }) {
 
     let cancelled = false;
 
+    // 자동 점검 쿨다운(분): 이 시간 안에 이미 점검했으면 유튜브 API 를 다시 쓰지 않고 건너뛴다.
+    // (페이지를 여러 번 열거나 새로고침해도 불필요하게 videos.list 유닛을 소모하지 않도록)
+    const COOLDOWN_MS = 10 * 60 * 1000; // 10분
+    const STORAGE_KEY = "livecam_last_scan_at";
+
     async function runAutoScan() {
-      setScanning(true);
-      setScanMessage("");
       try {
+        // 최근 점검 시각 확인 (쿨다운 내면 건너뜀)
+        let lastAt = 0;
+        try {
+          lastAt = Number(window.localStorage.getItem(STORAGE_KEY) || 0);
+        } catch (e) {
+          lastAt = 0;
+        }
+        const now = Date.now();
+        if (lastAt && now - lastAt < COOLDOWN_MS) {
+          const mins = Math.max(1, Math.round((now - lastAt) / 60000));
+          setScanMessage(
+            `최근(${mins}분 전)에 점검하여 이번엔 건너뜁니다. (자동 점검은 약 10분에 한 번, 유튜브 API 절약)`
+          );
+          return;
+        }
+
+        setScanning(true);
+        setScanMessage("");
+
         // 관리자 전용 API → 토큰 첨부 (세션 없으면 조용히 중단)
         const token = await getAdminIdToken();
         if (!token) return;
@@ -539,6 +561,13 @@ export default function MarkerList({ refreshSignal }) {
         const data = await res.json();
 
         if (!cancelled && res.ok && data.ok) {
+          // 점검 성공 시각 기록 (쿨다운 기준)
+          try {
+            window.localStorage.setItem(STORAGE_KEY, String(Date.now()));
+          } catch (e) {
+            // localStorage 사용 불가 시 무시
+          }
+
           if (data.disabled > 0) {
             // 재생불가로 바뀐 게 있으면 목록을 다시 불러와 배지를 갱신
             await loadMarkers();

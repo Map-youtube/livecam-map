@@ -85,8 +85,9 @@ export async function POST(request) {
     const statusMap = await getVideosLiveStatus(videoIds);
 
     let checked = 0;
-    let disabled = 0;
 
+    // 비활성화할 대상만 모은다 (쓰기는 아래에서 배치로 한 번에 처리 → 속도 개선)
+    const toDisable = [];
     for (const t of targets) {
       const status = statusMap.get(t.videoId);
       // 조회 실패(응답 자체가 없던 배치 등)면 판단 보류(오탐 방지) → 건너뜀
@@ -102,17 +103,24 @@ export async function POST(request) {
         reason = "stream_ended";
       }
 
-      if (reason) {
-        await t.ref.update({
-          auto_disabled: true,
-          is_active: false,
-          disabled_reason: reason,
-          last_checked_at: FieldValue.serverTimestamp(),
-        });
-        disabled += 1;
-      }
+      if (reason) toDisable.push({ ref: t.ref, reason });
       // 정상(현재 라이브/재생 가능) → 그대로 둠 (복원하지 않음)
     }
+
+    // ─── Firestore 배치 쓰기 (400개씩) ────────────────────────
+    for (let i = 0; i < toDisable.length; i += 400) {
+      const batch = adminDb.batch();
+      for (const item of toDisable.slice(i, i + 400)) {
+        batch.update(item.ref, {
+          auto_disabled: true,
+          is_active: false,
+          disabled_reason: item.reason,
+          last_checked_at: FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+    }
+    const disabled = toDisable.length;
 
     // 점검 후에는 항상 공개 마커 캐시를 무효화한다.
     // (이번에 바뀐 게 없어도, 이전에 다른 경로로 비활성화된 마커가 손님 화면 캐시에
