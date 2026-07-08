@@ -454,6 +454,7 @@ export default function MarkerList({ refreshSignal }) {
   // 드롭다운 필터 상태 ("all" 이면 해당 조건 미적용)
   const [filterContinent, setFilterContinent] = useState("all");
   const [filterCountry, setFilterCountry] = useState("all");
+  const [filterCity, setFilterCity] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   // 재생 확인(verify) 진행 중인 마커 id + 실패 안내 배너 메시지
   const [verifyingId, setVerifyingId] = useState(null);
@@ -679,6 +680,18 @@ export default function MarkerList({ refreshSignal }) {
     });
   }, [markers]);
 
+  // ─── 도시 필터 옵션 ──────────────────────────────────────────
+  // 현재 선택된 대륙/국가에 속하는 마커의 도시만 추려서 목록이 너무 길지 않게 한다.
+  const availableCities = useMemo(() => {
+    const set = new Set();
+    for (const m of markers) {
+      if (filterContinent !== "all" && m.continent !== filterContinent) continue;
+      if (filterCountry !== "all" && m.country !== filterCountry) continue;
+      if (m.city) set.add(m.city);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "ko"));
+  }, [markers, filterContinent, filterCountry]);
+
   // ─── 필터 적용 (텍스트 검색 + 4개 드롭다운, 모두 AND 조건) ───
   // 이미 불러온 markers 배열만 걸러낸다 → 추가 API 호출/비용 없음.
   const filteredMarkers = useMemo(() => {
@@ -711,7 +724,12 @@ export default function MarkerList({ refreshSignal }) {
         return false;
       }
 
-      // 4) 상태 필터 (배지와 동일 기준의 상태 키로 비교)
+      // 4) 도시 필터
+      if (filterCity !== "all" && (m.city || "") !== filterCity) {
+        return false;
+      }
+
+      // 5) 상태 필터 (배지와 동일 기준의 상태 키로 비교)
       if (filterStatus !== "all" && getStatusKey(m) !== filterStatus) {
         return false;
       }
@@ -724,6 +742,7 @@ export default function MarkerList({ refreshSignal }) {
     filterText,
     filterContinent,
     filterCountry,
+    filterCity,
     filterStatus,
   ]);
 
@@ -732,6 +751,7 @@ export default function MarkerList({ refreshSignal }) {
     setFilterText("");
     setFilterContinent("all");
     setFilterCountry("all");
+    setFilterCity("all");
     setFilterStatus("all");
   }
 
@@ -748,12 +768,15 @@ export default function MarkerList({ refreshSignal }) {
           className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
         />
 
-        {/* 드롭다운 필터 3종 + 초기화 버튼 */}
+        {/* 드롭다운 필터 4종 + 초기화 버튼 */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* 대륙 필터 */}
+          {/* 대륙 필터 (변경 시 하위 도시 선택은 초기화) */}
           <select
             value={filterContinent}
-            onChange={(e) => setFilterContinent(e.target.value)}
+            onChange={(e) => {
+              setFilterContinent(e.target.value);
+              setFilterCity("all");
+            }}
             className="rounded-md border border-border px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
           >
             <option value="all">대륙 전체</option>
@@ -764,16 +787,33 @@ export default function MarkerList({ refreshSignal }) {
             ))}
           </select>
 
-          {/* 국가 필터 */}
+          {/* 국가 필터 (변경 시 하위 도시 선택은 초기화) */}
           <select
             value={filterCountry}
-            onChange={(e) => setFilterCountry(e.target.value)}
+            onChange={(e) => {
+              setFilterCountry(e.target.value);
+              setFilterCity("all");
+            }}
             className="rounded-md border border-border px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
           >
             <option value="all">국가 전체</option>
             {availableCountries.map((code) => (
               <option key={code} value={code}>
                 {(COUNTRY_NAME_BY_CODE[code] || code) + ` (${code})`}
+              </option>
+            ))}
+          </select>
+
+          {/* 도시 필터 (선택된 대륙/국가에 속한 도시만) */}
+          <select
+            value={filterCity}
+            onChange={(e) => setFilterCity(e.target.value)}
+            className="rounded-md border border-border px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
+          >
+            <option value="all">도시 전체</option>
+            {availableCities.map((city) => (
+              <option key={city} value={city}>
+                {city}
               </option>
             ))}
           </select>
