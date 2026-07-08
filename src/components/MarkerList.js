@@ -16,7 +16,7 @@
 //    (CLAUDE.md 버그 예방 규칙 준수)
 // ─────────────────────────────────────────────────────────────
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LeafletMapWrapper from "@/components/LeafletMapWrapper";
 import AiDescriptionEditor from "@/components/AiDescriptionEditor";
 import TagSelector from "@/components/TagSelector";
@@ -458,10 +458,19 @@ export default function MarkerList({ refreshSignal }) {
   // 재생 확인(verify) 진행 중인 마커 id + 실패 안내 배너 메시지
   const [verifyingId, setVerifyingId] = useState(null);
   const [verifyMessage, setVerifyMessage] = useState("");
-  // 링크 확인(oEmbed) 상태: 전체 진행 여부 / 개별 진행 중인 마커 id / 결과 안내 배너
-  const [checkingAll, setCheckingAll] = useState(false);
-  const [checkingRowId, setCheckingRowId] = useState(null);
-  const [checkMessage, setCheckMessage] = useState("");
+  // 자동 링크 확인 중(oEmbed)인 행 id 집합 (그 행 상태 칸에 "확인 중..." 표시)
+  const [checkingRowIds, setCheckingRowIds] = useState(() => new Set());
+
+  // ─── 자동 확인용 refs ────────────────────────────────────────
+  // markersRef : 최신 markers 스냅샷 (자동 확인 루프가 참조)
+  const markersRef = useRef([]);
+  // checkedIdsRef : 이번 세션에서 이미 확인(또는 확인 시작)한 마커 id — 재확인 방지
+  const checkedIdsRef = useRef(new Set());
+  // autoCheckRunningRef : 자동 확인 루프 중복 실행 방지
+  const autoCheckRunningRef = useRef(false);
+  // 목록 로드 완료 신호 (값이 바뀌면 자동 확인을 트리거). markers 를 직접 의존하지 않아
+  // 루프 도중 setMarkers 로 인해 루프가 취소되는 문제를 피한다.
+  const [loadTick, setLoadTick] = useState(0);
 
   // ─── 목록 불러오기 (Firestore만 사용, 유튜브 API 호출 없음) ──
   const loadMarkers = useCallback(async () => {
@@ -471,15 +480,22 @@ export default function MarkerList({ refreshSignal }) {
       const res = await fetch("/api/markers?all=true");
       const data = await res.json();
       if (res.ok && data.ok) {
-        setMarkers(Array.isArray(data.markers) ? data.markers : []);
+        const arr = Array.isArray(data.markers) ? data.markers : [];
+        setMarkers(arr);
+        // 자동 확인 루프가 참조할 최신 스냅샷을 동기적으로 갱신
+        markersRef.current = arr;
+        // 로드 완료 신호 → 자동 확인 트리거
+        setLoadTick((t) => t + 1);
       } else {
         setLoadError(data.error || "목록을 불러오지 못했습니다.");
         setMarkers([]);
+        markersRef.current = [];
       }
     } catch (error) {
       console.error("[MarkerList] 목록 조회 실패:", error); // TODO: 배포 전 제거
       setLoadError("네트워크 오류로 목록을 불러오지 못했습니다.");
       setMarkers([]);
+      markersRef.current = [];
     } finally {
       setLoading(false);
     }
@@ -488,6 +504,112 @@ export default function MarkerList({ refreshSignal }) {
   useEffect(() => {
     loadMarkers();
   }, [loadMarkers, refreshSignal]);
+
+  // ─── 페이지 로드 시 자동으로 재생가능 여부(oEmbed) 순차 확인 ──
+  // 버튼 없이, 목록을 불러온 직후 자동으로 시작한다(엑셀 수식 자동계산처럼).
+  //   - 이미 auto_disabled/비활성 마커는 확인 없이 그대로 "⚫ 재생불가" 표시.
+  //   - 나머지는 하나씩(약 180ms 간격) POST /api/markers/check-status(개별 id) 호출.
+  //   - disabled:true 로 오면 그 행만 프론트에서 재생불가로 갱신(전체 재조회 안 함).
+  //   - 같은 세션에서 이미 확인한 마커(checkedIdsRef)는 다시 확인하지 않는다.
+  // markers 가 아니라 loadTick 에 의존 → 루프 도중 setMarkers 로 인해 취소되지 않는다.
+  useEffect(() => {
+    let cancelled = false;
+
+    function sleep(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    async function runAutoCheck() {
+      if (autoCheckRunningRef.current) return; // 중복 실행 방지
+      autoCheckRunningRef.current = true;
+      try {
+        // 아직 확인하지 않은 마커만 대상으로 (세션 내 1회)
+        const targets = (markersRef.current || []).filter(
+          (m) => m && m.id && !checkedIdsRef.current.has(m.id)
+        );
+
+        for (const m of targets) {
+          if (cancelled) break;
+
+          // 이 세션에서 확인 시작했다고 표시(중복 호출 방지)
+          checkedIdsRef.current.add(m.id);
+
+          // 이미 재생불가/비활성이면 API 호출 없이 건너뜀 (배지가 이미 재생불가)
+          if (m.auto_disabled === true || m.is_active === false) continue;
+          // video_id 가 없으면 확인 불가 → 건너뜀
+          if (!m.youtube_video_id) continue;
+
+          // UI: 이 행에 "확인 중..." 표시
+          setCheckingRowIds((prev) => {
+            const next = new Set(prev);
+            next.add(m.id);
+            return next;
+          });
+
+          try {
+            const token = await getAdminIdToken();
+            if (!token) {
+              // 세션 만료 → 자동 확인은 사용자를 방해하지 않도록 조용히 중단
+              setCheckingRowIds((prev) => {
+                const next = new Set(prev);
+                next.delete(m.id);
+                return next;
+              });
+              break;
+            }
+
+            const res = await fetch("/api/markers/check-status", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ markerIds: [m.id] }),
+            });
+            const data = await res.json();
+
+            // disabled:true → 그 행만 재생불가로 갱신 (그 마커 고유 id 기준)
+            if (!cancelled && res.ok && data.ok && data.disabled > 0) {
+              setMarkers((prev) =>
+                prev.map((x) =>
+                  x.id === m.id
+                    ? {
+                        ...x,
+                        auto_disabled: true,
+                        is_active: false,
+                        disabled_reason: "video_unavailable",
+                      }
+                    : x
+                )
+              );
+            }
+          } catch (error) {
+            console.error("[MarkerList] 자동 링크 확인 실패:", error); // TODO: 배포 전 제거
+          } finally {
+            // "확인 중..." 해제
+            setCheckingRowIds((prev) => {
+              const next = new Set(prev);
+              next.delete(m.id);
+              return next;
+            });
+          }
+
+          // 유튜브 서버 과도 연속 요청 방지 (약 180ms 간격)
+          if (!cancelled) await sleep(180);
+        }
+      } catch (error) {
+        console.error("[MarkerList] 자동 확인 루프 오류:", error); // TODO: 배포 전 제거
+      } finally {
+        autoCheckRunningRef.current = false;
+      }
+    }
+
+    runAutoCheck();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadTick]);
 
   // ─── 삭제 처리 ───────────────────────────────────────────────
   const handleDelete = useCallback(async (marker) => {
@@ -585,57 +707,6 @@ export default function MarkerList({ refreshSignal }) {
       }
     },
     [verifyingId, loadMarkers]
-  );
-
-  // ─── 링크 확인(oEmbed) → 존재하지 않는 영상 자동 비활성화 ────
-  // markerIds 가 배열이면 그 마커들만, null 이면 전체(is_active!=false) 대상.
-  const handleCheckStatus = useCallback(
-    async (markerIds) => {
-      const isAll = !markerIds; // null → 전체
-      // 진행 중이면 무시
-      if (isAll ? checkingAll : checkingRowId) return;
-
-      if (isAll) setCheckingAll(true);
-      else setCheckingRowId(markerIds[0]);
-      setCheckMessage("");
-
-      try {
-        // 관리자 전용 API → 토큰 첨부
-        const token = await getAdminIdToken();
-        if (!token) {
-          window.alert("로그인이 만료되었습니다. 다시 로그인해주세요");
-          window.location.href = "/admin/login";
-          return;
-        }
-
-        const res = await fetch("/api/markers/check-status", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(markerIds ? { markerIds } : {}),
-        });
-        const data = await res.json();
-
-        if (res.ok && data.ok && typeof data.checked === "number") {
-          setCheckMessage(
-            `점검 완료: ${data.checked}개 확인, ${data.disabled}개 재생불가로 표시됨`
-          );
-          // 배지/상태 반영을 위해 목록 재조회
-          await loadMarkers();
-        } else {
-          setCheckMessage(data.error || "링크 확인에 실패했습니다.");
-        }
-      } catch (error) {
-        console.error("[MarkerList] 링크 확인 실패:", error); // TODO: 배포 전 제거
-        setCheckMessage("링크 확인 중 오류가 발생했습니다.");
-      } finally {
-        if (isAll) setCheckingAll(false);
-        else setCheckingRowId(null);
-      }
-    },
-    [checkingAll, checkingRowId, loadMarkers]
   );
 
   // ─── 드롭다운 옵션: 실제 데이터에 존재하는 대륙/국가만 추출 ───
@@ -790,41 +861,8 @@ export default function MarkerList({ refreshSignal }) {
         </div>
       </div>
 
-      {/* 전체 링크 확인 버튼 (oEmbed 무료 존재 확인) */}
-      <div className="mb-3 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => handleCheckStatus(null)}
-          disabled={checkingAll}
-          title="링크 확인 = 삭제/비공개 여부만 빠르게 확인 (무료, oEmbed)"
-          className={
-            "rounded-md px-3 py-1.5 text-sm font-medium text-white " +
-            (checkingAll
-              ? "cursor-not-allowed bg-gray-300"
-              : "bg-teal-600 hover:bg-teal-700")
-          }
-        >
-          {checkingAll ? "확인 중... (전체 영상 존재 여부 점검)" : "전체 링크 확인"}
-        </button>
-        <span className="text-xs text-gray-500">
-          삭제/비공개/지역제한 영상을 빠르게 찾아 재생불가로 표시합니다 (무료).
-        </span>
-      </div>
-
-      {/* 링크 확인 결과 안내 배너 */}
-      {checkMessage && (
-        <div className="mb-3 flex items-center justify-between rounded border border-teal-300 bg-teal-50 px-3 py-2 text-sm text-teal-800">
-          <span>ℹ️ {checkMessage}</span>
-          <button
-            type="button"
-            onClick={() => setCheckMessage("")}
-            className="ml-2 rounded px-1 text-teal-600 hover:bg-teal-100"
-            aria-label="안내 닫기"
-          >
-            ✕
-          </button>
-        </div>
-      )}
+      {/* 재생가능 여부는 페이지 로드 시 자동으로 확인된다(버튼 없음).
+          각 행 상태 칸에 "확인 중..." → 결과 배지가 순차 반영된다. */}
 
       {/* 재생 확인 실패 안내 배너 */}
       {verifyMessage && (
@@ -939,32 +977,24 @@ export default function MarkerList({ refreshSignal }) {
                         <span className="text-gray-400">-</span>
                       )}
                     </td>
-                    {/* 상태 배지 (+ 재생불가/비활성 마커에만 "재생 확인" 버튼) */}
+                    {/* 상태: 자동 확인 중이면 "확인 중...", 아니면 배지 (+ 재생불가 마커에만 "재생 확인") */}
                     <td className="px-2 py-2">
                       <div className="flex flex-col items-start gap-1">
-                        <span
-                          className={
-                            "whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-semibold " +
-                            badge.className
-                          }
-                        >
-                          {badge.text}
-                        </span>
-                        {/* 링크 확인: 삭제/비공개 여부만 빠르게 확인 (무료, oEmbed) */}
-                        <button
-                          type="button"
-                          onClick={() => handleCheckStatus([marker.id])}
-                          disabled={checkingRowId === marker.id || checkingAll}
-                          title="링크 확인 = 삭제/비공개 여부만 빠르게 확인 (무료)"
-                          className={
-                            "whitespace-nowrap rounded border px-2 py-0.5 text-xs " +
-                            (checkingRowId === marker.id || checkingAll
-                              ? "cursor-not-allowed border-gray-200 text-gray-400"
-                              : "border-teal-300 text-teal-700 hover:bg-teal-50")
-                          }
-                        >
-                          {checkingRowId === marker.id ? "확인 중..." : "링크 확인"}
-                        </button>
+                        {checkingRowIds.has(marker.id) ? (
+                          // 자동 링크 확인(oEmbed) 진행 중
+                          <span className="whitespace-nowrap text-xs text-gray-400">
+                            확인 중...
+                          </span>
+                        ) : (
+                          <span
+                            className={
+                              "whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-semibold " +
+                              badge.className
+                            }
+                          >
+                            {badge.text}
+                          </span>
+                        )}
                         {/* 재생 확인: videos.list 기반 상세 재확인 및 복원 (재생불가 마커만) */}
                         {(marker.auto_disabled === true ||
                           marker.is_active === false) && (
