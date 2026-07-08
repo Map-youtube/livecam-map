@@ -132,6 +132,32 @@ export default function MainCategoryTree({
     return t;
   }, [markerList]);
 
+  // ─── 태그별 마커 개수 계산 ───────────────────────────────────
+  // 각 마커의 tags 배열을 순회하며 태그 이름별 등록 개수를 센다.
+  const tagCounts = useMemo(() => {
+    const counts = {};
+    try {
+      for (const m of markerList) {
+        if (!m || !Array.isArray(m.tags)) continue;
+        for (const tag of m.tags) {
+          const name = String(tag || "").trim();
+          if (!name) continue;
+          counts[name] = (counts[name] || 0) + 1;
+        }
+      }
+    } catch (error) {
+      console.error("[MainCategoryTree] 태그 개수 계산 실패:", error); // TODO: 배포 전 제거
+    }
+    return counts;
+  }, [markerList]);
+
+  // ─── 화면에 보일 태그: 마커가 1개 이상 등록된 태그만 (개수 포함) ───
+  const visibleTags = useMemo(() => {
+    return tagList
+      .map((t) => ({ ...t, count: tagCounts[t.name] || 0 }))
+      .filter((t) => t.count > 0);
+  }, [tagList, tagCounts]);
+
   // 개수 계산 헬퍼
   function countCountry(countryObj) {
     let n = 0;
@@ -262,11 +288,12 @@ export default function MainCategoryTree({
       {/* ── 특성 태그 섹션 ────────────────────────────────────── */}
       <div className="px-1 py-2">
         <h2 className="mb-1 px-1 text-xs font-bold text-gray-700">특성 태그</h2>
-        {tagList.length === 0 ? (
-          <p className="px-1 text-xs text-gray-400">등록된 태그가 없습니다.</p>
+        {/* 마커가 1개 이상 등록된 태그만 표시(0개는 숨김), 옆에 개수 표기 */}
+        {visibleTags.length === 0 ? (
+          <p className="px-1 text-xs text-gray-400">표시할 태그가 없습니다.</p>
         ) : (
           <div className="flex flex-col">
-            {tagList.map((tag) => {
+            {visibleTags.map((tag) => {
               // 각 태그는 자신의 고유 id 를 key 로, 자신의 name 을 콜백에 넘긴다.
               const active = selectedTag === tag.name;
               return (
@@ -277,13 +304,16 @@ export default function MainCategoryTree({
                     typeof onSelectTag === "function" && onSelectTag(tag.name)
                   }
                   className={
-                    "w-full px-2 py-0.5 text-left text-xs hover:bg-gray-100 " +
+                    "flex w-full items-center gap-1 px-2 py-0.5 text-left text-xs hover:bg-gray-100 " +
                     (active
                       ? "bg-blue-100 font-semibold text-blue-800"
                       : "text-blue-700")
                   }
                 >
-                  #{tag.name}
+                  <span className="truncate">#{tag.name}</span>
+                  <span className="ml-auto pr-1 text-gray-400">
+                    ({tag.count})
+                  </span>
                 </button>
               );
             })}
