@@ -473,7 +473,9 @@ export default function MarkerList({ refreshSignal }) {
   const [scanMessage, setScanMessage] = useState("");
   // 이번 페이지 세션에서 자동 검사를 이미 1회 수행했는지 (재실행 방지)
   const autoScanDoneRef = useRef(false);
-  // 목록 로드 완료 신호 (값이 바뀌면 자동 검사를 트리거)
+  // loadTick 을 "최초 로드 때만" 올리기 위한 플래그
+  const firstLoadRef = useRef(false);
+  // 목록 로드 완료 신호 (최초 1회만 바뀌어 자동 검사를 트리거)
   const [loadTick, setLoadTick] = useState(0);
 
   // ─── 목록 불러오기 (Firestore만 사용, 유튜브 API 호출 없음) ──
@@ -486,8 +488,13 @@ export default function MarkerList({ refreshSignal }) {
       if (res.ok && data.ok) {
         const arr = Array.isArray(data.markers) ? data.markers : [];
         setMarkers(arr);
-        // 로드 완료 신호 → 자동 검사 트리거
-        setLoadTick((t) => t + 1);
+        // ⚠️ loadTick 은 "최초 로드 때만" 올린다.
+        // (자동 검사 중 loadMarkers 로 목록을 다시 불러올 때 loadTick 이 또 바뀌면
+        //  검사 effect 가 취소되어 "확인 중" 상태가 안 풀리는 버그가 있었다.)
+        if (!firstLoadRef.current) {
+          firstLoadRef.current = true;
+          setLoadTick((t) => t + 1);
+        }
       } else {
         setLoadError(data.error || "목록을 불러오지 못했습니다.");
         setMarkers([]);
@@ -581,7 +588,8 @@ export default function MarkerList({ refreshSignal }) {
       } catch (error) {
         console.error("[MarkerList] 자동 상태 검사 실패:", error); // TODO: 배포 전 제거
       } finally {
-        if (!cancelled) setScanning(false);
+        // 스캔이 끝나면 무조건 "확인 중" 상태를 해제한다(취소 여부와 무관 — 멈춤 방지).
+        setScanning(false);
       }
     }
 
