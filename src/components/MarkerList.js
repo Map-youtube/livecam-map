@@ -458,18 +458,12 @@ export default function MarkerList({ refreshSignal }) {
   // 재생 확인(verify) 진행 중인 마커 id + 실패 안내 배너 메시지
   const [verifyingId, setVerifyingId] = useState(null);
   const [verifyMessage, setVerifyMessage] = useState("");
-  // 자동 링크 확인 중(oEmbed)인 행 id 집합 (그 행 상태 칸에 "확인 중..." 표시)
-  const [checkingRowIds, setCheckingRowIds] = useState(() => new Set());
-
-  // ─── 자동 확인용 refs ────────────────────────────────────────
-  // markersRef : 최신 markers 스냅샷 (자동 확인 루프가 참조)
-  const markersRef = useRef([]);
-  // checkedIdsRef : 이번 세션에서 이미 확인(또는 확인 시작)한 마커 id — 재확인 방지
-  const checkedIdsRef = useRef(new Set());
-  // autoCheckRunningRef : 자동 확인 루프 중복 실행 방지
-  const autoCheckRunningRef = useRef(false);
-  // 목록 로드 완료 신호 (값이 바뀌면 자동 확인을 트리거). markers 를 직접 의존하지 않아
-  // 루프 도중 setMarkers 로 인해 루프가 취소되는 문제를 피한다.
+  // 자동 재생가능 여부 검사(oEmbed) 진행 상태 + 결과 안내
+  const [scanning, setScanning] = useState(false);
+  const [scanMessage, setScanMessage] = useState("");
+  // 이번 페이지 세션에서 자동 검사를 이미 1회 수행했는지 (재실행 방지)
+  const autoScanDoneRef = useRef(false);
+  // 목록 로드 완료 신호 (값이 바뀌면 자동 검사를 트리거)
   const [loadTick, setLoadTick] = useState(0);
 
   // ─── 목록 불러오기 (Firestore만 사용, 유튜브 API 호출 없음) ──
@@ -482,20 +476,16 @@ export default function MarkerList({ refreshSignal }) {
       if (res.ok && data.ok) {
         const arr = Array.isArray(data.markers) ? data.markers : [];
         setMarkers(arr);
-        // 자동 확인 루프가 참조할 최신 스냅샷을 동기적으로 갱신
-        markersRef.current = arr;
-        // 로드 완료 신호 → 자동 확인 트리거
+        // 로드 완료 신호 → 자동 검사 트리거
         setLoadTick((t) => t + 1);
       } else {
         setLoadError(data.error || "목록을 불러오지 못했습니다.");
         setMarkers([]);
-        markersRef.current = [];
       }
     } catch (error) {
       console.error("[MarkerList] 목록 조회 실패:", error); // TODO: 배포 전 제거
       setLoadError("네트워크 오류로 목록을 불러오지 못했습니다.");
       setMarkers([]);
-      markersRef.current = [];
     } finally {
       setLoading(false);
     }
@@ -505,111 +495,63 @@ export default function MarkerList({ refreshSignal }) {
     loadMarkers();
   }, [loadMarkers, refreshSignal]);
 
-  // ─── 페이지 로드 시 자동으로 재생가능 여부(oEmbed) 순차 확인 ──
-  // 버튼 없이, 목록을 불러온 직후 자동으로 시작한다(엑셀 수식 자동계산처럼).
-  //   - 이미 auto_disabled/비활성 마커는 확인 없이 그대로 "⚫ 재생불가" 표시.
-  //   - 나머지는 하나씩(약 180ms 간격) POST /api/markers/check-status(개별 id) 호출.
-  //   - disabled:true 로 오면 그 행만 프론트에서 재생불가로 갱신(전체 재조회 안 함).
-  //   - 같은 세션에서 이미 확인한 마커(checkedIdsRef)는 다시 확인하지 않는다.
-  // markers 가 아니라 loadTick 에 의존 → 루프 도중 setMarkers 로 인해 취소되지 않는다.
+  // ─── 페이지 로드 시 자동으로 재생가능 여부(oEmbed) 검사 ──────
+  // 버튼 없이, 첫 목록 로드 직후 자동으로 시작(엑셀 수식 자동계산처럼).
+  //   - 개별 마커를 한 개씩 부르는 대신, 서버에 "전체 검사"를 1회 요청한다(check-status, markerIds 없음).
+  //     → 서버가 활성 마커 전체를 oEmbed 로 순차 검사하고 재생불가 영상을 비활성화한다.
+  //   - 마커가 많아도(수백 개) 페이지를 계속 열어둘 필요 없이 요청 1건으로 처리되어 신뢰성이 높다.
+  //   - 완료 후 목록을 한 번 다시 불러와 배지("⚫ 재생불가")를 반영한다.
+  //   - 세션 내 1회만 실행(autoScanDoneRef).
   useEffect(() => {
+    if (loadTick === 0) return; // 아직 첫 로드 전
+    if (autoScanDoneRef.current) return; // 세션 내 1회만
+    autoScanDoneRef.current = true;
+
     let cancelled = false;
 
-    function sleep(ms) {
-      return new Promise((resolve) => setTimeout(resolve, ms));
-    }
-
-    async function runAutoCheck() {
-      if (autoCheckRunningRef.current) return; // 중복 실행 방지
-      autoCheckRunningRef.current = true;
+    async function runAutoScan() {
+      setScanning(true);
+      setScanMessage("");
       try {
-        // 아직 확인하지 않은 마커만 대상으로 (세션 내 1회)
-        const targets = (markersRef.current || []).filter(
-          (m) => m && m.id && !checkedIdsRef.current.has(m.id)
-        );
+        // 관리자 전용 API → 토큰 첨부 (세션 없으면 조용히 중단)
+        const token = await getAdminIdToken();
+        if (!token) return;
 
-        for (const m of targets) {
-          if (cancelled) break;
+        const res = await fetch("/api/markers/check-status", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          // markerIds 없이 전체(is_active!=false) 검사
+          body: JSON.stringify({}),
+        });
+        const data = await res.json();
 
-          // 이 세션에서 확인 시작했다고 표시(중복 호출 방지)
-          checkedIdsRef.current.add(m.id);
-
-          // 이미 재생불가/비활성이면 API 호출 없이 건너뜀 (배지가 이미 재생불가)
-          if (m.auto_disabled === true || m.is_active === false) continue;
-          // video_id 가 없으면 확인 불가 → 건너뜀
-          if (!m.youtube_video_id) continue;
-
-          // UI: 이 행에 "확인 중..." 표시
-          setCheckingRowIds((prev) => {
-            const next = new Set(prev);
-            next.add(m.id);
-            return next;
-          });
-
-          try {
-            const token = await getAdminIdToken();
-            if (!token) {
-              // 세션 만료 → 자동 확인은 사용자를 방해하지 않도록 조용히 중단
-              setCheckingRowIds((prev) => {
-                const next = new Set(prev);
-                next.delete(m.id);
-                return next;
-              });
-              break;
-            }
-
-            const res = await fetch("/api/markers/check-status", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify({ markerIds: [m.id] }),
-            });
-            const data = await res.json();
-
-            // disabled:true → 그 행만 재생불가로 갱신 (그 마커 고유 id 기준)
-            if (!cancelled && res.ok && data.ok && data.disabled > 0) {
-              setMarkers((prev) =>
-                prev.map((x) =>
-                  x.id === m.id
-                    ? {
-                        ...x,
-                        auto_disabled: true,
-                        is_active: false,
-                        disabled_reason: "video_unavailable",
-                      }
-                    : x
-                )
-              );
-            }
-          } catch (error) {
-            console.error("[MarkerList] 자동 링크 확인 실패:", error); // TODO: 배포 전 제거
-          } finally {
-            // "확인 중..." 해제
-            setCheckingRowIds((prev) => {
-              const next = new Set(prev);
-              next.delete(m.id);
-              return next;
-            });
+        if (!cancelled && res.ok && data.ok) {
+          if (data.disabled > 0) {
+            // 재생불가로 바뀐 게 있으면 목록을 다시 불러와 배지를 갱신
+            await loadMarkers();
+            setScanMessage(
+              `영상 상태 확인 완료: ${data.disabled}개 재생불가로 표시됨`
+            );
+          } else {
+            setScanMessage("영상 상태 확인 완료: 모두 재생 가능");
           }
-
-          // 유튜브 서버 과도 연속 요청 방지 (약 180ms 간격)
-          if (!cancelled) await sleep(180);
         }
       } catch (error) {
-        console.error("[MarkerList] 자동 확인 루프 오류:", error); // TODO: 배포 전 제거
+        console.error("[MarkerList] 자동 상태 검사 실패:", error); // TODO: 배포 전 제거
       } finally {
-        autoCheckRunningRef.current = false;
+        if (!cancelled) setScanning(false);
       }
     }
 
-    runAutoCheck();
+    runAutoScan();
 
     return () => {
       cancelled = true;
     };
-  }, [loadTick]);
+  }, [loadTick, loadMarkers]);
 
   // ─── 삭제 처리 ───────────────────────────────────────────────
   const handleDelete = useCallback(async (marker) => {
@@ -861,8 +803,25 @@ export default function MarkerList({ refreshSignal }) {
         </div>
       </div>
 
-      {/* 재생가능 여부는 페이지 로드 시 자동으로 확인된다(버튼 없음).
-          각 행 상태 칸에 "확인 중..." → 결과 배지가 순차 반영된다. */}
+      {/* 자동 재생가능 여부 검사 진행/결과 안내 (버튼 없이 페이지 로드 시 자동 실행) */}
+      {scanning && (
+        <div className="mb-3 rounded border border-teal-300 bg-teal-50 px-3 py-2 text-sm text-teal-800">
+          ⏳ 영상 재생 가능 여부를 확인하는 중입니다... (마커가 많으면 다소 걸릴 수 있습니다)
+        </div>
+      )}
+      {!scanning && scanMessage && (
+        <div className="mb-3 flex items-center justify-between rounded border border-teal-300 bg-teal-50 px-3 py-2 text-sm text-teal-800">
+          <span>ℹ️ {scanMessage}</span>
+          <button
+            type="button"
+            onClick={() => setScanMessage("")}
+            className="ml-2 rounded px-1 text-teal-600 hover:bg-teal-100"
+            aria-label="안내 닫기"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* 재생 확인 실패 안내 배너 */}
       {verifyMessage && (
@@ -977,24 +936,17 @@ export default function MarkerList({ refreshSignal }) {
                         <span className="text-gray-400">-</span>
                       )}
                     </td>
-                    {/* 상태: 자동 확인 중이면 "확인 중...", 아니면 배지 (+ 재생불가 마커에만 "재생 확인") */}
+                    {/* 상태 배지 (+ 재생불가 마커에만 "재생 확인") */}
                     <td className="px-2 py-2">
                       <div className="flex flex-col items-start gap-1">
-                        {checkingRowIds.has(marker.id) ? (
-                          // 자동 링크 확인(oEmbed) 진행 중
-                          <span className="whitespace-nowrap text-xs text-gray-400">
-                            확인 중...
-                          </span>
-                        ) : (
-                          <span
-                            className={
-                              "whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-semibold " +
-                              badge.className
-                            }
-                          >
-                            {badge.text}
-                          </span>
-                        )}
+                        <span
+                          className={
+                            "whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-semibold " +
+                            badge.className
+                          }
+                        >
+                          {badge.text}
+                        </span>
                         {/* 재생 확인: videos.list 기반 상세 재확인 및 복원 (재생불가 마커만) */}
                         {(marker.auto_disabled === true ||
                           marker.is_active === false) && (
