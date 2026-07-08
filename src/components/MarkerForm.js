@@ -290,7 +290,7 @@ export default function MarkerForm({ onRegistered }) {
 
   // ─── 렌더 ────────────────────────────────────────────────────
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="w-full space-y-6">
       {/* 등록 성공/실패 안내 (상단 고정 영역) */}
       {submitMessage && (
         <div className="rounded-md border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-800">
@@ -377,8 +377,8 @@ export default function MarkerForm({ onRegistered }) {
           지도를 클릭하면 그 지점의 좌표가 자동 입력됩니다. 아래 입력창에서 미세 조정도 가능합니다.
         </p>
 
-        {/* 지도 (높이는 부모가 지정) */}
-        <div className="h-80 w-full overflow-hidden rounded-md border border-border">
+        {/* 지도 (크게 — 왼쪽 절반 폭을 거의 채움) */}
+        <div className="h-[560px] w-full overflow-hidden rounded-md border border-border">
           <LeafletMapWrapper
             markers={mapMarkers}
             center={mapCenter}
@@ -422,50 +422,53 @@ export default function MarkerForm({ onRegistered }) {
           3. 장소 정보 <span className="text-red-500">*</span>
         </label>
 
-        {/* 장소명 */}
-        <div>
-          <label className="block text-xs text-gray-600">장소명</label>
-          <input
-            type="text"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            placeholder="예: 도쿄 시부야 교차로"
-            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
-          />
-        </div>
+        {/* 장소명 · 도시 · 국가 (한 줄) */}
+        <div className="grid grid-cols-3 gap-3">
+          {/* 장소명 */}
+          <div>
+            <label className="block text-xs text-gray-600">장소명</label>
+            <input
+              type="text"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="예: 도쿄 시부야 교차로"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
+            />
+          </div>
 
-        {/* 도시 */}
-        <div>
-          <label className="block text-xs text-gray-600">도시</label>
-          <input
-            type="text"
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-            placeholder="예: Tokyo"
-            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
-          />
-        </div>
+          {/* 도시 */}
+          <div>
+            <label className="block text-xs text-gray-600">도시</label>
+            <input
+              type="text"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              placeholder="예: Tokyo"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
+            />
+          </div>
 
-        {/* 국가 드롭다운 */}
-        <div>
-          <label className="block text-xs text-gray-600">국가</label>
-          <select
-            value={country}
-            onChange={(e) => setCountry(e.target.value)}
-            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
-          >
-            <option value="">국가를 선택하세요</option>
-            {COUNTRIES.map((c) => (
-              // 각 옵션은 자신의 고유 코드(c.code)를 value 로 사용한다.
-              <option key={c.code} value={c.code}>
-                {c.name} ({c.code})
-              </option>
-            ))}
-          </select>
-          {/* 대륙 자동 표시 (수정 불가) */}
-          {country && (
-            <p className="mt-1 text-sm text-gray-600">대륙: {continentLabel}</p>
-          )}
+          {/* 국가 드롭다운 */}
+          <div>
+            <label className="block text-xs text-gray-600">국가</label>
+            <select
+              value={country}
+              onChange={(e) => setCountry(e.target.value)}
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
+            >
+              <option value="">국가를 선택하세요</option>
+              {COUNTRIES.map((c) => (
+                // 각 옵션은 자신의 고유 코드(c.code)를 value 로 사용한다.
+                <option key={c.code} value={c.code}>
+                  {c.name} ({c.code})
+                </option>
+              ))}
+            </select>
+            {/* 대륙 자동 표시 (수정 불가) */}
+            {country && (
+              <p className="mt-1 text-sm text-gray-600">대륙: {continentLabel}</p>
+            )}
+          </div>
         </div>
 
         {/* 장소 특성 태그 (지역 분류와 별개, 최대 3개) */}

@@ -92,22 +92,27 @@ const STATUS_OPTIONS = [
   { value: "inactive", label: "⚫ 비활성" },
 ];
 
-// ─── 마커 목록 표 컬럼 정의 (기본 너비, px) ────────────────────
-// 장소명은 긴 제목도 한 줄에 보이도록 넉넉하게. 각 컬럼은 마우스로 너비 조절 가능(아래 로직).
+// ─── 마커 목록 표 컬럼 정의 (기본 너비, %) ────────────────────
+// 합계가 100% 라 표가 항상 컨테이너에 꼭 맞아 가로 스크롤이 없다.
+// 컬럼 경계를 드래그하면 그 컬럼과 오른쪽 이웃 컬럼 사이에서 폭을 주고받는다(합계 100% 유지 → 스크롤 없음).
 const MARKER_COLUMNS = [
-  { key: "thumb", label: "썸네일", width: 80 },
-  { key: "location", label: "장소명", width: 460 },
-  { key: "city", label: "도시", width: 120 },
-  { key: "country", label: "국가", width: 150 },
-  { key: "continent", label: "대륙", width: 90 },
-  { key: "tags", label: "특성 태그", width: 170 },
-  { key: "status", label: "상태", width: 120 },
-  { key: "channel", label: "채널명", width: 220 },
-  { key: "lastChecked", label: "마지막 확인", width: 170 },
-  { key: "ai", label: "AI 설명", width: 150 },
-  { key: "edit", label: "수정", width: 70 },
-  { key: "delete", label: "삭제", width: 70 },
+  { key: "thumb", label: "썸네일", width: 5 },
+  { key: "location", label: "장소명", width: 18 },
+  { key: "city", label: "도시", width: 7 },
+  { key: "country", label: "국가", width: 8 },
+  { key: "continent", label: "대륙", width: 6 },
+  { key: "tags", label: "특성 태그", width: 12 },
+  { key: "status", label: "상태", width: 10 },
+  { key: "channel", label: "채널명", width: 11 },
+  { key: "lastChecked", label: "마지막 확인", width: 8 },
+  { key: "ai", label: "AI 설명", width: 7 },
+  { key: "edit", label: "수정", width: 4 },
+  { key: "delete", label: "삭제", width: 4 },
 ];
+
+// 자동 점검 쿨다운/저장키
+const SCAN_COOLDOWN_MS = 10 * 60 * 1000; // 10분
+const SCAN_STORAGE_KEY = "livecam_last_scan_at";
 
 // 지도 기본 중심 (좌표가 없을 때)
 const DEFAULT_CENTER = { lat: 35.68, lng: 139.76 };
@@ -485,27 +490,48 @@ export default function MarkerList({ refreshSignal }) {
   // 재생 확인(verify) 진행 중인 마커 id + 실패 안내 배너 메시지
   const [verifyingId, setVerifyingId] = useState(null);
   const [verifyMessage, setVerifyMessage] = useState("");
-  // 자동 재생가능 여부 검사(oEmbed) 진행 상태 + 결과 안내
+  // 자동 재생가능 여부 검사 진행 상태 + 결과 안내 + 마지막 점검 시각
   const [scanning, setScanning] = useState(false);
   const [scanMessage, setScanMessage] = useState("");
-  // 표 컬럼 너비(px) — 마우스로 조절 가능
+  const [lastScanAt, setLastScanAt] = useState(0);
+  // 동시 실행 방지 (인터벌/트리거가 겹쳐도 한 번만)
+  const scanningRef = useRef(false);
+  // 표 컬럼 너비(%) — 마우스로 조절 가능. 합계는 항상 100%로 유지되어 가로 스크롤이 없다.
   const [colWidths, setColWidths] = useState(() => {
     const o = {};
     for (const c of MARKER_COLUMNS) o[c.key] = c.width;
     return o;
   });
+  // px → % 환산을 위해 표 실제 폭을 참조
+  const tableRef = useRef(null);
 
-  // ─── 컬럼 너비 마우스 드래그 조절 ────────────────────────────
-  function startColResize(key, e) {
+  // ─── 컬럼 너비 마우스 드래그 조절 (이웃 컬럼과 폭을 주고받음) ─
+  function startColResize(idx, e) {
     try {
       e.preventDefault();
       e.stopPropagation();
+      const leftKey = MARKER_COLUMNS[idx] && MARKER_COLUMNS[idx].key;
+      const rightCol = MARKER_COLUMNS[idx + 1];
+      if (!leftKey || !rightCol) return; // 마지막 컬럼은 조절 안 함
+      const rightKey = rightCol.key;
+
+      const totalPx = tableRef.current ? tableRef.current.offsetWidth : 1000;
       const startX = e.clientX;
-      const startWidth = colWidths[key];
+      const startLeft = colWidths[leftKey];
+      const startRight = colWidths[rightKey];
+      const pair = startLeft + startRight; // 두 컬럼 합(고정) → 나머지에 영향 없음
+
       function onMove(ev) {
-        const delta = ev.clientX - startX;
-        const next = Math.max(50, startWidth + delta); // 최소 50px
-        setColWidths((prev) => ({ ...prev, [key]: next }));
+        const deltaPct = ((ev.clientX - startX) / totalPx) * 100;
+        // 각 컬럼 최소 3% 보장
+        let newLeft = startLeft + deltaPct;
+        newLeft = Math.max(3, Math.min(pair - 3, newLeft));
+        const newRight = pair - newLeft;
+        setColWidths((prev) => ({
+          ...prev,
+          [leftKey]: newLeft,
+          [rightKey]: newRight,
+        }));
       }
       function onUp() {
         document.removeEventListener("mousemove", onMove);
@@ -515,7 +541,6 @@ export default function MarkerList({ refreshSignal }) {
       }
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup", onUp);
-      // 드래그 중 커서/선택 방지
       document.body.style.cursor = "col-resize";
       document.body.style.userSelect = "none";
     } catch (error) {
@@ -523,13 +548,6 @@ export default function MarkerList({ refreshSignal }) {
     }
   }
 
-  // 표 전체 너비 = 각 컬럼 너비 합
-  const tableWidth = MARKER_COLUMNS.reduce(
-    (sum, c) => sum + (colWidths[c.key] || 0),
-    0
-  );
-  // 이번 페이지 세션에서 자동 검사를 이미 1회 수행했는지 (재실행 방지)
-  const autoScanDoneRef = useRef(false);
   // loadTick 을 "최초 로드 때만" 올리기 위한 플래그
   const firstLoadRef = useRef(false);
   // 목록 로드 완료 신호 (최초 1회만 바뀌어 자동 검사를 트리거)
@@ -569,93 +587,86 @@ export default function MarkerList({ refreshSignal }) {
     loadMarkers();
   }, [loadMarkers, refreshSignal]);
 
-  // ─── 페이지 로드 시 자동으로 재생가능 여부(oEmbed) 검사 ──────
-  // 버튼 없이, 첫 목록 로드 직후 자동으로 시작(엑셀 수식 자동계산처럼).
-  //   - 개별 마커를 한 개씩 부르는 대신, 서버에 "전체 검사"를 1회 요청한다(check-status, markerIds 없음).
-  //     → 서버가 활성 마커 전체를 oEmbed 로 순차 검사하고 재생불가 영상을 비활성화한다.
-  //   - 마커가 많아도(수백 개) 페이지를 계속 열어둘 필요 없이 요청 1건으로 처리되어 신뢰성이 높다.
-  //   - 완료 후 목록을 한 번 다시 불러와 배지("⚫ 재생불가")를 반영한다.
-  //   - 세션 내 1회만 실행(autoScanDoneRef).
-  useEffect(() => {
-    if (loadTick === 0) return; // 아직 첫 로드 전
-    if (autoScanDoneRef.current) return; // 세션 내 1회만
-    autoScanDoneRef.current = true;
+  // ─── 자동 재생가능 여부 검사 (videos.list 전체 검사 1회 요청) ──
+  // 실제 점검 실행 (쿨다운 판단은 호출부에서 함)
+  const runScan = useCallback(async () => {
+    if (scanningRef.current) return; // 동시 실행 방지
+    scanningRef.current = true;
+    setScanning(true);
+    setScanMessage("");
+    try {
+      const token = await getAdminIdToken();
+      if (!token) return;
 
-    let cancelled = false;
+      const res = await fetch("/api/markers/check-status", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({}), // markerIds 없이 전체 검사
+      });
+      const data = await res.json();
 
-    // 자동 점검 쿨다운(분): 이 시간 안에 이미 점검했으면 유튜브 API 를 다시 쓰지 않고 건너뛴다.
-    // (페이지를 여러 번 열거나 새로고침해도 불필요하게 videos.list 유닛을 소모하지 않도록)
-    const COOLDOWN_MS = 10 * 60 * 1000; // 10분
-    const STORAGE_KEY = "livecam_last_scan_at";
-
-    async function runAutoScan() {
-      try {
-        // 최근 점검 시각 확인 (쿨다운 내면 건너뜀)
-        let lastAt = 0;
-        try {
-          lastAt = Number(window.localStorage.getItem(STORAGE_KEY) || 0);
-        } catch (e) {
-          lastAt = 0;
-        }
+      if (res.ok && data.ok) {
+        // 점검 성공 시각 기록 (쿨다운 기준 + 화면 표시)
         const now = Date.now();
-        if (lastAt && now - lastAt < COOLDOWN_MS) {
-          const mins = Math.max(1, Math.round((now - lastAt) / 60000));
+        try {
+          window.localStorage.setItem(SCAN_STORAGE_KEY, String(now));
+        } catch (e) {
+          // localStorage 사용 불가 시 무시
+        }
+        setLastScanAt(now);
+
+        if (data.disabled > 0) {
+          await loadMarkers();
           setScanMessage(
-            `최근(${mins}분 전)에 점검하여 이번엔 건너뜁니다. (자동 점검은 약 10분에 한 번, 유튜브 API 절약)`
+            `영상 상태 확인 완료: ${data.disabled}개 재생불가로 표시됨`
           );
-          return;
+        } else {
+          setScanMessage("영상 상태 확인 완료: 모두 재생 가능");
         }
+      }
+    } catch (error) {
+      console.error("[MarkerList] 자동 상태 검사 실패:", error); // TODO: 배포 전 제거
+    } finally {
+      scanningRef.current = false;
+      setScanning(false); // 무조건 해제(멈춤 방지)
+    }
+  }, [loadMarkers]);
 
-        setScanning(true);
-        setScanMessage("");
+  // 최초 로드 후 자동 점검 트리거 + 주기적 재점검.
+  //   - 마지막 점검이 쿨다운(10분)보다 오래됐으면 점검 실행.
+  //   - 아니면 대기했다가, 인터벌(1분)로 쿨다운이 지나면 자동으로 다시 점검(실시간 반영).
+  useEffect(() => {
+    if (loadTick === 0) return; // 첫 로드 전
 
-        // 관리자 전용 API → 토큰 첨부 (세션 없으면 조용히 중단)
-        const token = await getAdminIdToken();
-        if (!token) return;
+    // 저장된 마지막 점검 시각을 화면 상태에도 반영
+    let stored = 0;
+    try {
+      stored = Number(window.localStorage.getItem(SCAN_STORAGE_KEY) || 0);
+    } catch (e) {
+      stored = 0;
+    }
+    if (stored) setLastScanAt(stored);
 
-        const res = await fetch("/api/markers/check-status", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          // markerIds 없이 전체(is_active!=false) 검사
-          body: JSON.stringify({}),
-        });
-        const data = await res.json();
-
-        if (!cancelled && res.ok && data.ok) {
-          // 점검 성공 시각 기록 (쿨다운 기준)
-          try {
-            window.localStorage.setItem(STORAGE_KEY, String(Date.now()));
-          } catch (e) {
-            // localStorage 사용 불가 시 무시
-          }
-
-          if (data.disabled > 0) {
-            // 재생불가로 바뀐 게 있으면 목록을 다시 불러와 배지를 갱신
-            await loadMarkers();
-            setScanMessage(
-              `영상 상태 확인 완료: ${data.disabled}개 재생불가로 표시됨`
-            );
-          } else {
-            setScanMessage("영상 상태 확인 완료: 모두 재생 가능");
-          }
-        }
-      } catch (error) {
-        console.error("[MarkerList] 자동 상태 검사 실패:", error); // TODO: 배포 전 제거
-      } finally {
-        // 스캔이 끝나면 무조건 "확인 중" 상태를 해제한다(취소 여부와 무관 — 멈춤 방지).
-        setScanning(false);
+    function maybeScan() {
+      if (scanningRef.current) return;
+      let last = 0;
+      try {
+        last = Number(window.localStorage.getItem(SCAN_STORAGE_KEY) || 0);
+      } catch (e) {
+        last = 0;
+      }
+      if (Date.now() - last >= SCAN_COOLDOWN_MS) {
+        runScan();
       }
     }
 
-    runAutoScan();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [loadTick, loadMarkers]);
+    maybeScan(); // 즉시 한 번 판단
+    const id = setInterval(maybeScan, 60 * 1000); // 1분마다 쿨다운 경과 확인 → 자동 재점검
+    return () => clearInterval(id);
+  }, [loadTick, runScan]);
 
   // ─── 삭제 처리 ───────────────────────────────────────────────
   const handleDelete = useCallback(async (marker) => {
@@ -973,6 +984,13 @@ export default function MarkerList({ refreshSignal }) {
           </button>
         </div>
       )}
+      {/* 마지막 점검 시각 (자동 점검은 약 10분마다 자동 재실행) */}
+      {!scanning && lastScanAt > 0 && (
+        <p className="mb-3 text-xs text-ink-muted">
+          마지막 점검: {new Date(lastScanAt).toLocaleString("ko-KR")} · 약 10분마다
+          자동 재점검
+        </p>
+      )}
 
       {/* 재생 확인 실패 안내 배너 */}
       {verifyMessage && (
@@ -1004,36 +1022,37 @@ export default function MarkerList({ refreshSignal }) {
           <p className="text-sm text-gray-500">검색 결과가 없습니다.</p>
         )}
 
-      {/* 표 (가로 스크롤 가능, 컬럼 너비 마우스 조절 가능) */}
+      {/* 표 (가로 스크롤 없음 — 모든 컬럼이 한눈에. 컬럼 경계 드래그로 너비 조절) */}
       {!loading && !loadError && filteredMarkers.length > 0 && (
-        <div className="max-h-[70vh] overflow-auto rounded-md border border-border">
+        <div className="max-h-[70vh] overflow-x-hidden overflow-y-auto rounded-md border border-border">
           <table
-            className="border-collapse text-left text-sm"
-            style={{ tableLayout: "fixed", width: `${tableWidth}px` }}
+            ref={tableRef}
+            className="w-full table-fixed border-collapse text-left text-xs"
           >
-            {/* 컬럼 너비 지정 */}
+            {/* 컬럼 너비 지정 (%) */}
             <colgroup>
               {MARKER_COLUMNS.map((c) => (
-                <col key={c.key} style={{ width: `${colWidths[c.key]}px` }} />
+                <col key={c.key} style={{ width: `${colWidths[c.key]}%` }} />
               ))}
             </colgroup>
-            {/* sticky 헤더 + 컬럼 크기 조절 핸들 */}
-            <thead className="sticky top-0 z-10 bg-gray-100 text-xs text-gray-600">
+            {/* sticky 헤더 + 컬럼 크기 조절 핸들 (마지막 컬럼 제외) */}
+            <thead className="sticky top-0 z-10 bg-gray-100 text-[11px] text-gray-600">
               <tr>
-                {MARKER_COLUMNS.map((c) => (
+                {MARKER_COLUMNS.map((c, idx) => (
                   <th
                     key={c.key}
-                    className="relative select-none px-2 py-2"
-                    style={{ width: `${colWidths[c.key]}px` }}
+                    className="relative select-none px-1.5 py-1.5"
                   >
                     <span className="block truncate">{c.label}</span>
                     {/* 오른쪽 경계 드래그 핸들 */}
-                    <span
-                      onMouseDown={(e) => startColResize(c.key, e)}
-                      className="absolute right-0 top-0 z-20 h-full w-1.5 cursor-col-resize hover:bg-brand/40"
-                      aria-hidden="true"
-                      title="드래그하여 컬럼 너비 조절"
-                    />
+                    {idx < MARKER_COLUMNS.length - 1 && (
+                      <span
+                        onMouseDown={(e) => startColResize(idx, e)}
+                        className="absolute -right-0.5 top-0 z-20 h-full w-1.5 cursor-col-resize hover:bg-brand/40"
+                        aria-hidden="true"
+                        title="드래그하여 컬럼 너비 조절"
+                      />
+                    )}
                   </th>
                 ))}
               </tr>
@@ -1056,45 +1075,44 @@ export default function MarkerList({ refreshSignal }) {
                 return (
                   <tr
                     key={marker.id}
-                    className="border-t border-gray-100 align-middle hover:bg-bg"
+                    className="border-t border-gray-100 align-top hover:bg-bg"
                   >
-                    {/* 썸네일 */}
-                    <td className="px-2 py-2">
+                    {/* 썸네일 (컬럼 폭에 맞춰 축소) */}
+                    <td className="px-1.5 py-1">
                       {thumb ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={thumb}
                           alt={marker.location || "썸네일"}
-                          className="h-9 w-16 rounded object-cover"
+                          className="h-8 w-full rounded object-cover"
                         />
                       ) : (
-                        <div className="h-9 w-16 rounded bg-gray-100" />
+                        <div className="h-8 w-full rounded bg-gray-100" />
                       )}
                     </td>
-                    {/* 장소명 (한 줄, 컬럼보다 길면 …+툴팁, 컬럼 너비 조절로 더 넓게 볼 수 있음) */}
-                    <td
-                      className="truncate px-2 py-2 font-medium text-ink"
-                      title={marker.location || ""}
-                    >
-                      {marker.location || "(장소명 없음)"}
+                    {/* 장소명 (넘치면 2줄까지 표시, 나머지는 …+툴팁) */}
+                    <td className="px-1.5 py-1 font-medium text-ink">
+                      <div className="line-clamp-2" title={marker.location || ""}>
+                        {marker.location || "(장소명 없음)"}
+                      </div>
                     </td>
                     {/* 도시 */}
                     <td
-                      className="truncate px-2 py-2 text-gray-700"
+                      className="truncate px-1.5 py-1 text-gray-700"
                       title={marker.city || ""}
                     >
                       {marker.city || "-"}
                     </td>
                     {/* 국가 */}
-                    <td className="truncate px-2 py-2 text-gray-700" title={countryLabel}>
+                    <td className="truncate px-1.5 py-1 text-gray-700" title={countryLabel}>
                       {countryLabel}
                     </td>
                     {/* 대륙 */}
-                    <td className="truncate px-2 py-2 text-gray-700">
+                    <td className="truncate px-1.5 py-1 text-gray-700">
                       {continentLabel}
                     </td>
                     {/* 특성 태그 (없으면 -) */}
-                    <td className="px-2 py-2">
+                    <td className="px-1.5 py-1">
                       {Array.isArray(marker.tags) && marker.tags.length > 0 ? (
                         <div className="flex flex-wrap gap-1">
                           {marker.tags.map((tag) => (
@@ -1111,7 +1129,7 @@ export default function MarkerList({ refreshSignal }) {
                       )}
                     </td>
                     {/* 상태 배지 (+ 재생불가 마커에만 "재생 확인") */}
-                    <td className="px-2 py-2">
+                    <td className="px-1.5 py-1">
                       <div className="flex flex-col items-start gap-1">
                         <span
                           className={
@@ -1142,7 +1160,7 @@ export default function MarkerList({ refreshSignal }) {
                       </div>
                     </td>
                     {/* 채널명 */}
-                    <td className="truncate px-2 py-2 text-gray-700" title={channelName}>
+                    <td className="truncate px-1.5 py-1 text-gray-700" title={channelName}>
                       {channelUrl ? (
                         <a
                           href={channelUrl}
@@ -1157,22 +1175,22 @@ export default function MarkerList({ refreshSignal }) {
                       )}
                     </td>
                     {/* 마지막 확인 */}
-                    <td className="truncate whitespace-nowrap px-2 py-2 text-gray-500">
+                    <td className="truncate whitespace-nowrap px-1.5 py-1 text-gray-500">
                       {lastChecked}
                     </td>
-                    {/* AI 설명 (확정 여부 배지 + 편집 버튼) */}
-                    <td className="whitespace-nowrap px-2 py-2">
-                      <div className="flex items-center gap-1">
+                    {/* AI 설명 (확정 여부 배지 + 편집 버튼, 좁은 칸이라 세로 배치) */}
+                    <td className="px-1.5 py-1">
+                      <div className="flex flex-col items-start gap-1">
                         {marker.description_confirmed === true ? (
                           <span
-                            className="rounded bg-green-100 px-1 py-0.5 text-xs text-green-700"
+                            className="whitespace-nowrap rounded bg-green-100 px-1 py-0.5 text-[11px] text-green-700"
                             title="설명 확정됨"
                           >
                             확정✅
                           </span>
                         ) : (
                           <span
-                            className="rounded bg-yellow-100 px-1 py-0.5 text-xs text-yellow-700"
+                            className="whitespace-nowrap rounded bg-yellow-100 px-1 py-0.5 text-[11px] text-yellow-700"
                             title="설명 미확정"
                           >
                             미확정⏳
@@ -1181,28 +1199,28 @@ export default function MarkerList({ refreshSignal }) {
                         <button
                           type="button"
                           onClick={() => handleOpenAi(marker)}
-                          className="rounded border border-brand px-2 py-1 text-xs text-brand hover:bg-brand-light"
+                          className="whitespace-nowrap rounded border border-brand px-1.5 py-0.5 text-[11px] text-brand hover:bg-brand-light"
                         >
                           AI 설명
                         </button>
                       </div>
                     </td>
                     {/* 수정 */}
-                    <td className="px-2 py-2">
+                    <td className="px-1 py-1">
                       <button
                         type="button"
                         onClick={() => handleEdit(marker)}
-                        className="rounded border border-border px-2 py-1 text-xs text-gray-700 hover:bg-gray-100"
+                        className="whitespace-nowrap rounded border border-border px-1.5 py-0.5 text-[11px] text-gray-700 hover:bg-gray-100"
                       >
                         수정
                       </button>
                     </td>
                     {/* 삭제 */}
-                    <td className="px-2 py-2">
+                    <td className="px-1 py-1">
                       <button
                         type="button"
                         onClick={() => handleDelete(marker)}
-                        className="rounded border border-red-300 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                        className="whitespace-nowrap rounded border border-red-300 px-1.5 py-0.5 text-[11px] text-red-600 hover:bg-red-50"
                       >
                         삭제
                       </button>

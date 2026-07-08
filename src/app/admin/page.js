@@ -72,8 +72,8 @@ export default function AdminPage() {
             </button>
           </div>
 
-          {/* 등록 영역 (폼은 읽기 좋게 최대폭 제한) */}
-          <div className="max-w-2xl">
+          {/* 등록 영역 (폼이 왼쪽 절반 폭을 넓게 사용 — 지도/태그가 넓어짐) */}
+          <div>
             <h1 className="mb-6 font-display text-2xl font-bold text-ink">
               관리자 - 마커 등록
             </h1>
