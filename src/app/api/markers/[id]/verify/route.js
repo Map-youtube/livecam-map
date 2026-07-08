@@ -78,7 +78,34 @@ export async function POST(request, context) {
       );
     }
 
-    // ─── 정상 조회됨 → 복원 + 최신 제목/썸네일 갱신 ───────────
+    // ─── 라이브 방송이 종료된 영상은 복원하지 않는다 ───────────
+    // (영상 ID 는 남아있어 조회는 되지만 실제로는 재생 불가/라이브 아님 → 재활성 시 재발 방지)
+    if (ytInfo.streamEnded) {
+      await docRef.update({
+        auto_disabled: true,
+        is_active: false,
+        disabled_reason: "stream_ended",
+        last_checked_at: FieldValue.serverTimestamp(),
+      });
+      // 손님 화면에서 확실히 제외되도록 캐시 무효화
+      try {
+        revalidateTag("public-markers");
+      } catch (revalidateError) {
+        console.error(
+          "[api/markers/[id]/verify] 캐시 무효화 실패:",
+          revalidateError
+        ); // TODO: 배포 전 제거
+      }
+      return Response.json(
+        {
+          ok: false,
+          error: "라이브 방송이 종료된 영상입니다 (재생 불가)",
+        },
+        { status: 200 }
+      );
+    }
+
+    // ─── 정상(현재 라이브/재생 가능) → 복원 + 최신 제목/썸네일 갱신 ─
     await docRef.update({
       auto_disabled: false,
       is_active: true,

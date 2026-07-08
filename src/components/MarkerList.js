@@ -87,8 +87,9 @@ const CONTINENT_ORDER = [
 // 값(key)은 getStatusKey 가 돌려주는 값과 일치해야 한다.
 const STATUS_OPTIONS = [
   { value: "live", label: "🔴 LIVE" },
-  { value: "inactive", label: "⚫ 비활성" },
+  { value: "ended", label: "⏹ 방송종료" },
   { value: "disabled", label: "⚫ 재생불가" },
+  { value: "inactive", label: "⚫ 비활성" },
 ];
 
 // 지도 기본 중심 (좌표가 없을 때)
@@ -131,23 +132,31 @@ function getThumb(marker) {
 }
 
 // ─── 상태 배지 계산 ────────────────────────────────────────────
-// 우선순위: 비활성(is_active===false) → 재생불가(auto_disabled===true) → LIVE
+// 우선순위: 재생불가/방송종료(auto_disabled) → 비활성(is_active===false) → LIVE
+//   - disabled_reason === "stream_ended" 이면 "방송종료"로 구분 표시
+//     (영상 ID 는 남아있지만 라이브가 종료돼 재생 불가)
 function getStatusBadge(marker) {
+  if (marker.auto_disabled === true) {
+    if (marker.disabled_reason === "stream_ended") {
+      return { text: "⏹ 방송종료", className: "bg-purple-100 text-purple-700" };
+    }
+    return { text: "⚫ 재생불가", className: "bg-orange-100 text-orange-700" };
+  }
   if (marker.is_active === false) {
     return { text: "⚫ 비활성", className: "bg-gray-200 text-gray-700" };
-  }
-  if (marker.auto_disabled === true) {
-    return { text: "⚫ 재생불가", className: "bg-orange-100 text-orange-700" };
   }
   return { text: "🔴 LIVE", className: "bg-red-100 text-red-700" };
 }
 
 // ─── 상태 필터용 키 계산 ───────────────────────────────────────
-// 배지(getStatusBadge)와 "동일한 우선순위 기준"으로 상태 키를 돌려준다.
-//   is_active===false → "inactive", auto_disabled===true → "disabled", 그 외 → "live"
+// 배지(getStatusBadge)와 "동일한 기준"으로 상태 키를 돌려준다.
+//   auto_disabled+stream_ended → "ended", auto_disabled → "disabled",
+//   is_active===false → "inactive", 그 외 → "live"
 function getStatusKey(marker) {
+  if (marker.auto_disabled === true) {
+    return marker.disabled_reason === "stream_ended" ? "ended" : "disabled";
+  }
   if (marker.is_active === false) return "inactive";
-  if (marker.auto_disabled === true) return "disabled";
   return "live";
 }
 

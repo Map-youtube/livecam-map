@@ -1,21 +1,22 @@
 // ─────────────────────────────────────────────────────────────
-// 마커 링크(존재) 확인 API — oEmbed 기반 (관리자 전용)
+// 마커 상태 확인 API — videos.list(배치) 기반 (관리자 전용)
 //
 // POST /api/markers/check-status
 //   - verifyAdminRequest 로 보호.
 //   - body: { markerIds?: string[] }
 //       · markerIds 가 있으면 그 마커들만 확인.
 //       · 없으면 is_active !== false 인 전체 마커를 확인.
-//   - 각 대상의 youtube_video_id 로 checkVideoExists(oEmbed) 호출:
-//       · exists:false → (이미 auto_disabled 면 건너뜀) auto_disabled:true, is_active:false,
-//         disabled_reason:"video_unavailable", last_checked_at 갱신.
-//       · exists:true → 그대로 둠(복원은 하지 않음 — 복원은 "재생 확인"(videos.list) 역할).
-//   - 유튜브 서버에 과도한 연속 요청을 피하려 호출 사이 약 200ms 지연(순차 처리).
+//   - 각 대상의 youtube_video_id 를 videos.list 로 "한 번에 50개씩" 조회(getVideosLiveStatus):
+//       · 응답에 없음(삭제/비공개) → disabled_reason:"video_unavailable"
+//       · liveStreamingDetails.actualEndTime 있음(라이브 종료) → disabled_reason:"stream_ended"
+//         (영상 ID 는 남아있어 oEmbed 로는 못 잡지만 실제로는 재생 불가/라이브 아님)
+//       · 정상(현재 라이브/재생 가능) → 그대로 둠(복원은 "재생 확인" 역할).
+//   - 이미 auto_disabled 인 마커는 재처리하지 않음(중복 방지).
 //   - 하나라도 바뀌면 revalidateTag('public-markers') 로 손님 화면 캐시 무효화.
 //   - 응답: { ok:true, checked, disabled }
 //
-// ⚠️ oEmbed 는 무료 공개 프로토콜 — YOUTUBE_API_KEY / Data API 유닛과 무관.
-//    "재생 확인"(videos.list 기반 복원)과 역할이 분리되어 있다(여기서는 복원하지 않음).
+// ⚠️ 비용: videos.list 는 id 50개당 1유닛. 예) 활성 246개 → 약 5유닛(매우 저렴).
+//    "라이브 방송 종료"는 oEmbed(무료)로는 감지 불가라 videos.list 가 필요하다.
 // firebase-admin(Node 전용) → Node.js 런타임 명시.
 // ─────────────────────────────────────────────────────────────
 
@@ -23,18 +24,12 @@ import { revalidateTag } from "next/cache";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { FieldValue } from "firebase-admin/firestore";
 import { verifyAdminRequest } from "@/lib/authUtils";
-import { checkVideoExists } from "@/lib/youtubeUtils";
+import { getVideosLiveStatus } from "@/lib/youtubeUtils";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const COLLECTION = "markers";
-// 연속 요청 사이 지연(ms) — 과도한 연속 호출로 인한 일시 차단 방지 (비용과 무관)
-const DELAY_MS = 200;
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 export async function POST(request) {
   try {
@@ -63,7 +58,6 @@ export async function POST(request) {
     // ─── 대상 마커 문서 목록 구성 ─────────────────────────────
     let docs = [];
     if (markerIds && markerIds.length > 0) {
-      // 개별 지정: 각 id 문서 조회
       for (const id of markerIds) {
         const snap = await adminDb.collection(COLLECTION).doc(id).get();
         if (snap.exists) docs.push(snap);
@@ -77,44 +71,49 @@ export async function POST(request) {
       docs = snapshot.docs;
     }
 
+    // ─── 검사 대상 추리기 (이미 재생불가/video_id 없음 제외) ───
+    const targets = [];
+    for (const doc of docs) {
+      const data = doc.data() || {};
+      if (data.auto_disabled === true) continue; // 이미 재생불가 → 재처리 안 함
+      if (!data.youtube_video_id) continue; // video_id 없으면 확인 불가
+      targets.push({ ref: doc.ref, videoId: data.youtube_video_id });
+    }
+
+    // ─── videos.list 로 일괄 상태 조회 (50개당 1유닛) ─────────
+    const videoIds = targets.map((t) => t.videoId);
+    const statusMap = await getVideosLiveStatus(videoIds);
+
     let checked = 0;
     let disabled = 0;
     let anyChanged = false;
 
-    // ─── 순차 처리 (호출 사이 지연) ───────────────────────────
-    for (const doc of docs) {
-      const data = doc.data() || {};
-      const videoId = data.youtube_video_id;
-
-      // video_id 가 없으면 확인 불가 → 건너뜀
-      if (!videoId) continue;
-      // 이미 재생불가 상태면 재처리하지 않음 (중복 방지)
-      if (data.auto_disabled === true) continue;
-
-      // 첫 호출 이후에는 약간의 지연을 둔다
-      if (checked > 0) {
-        await sleep(DELAY_MS);
-      }
-
-      const result = await checkVideoExists(videoId);
+    for (const t of targets) {
+      const status = statusMap.get(t.videoId);
+      // 조회 실패(응답 자체가 없던 배치 등)면 판단 보류(오탐 방지) → 건너뜀
+      if (!status) continue;
       checked += 1;
 
-      // 네트워크 오류 등(error:true)이면 "존재 안 함"으로 단정하지 않고 건너뜀
-      // (일시적 실패로 정상 영상을 비활성화하는 오탐 방지)
-      if (result.error) continue;
+      let reason = null;
+      if (status.exists === false) {
+        // 삭제/비공개 등
+        reason = "video_unavailable";
+      } else if (status.streamEnded === true) {
+        // 라이브 방송 종료(영상은 남아있으나 재생 불가/라이브 아님)
+        reason = "stream_ended";
+      }
 
-      if (result.exists === false) {
-        // 존재하지 않음(삭제/비공개/지역제한) → 비활성화
-        await doc.ref.update({
+      if (reason) {
+        await t.ref.update({
           auto_disabled: true,
           is_active: false,
-          disabled_reason: "video_unavailable",
+          disabled_reason: reason,
           last_checked_at: FieldValue.serverTimestamp(),
         });
         disabled += 1;
         anyChanged = true;
       }
-      // exists:true → 그대로 둠 (복원하지 않음)
+      // 정상(현재 라이브/재생 가능) → 그대로 둠 (복원하지 않음)
     }
 
     // 하나라도 바뀌었으면 공개 마커 캐시 즉시 무효화
@@ -133,7 +132,7 @@ export async function POST(request) {
   } catch (error) {
     console.error("[api/markers/check-status][POST] 에러:", error); // TODO: 배포 전 제거
     return Response.json(
-      { ok: false, error: "링크 확인 중 오류가 발생했습니다: " + error.message },
+      { ok: false, error: "상태 확인 중 오류가 발생했습니다: " + error.message },
       { status: 500 }
     );
   }

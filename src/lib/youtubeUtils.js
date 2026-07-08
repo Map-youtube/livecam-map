@@ -101,9 +101,10 @@ export async function getYoutubeInfo(videoId) {
       );
     }
 
-    // videos.list 엔드포인트 (part=snippet → 1유닛)
+    // videos.list 엔드포인트 (part=snippet,liveStreamingDetails → 여전히 1유닛)
+    // liveStreamingDetails.actualEndTime 로 "라이브 방송 종료" 여부를 판별한다.
     const endpoint = new URL("https://www.googleapis.com/youtube/v3/videos");
-    endpoint.searchParams.set("part", "snippet");
+    endpoint.searchParams.set("part", "snippet,liveStreamingDetails");
     endpoint.searchParams.set("id", videoId);
     endpoint.searchParams.set("key", apiKey);
 
@@ -152,6 +153,14 @@ export async function getYoutubeInfo(videoId) {
       ? `https://www.youtube.com/channel/${channelId}`
       : "";
 
+    // ─── 라이브 상태 판별 ─────────────────────────────────────
+    // liveStreamingDetails.actualEndTime 이 있으면 "라이브 방송이 종료된" 영상이다.
+    // (영상 객체 자체는 남아있어 oEmbed 로는 못 잡지만, 실제로는 재생 불가/라이브 아님)
+    const lsd = data.items[0].liveStreamingDetails || null;
+    const actualEndTime = lsd && lsd.actualEndTime ? lsd.actualEndTime : null;
+    const liveBroadcastContent = snippet.liveBroadcastContent || "none";
+    const streamEnded = Boolean(actualEndTime);
+
     return {
       title: snippet.title || "",
       description,
@@ -159,12 +168,89 @@ export async function getYoutubeInfo(videoId) {
       thumbnailUrl,
       channelId,
       channelUrl,
+      // 라이브 상태 정보
+      liveBroadcastContent, // "live" | "upcoming" | "none"
+      actualEndTime, // 방송 종료 시각(있으면 종료된 것)
+      streamEnded, // 라이브 방송 종료 여부
     };
   } catch (error) {
     // 호출부(API Route)에서 500 처리할 수 있도록 그대로 전파
     console.error("[youtubeUtils] getYoutubeInfo 에러:", error); // TODO: 배포 전 제거
     throw error;
   }
+}
+
+// ─── 여러 영상의 존재/라이브 상태 일괄 조회 (videos.list, 배치) ──
+// videos.list 는 한 번에 최대 50개 id 를 1유닛으로 조회할 수 있어 매우 저렴하다.
+//   반환: Map(videoId → { exists, streamEnded, liveBroadcastContent })
+//   - 응답 items 에 없는 id = 삭제/비공개 → { exists:false }
+//   - liveStreamingDetails.actualEndTime 있으면 streamEnded:true (라이브 종료)
+// 실패 시 빈 Map 을 반환(throw 하지 않음) → 호출부에서 "판단 보류"로 처리 가능.
+export async function getVideosLiveStatus(videoIds) {
+  const result = new Map();
+  try {
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (!apiKey) {
+      console.error(
+        "[youtubeUtils] 환경변수 YOUTUBE_API_KEY 가 없어 라이브 상태 조회를 건너뜁니다."
+      ); // TODO: 배포 전 제거
+      return result;
+    }
+
+    const ids = (Array.isArray(videoIds) ? videoIds : [])
+      .map((v) => String(v || "").trim())
+      .filter((v) => v.length > 0);
+
+    // 50개씩 배치 (videos.list 최대 id 수)
+    for (let i = 0; i < ids.length; i += 50) {
+      const chunk = ids.slice(i, i + 50);
+      const endpoint = new URL("https://www.googleapis.com/youtube/v3/videos");
+      endpoint.searchParams.set("part", "snippet,liveStreamingDetails");
+      endpoint.searchParams.set("id", chunk.join(","));
+      endpoint.searchParams.set("key", apiKey);
+
+      const res = await fetch(endpoint.toString(), {
+        method: "GET",
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        // 이 배치는 판단 보류(결과에 넣지 않음)
+        console.error(
+          `[youtubeUtils] getVideosLiveStatus 배치 실패 (status ${res.status})`
+        ); // TODO: 배포 전 제거
+        continue;
+      }
+      const data = await res.json();
+      const items = Array.isArray(data.items) ? data.items : [];
+
+      // 존재하는(=응답에 온) id 들 처리
+      for (const it of items) {
+        const vid = it.id;
+        const lsd = it.liveStreamingDetails || null;
+        const ended = Boolean(lsd && lsd.actualEndTime);
+        const lbc =
+          (it.snippet && it.snippet.liveBroadcastContent) || "none";
+        result.set(vid, {
+          exists: true,
+          streamEnded: ended,
+          liveBroadcastContent: lbc,
+        });
+      }
+      // 응답에 없는 id = 삭제/비공개 → exists:false
+      for (const vid of chunk) {
+        if (!result.has(vid)) {
+          result.set(vid, {
+            exists: false,
+            streamEnded: false,
+            liveBroadcastContent: "none",
+          });
+        }
+      }
+    }
+  } catch (error) {
+    console.error("[youtubeUtils] getVideosLiveStatus 에러:", error); // TODO: 배포 전 제거
+  }
+  return result;
 }
 
 // ─── 영상 존재 여부 빠른 확인 (oEmbed, 무료) ──────────────────
