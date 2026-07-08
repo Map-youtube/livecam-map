@@ -667,9 +667,11 @@ export default function MarkerList({ refreshSignal }) {
     });
   }, [markers]);
 
+  // 국가 목록: 선택된 대륙에 속한 국가만 (대륙 미선택이면 전체)
   const availableCountries = useMemo(() => {
     const set = new Set();
     for (const m of markers) {
+      if (filterContinent !== "all" && m.continent !== filterContinent) continue;
       if (m.country) set.add(m.country);
     }
     // 한국어 국가명 기준 정렬
@@ -678,7 +680,7 @@ export default function MarkerList({ refreshSignal }) {
       const nb = COUNTRY_NAME_BY_CODE[b] || b;
       return na.localeCompare(nb, "ko");
     });
-  }, [markers]);
+  }, [markers, filterContinent]);
 
   // ─── 도시 필터 옵션 ──────────────────────────────────────────
   // 현재 선택된 대륙/국가에 속하는 마커의 도시만 추려서 목록이 너무 길지 않게 한다.
@@ -770,11 +772,12 @@ export default function MarkerList({ refreshSignal }) {
 
         {/* 드롭다운 필터 4종 + 초기화 버튼 */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* 대륙 필터 (변경 시 하위 도시 선택은 초기화) */}
+          {/* 대륙 필터 (변경 시 하위 국가/도시 선택은 초기화) */}
           <select
             value={filterContinent}
             onChange={(e) => {
               setFilterContinent(e.target.value);
+              setFilterCountry("all");
               setFilterCity("all");
             }}
             className="rounded-md border border-border px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
