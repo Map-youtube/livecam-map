@@ -87,10 +87,10 @@ export default function AiDescriptionEditor({ marker, onSaved, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white p-5 shadow-xl">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-surface p-5 shadow-xl">
         {/* 헤더 */}
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="flex items-center gap-2 text-lg font-bold text-gray-900">
+          <h3 className="flex items-center gap-2 text-lg font-bold text-ink">
             AI 장소 설명
             {confirmed ? (
               <span className="rounded bg-green-100 px-1.5 py-0.5 text-xs font-semibold text-green-700">
@@ -140,7 +140,7 @@ export default function AiDescriptionEditor({ marker, onSaved, onClose }) {
             onChange={(e) => setKo(e.target.value)}
             rows={4}
             placeholder="한국어 장소 소개를 입력하세요."
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
           />
         </div>
 
@@ -154,7 +154,7 @@ export default function AiDescriptionEditor({ marker, onSaved, onClose }) {
             onChange={(e) => setEn(e.target.value)}
             rows={4}
             placeholder="Enter the place introduction in English."
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
           />
         </div>
 
@@ -163,7 +163,7 @@ export default function AiDescriptionEditor({ marker, onSaved, onClose }) {
           <button
             type="button"
             onClick={() => (typeof onClose === "function" ? onClose() : null)}
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+            className="rounded-md border border-border px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
           >
             닫기
           </button>
@@ -175,7 +175,7 @@ export default function AiDescriptionEditor({ marker, onSaved, onClose }) {
               "rounded-md px-4 py-2 text-sm font-semibold text-white " +
               (saving
                 ? "cursor-not-allowed bg-gray-300"
-                : "bg-blue-600 hover:bg-blue-700")
+                : "bg-brand hover:bg-brand-hover")
             }
           >
             {saving ? "저장 중..." : "확정 저장"}

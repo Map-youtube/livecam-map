@@ -49,20 +49,28 @@ try {
 }
 
 // ─── 마커 아이콘 생성 함수 ─────────────────────────────────────
-// selected(강조) 여부에 따라 크기를 다르게 하여 선택된 마커를 시각적으로 강조한다.
-// 아이콘 생성 실패 시 undefined 를 반환하여 Leaflet 기본 아이콘으로 폴백되게 한다.
-function makeIcon(selected) {
+// divIcon(HTML) 으로 기존 핀 이미지를 그리고, live 인 마커에는 그 위에 라이브 신호점(.live-dot)을
+// CSS 오버레이로 얹는다. selected(강조) 여부에 따라 크기를 다르게 한다.
+// (클러스터링/클릭 등 기존 동작은 그대로 — 시각적 오버레이만 추가)
+function makeIcon(live, selected) {
   try {
     const size = selected ? [37, 61] : [25, 41];
     const anchor = selected ? [18, 61] : [12, 41];
-    return L.icon({
-      iconUrl: ICON_BASE + "marker-icon.png",
-      iconRetinaUrl: ICON_BASE + "marker-icon-2x.png",
-      shadowUrl: ICON_BASE + "marker-shadow.png",
+    const w = size[0];
+    const h = size[1];
+    // 라이브면 핀 머리 부분 위에 신호점을 얹는다 (globals.css 의 .live-dot 애니메이션 사용)
+    const pulse = live ? '<span class="live-dot"></span>' : "";
+    const html =
+      `<div class="lm-marker" style="width:${w}px;height:${h}px;">` +
+      `<img src="${ICON_BASE}marker-icon.png" width="${w}" height="${h}" alt="" style="display:block;width:${w}px;height:${h}px;" />` +
+      pulse +
+      `</div>`;
+    return L.divIcon({
+      html,
+      className: "lm-divicon",
       iconSize: size,
       iconAnchor: anchor,
       popupAnchor: [1, -34],
-      shadowSize: [41, 41],
     });
   } catch (error) {
     console.error("[LeafletMap] 아이콘 생성 실패:", error); // TODO: 배포 전 제거
@@ -196,9 +204,14 @@ function MarkerClusterLayer({ markers, onMarkerClick, selectedMarkerId }) {
 
         const isSelected =
           selectedMarkerId != null && m.id === selectedMarkerId;
+        // 실제 라이브 상태(비활성/재생불가가 아니고 is_live 가 false 가 아님)
+        const isLive =
+          m.auto_disabled !== true &&
+          m.is_active !== false &&
+          m.is_live !== false;
 
         const marker = L.marker([lat, lng], {
-          icon: makeIcon(isSelected),
+          icon: makeIcon(isLive, isSelected),
           zIndexOffset: isSelected ? 1000 : 0,
         });
 

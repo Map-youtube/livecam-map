@@ -316,7 +316,7 @@ export default function MarkerForm({ onRegistered }) {
           value={youtubeUrl}
           onChange={(e) => setYoutubeUrl(e.target.value)}
           placeholder="https://www.youtube.com/watch?v=..."
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
         />
 
         {/* URL 상태 안내 */}
@@ -362,7 +362,7 @@ export default function MarkerForm({ onRegistered }) {
             <img
               src={thumbnailUrl}
               alt="유튜브 썸네일 미리보기"
-              className="w-64 rounded-md border border-gray-200"
+              className="w-64 rounded-md border border-border"
             />
           </div>
         )}
@@ -378,7 +378,7 @@ export default function MarkerForm({ onRegistered }) {
         </p>
 
         {/* 지도 (높이는 부모가 지정) */}
-        <div className="h-80 w-full overflow-hidden rounded-md border border-gray-300">
+        <div className="h-80 w-full overflow-hidden rounded-md border border-border">
           <LeafletMapWrapper
             markers={mapMarkers}
             center={mapCenter}
@@ -397,7 +397,7 @@ export default function MarkerForm({ onRegistered }) {
               value={lat}
               onChange={(e) => setLat(e.target.value)}
               placeholder="예: 35.6595"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
             />
           </div>
           <div>
@@ -407,7 +407,7 @@ export default function MarkerForm({ onRegistered }) {
               value={lng}
               onChange={(e) => setLng(e.target.value)}
               placeholder="예: 139.7004"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
             />
           </div>
         </div>
@@ -430,7 +430,7 @@ export default function MarkerForm({ onRegistered }) {
             value={location}
             onChange={(e) => setLocation(e.target.value)}
             placeholder="예: 도쿄 시부야 교차로"
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
           />
         </div>
 
@@ -442,7 +442,7 @@ export default function MarkerForm({ onRegistered }) {
             value={city}
             onChange={(e) => setCity(e.target.value)}
             placeholder="예: Tokyo"
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
           />
         </div>
 
@@ -452,7 +452,7 @@ export default function MarkerForm({ onRegistered }) {
           <select
             value={country}
             onChange={(e) => setCountry(e.target.value)}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
           >
             <option value="">국가를 선택하세요</option>
             {COUNTRIES.map((c) => (
@@ -500,7 +500,7 @@ export default function MarkerForm({ onRegistered }) {
           className={
             "w-full rounded-md px-4 py-3 text-sm font-semibold text-white transition " +
             (canSubmit
-              ? "bg-blue-600 hover:bg-blue-700"
+              ? "bg-brand hover:bg-brand-hover"
               : "cursor-not-allowed bg-gray-300")
           }
         >

@@ -1,26 +1,102 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ─────────────────────────────────────────────────────────────
+   디자인 토큰 (CSS 변수) — 사이트 전체 색상/타이포/모서리/그림자
+   next/font 로 로드된 폰트 변수(--font-space 등)는 layout.js 에서 <html> 에 주입된다.
+   ───────────────────────────────────────────────────────────── */
+@theme {
+  /* 색상 */
+  --color-bg: #f7f8fa; /* 전체 배경 (부드러운 흰색) */
+  --color-surface: #ffffff; /* 카드/패널 표면 */
+  --color-ink: #12181f; /* 본문 텍스트 (진한 슬레이트) */
+  --color-ink-muted: #5b6472; /* 보조 텍스트 */
+  --color-border: #e4e7ec; /* 구분선/테두리 */
+  --color-brand: #146c6b; /* 포인트색 (청록/바다색) */
+  --color-brand-hover: #0f5654; /* 브랜드 hover */
+  --color-brand-light: #e6f2f1; /* 브랜드 연한 배경 (선택 강조 등) */
+  --color-live: #e1483c; /* LIVE 신호색 */
+  --color-live-light: #fdecea; /* LIVE 연한 배경 */
+
+  /* 모서리 둥글기 */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  /* 카드 그림자 (과하지 않게) */
+  --shadow-card: 0 1px 2px rgba(18, 24, 31, 0.06),
+    0 4px 12px rgba(18, 24, 31, 0.06);
+
+  /* 타이포그래피 — 한국어 텍스트는 Noto Sans KR + Inter 조합,
+     영문/숫자는 Inter 우선(글자별 폴백으로 한글은 Noto Sans KR 로 넘어감) */
+  --font-display: var(--font-space), var(--font-inter), ui-sans-serif,
+    system-ui, sans-serif;
+  --font-body: var(--font-inter), var(--font-noto-kr), ui-sans-serif,
+    system-ui, "Malgun Gothic", sans-serif;
+  --font-mono: var(--font-plex), ui-monospace, SFMono-Regular, monospace;
+  --font-kr: var(--font-noto-kr), var(--font-inter), "Malgun Gothic",
+    sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* ─── 기본 바탕 ─── */
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-body);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* ─────────────────────────────────────────────────────────────
+   라이브 시그니처 — "신호 점(Live Pulse)"
+   작은 점 하나가 은은하게 바깥으로 퍼지며(scale) 사라지는(opacity) 애니메이션.
+   opacity 와 scale 만 사용, 2초 주기.
+   ───────────────────────────────────────────────────────────── */
+.live-dot {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  border-radius: 9999px;
+  background: var(--color-live);
+}
+.live-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: var(--color-live);
+  animation: live-ping 2s ease-out infinite;
+}
+@keyframes live-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  70%,
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* 지도 마커의 라이브 신호점 (Leaflet divIcon 오버레이) */
+.lm-divicon {
+  background: transparent;
+  border: 0;
+}
+.lm-marker {
+  position: relative;
+}
+.lm-marker .live-dot {
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+}
+
+/* 사용자가 모션 최소화를 원하면 퍼지는 애니메이션을 끄고 정적인 점만 표시 */
+@media (prefers-reduced-motion: reduce) {
+  .live-dot::after {
+    animation: none;
+    opacity: 0;
+  }
 }

@@ -90,16 +90,16 @@ export default function AdminLoginPage() {
   // ─── 초기 확인 중에는 로딩 화면만 ───────────────────────────
   if (checking) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-gray-50">
+      <main className="flex min-h-screen items-center justify-center bg-bg">
         <p className="text-sm text-gray-500">확인 중...</p>
       </main>
     );
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-        <h1 className="mb-1 text-xl font-bold text-gray-900">관리자 로그인</h1>
+    <main className="flex min-h-screen items-center justify-center bg-bg px-4">
+      <div className="w-full max-w-sm rounded-lg border border-border bg-surface p-6 shadow-sm">
+        <h1 className="mb-1 text-xl font-bold text-ink">관리자 로그인</h1>
         <p className="mb-5 text-xs text-gray-500">
           등록된 관리자 계정으로만 로그인할 수 있습니다.
         </p>
@@ -121,7 +121,7 @@ export default function AdminLoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="username"
               placeholder="admin@example.com"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
             />
           </div>
 
@@ -134,7 +134,7 @@ export default function AdminLoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
               placeholder="비밀번호"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
             />
           </div>
 
@@ -146,7 +146,7 @@ export default function AdminLoginPage() {
               "w-full rounded-md px-4 py-2.5 text-sm font-semibold text-white transition " +
               (submitting
                 ? "cursor-not-allowed bg-gray-300"
-                : "bg-blue-600 hover:bg-blue-700")
+                : "bg-brand hover:bg-brand-hover")
             }
           >
             {submitting ? "로그인 중..." : "로그인"}

@@ -54,33 +54,33 @@ export default function AdminPage() {
 
   return (
     <AdminGuard>
-      <main className="min-h-screen bg-gray-50 px-4 py-8">
+      <main className="min-h-screen bg-bg px-4 py-8">
         <div className="mx-auto max-w-2xl">
           {/* 상단 바: 관리자 이메일 + 로그아웃 */}
-          <div className="mb-6 flex items-center justify-between border-b border-gray-200 pb-3">
+          <div className="mb-6 flex items-center justify-between border-b border-border pb-3">
             <span className="text-xs text-gray-500">
               {adminEmail ? `로그인: ${adminEmail}` : "로그인됨"}
             </span>
             <button
               type="button"
               onClick={handleLogout}
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+              className="rounded-md border border-border px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
             >
               로그아웃
             </button>
           </div>
 
           {/* 등록 영역 */}
-          <h1 className="mb-6 text-2xl font-bold text-gray-900">
+          <h1 className="mb-6 font-display text-2xl font-bold text-ink">
             관리자 - 마커 등록
           </h1>
           <MarkerForm onRegistered={() => setRefreshSignal((n) => n + 1)} />
 
           {/* 구분선 */}
-          <hr className="my-10 border-gray-300" />
+          <hr className="my-10 border-border" />
 
           {/* 목록 영역 */}
-          <h2 className="mb-4 text-xl font-bold text-gray-900">
+          <h2 className="mb-4 font-display text-xl font-bold text-ink">
             등록된 마커 목록
           </h2>
           <MarkerList refreshSignal={refreshSignal} />

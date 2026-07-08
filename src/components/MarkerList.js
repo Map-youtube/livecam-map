@@ -273,9 +273,9 @@ function EditModal({ marker, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white p-5 shadow-xl">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-surface p-5 shadow-xl">
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-lg font-bold text-gray-900">마커 수정</h3>
+          <h3 className="text-lg font-bold text-ink">마커 수정</h3>
           <button
             type="button"
             onClick={onClose}
@@ -299,7 +299,7 @@ function EditModal({ marker, onClose, onSaved }) {
               type="text"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm"
             />
           </div>
 
@@ -310,7 +310,7 @@ function EditModal({ marker, onClose, onSaved }) {
               type="text"
               value={city}
               onChange={(e) => setCity(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm"
             />
           </div>
 
@@ -320,7 +320,7 @@ function EditModal({ marker, onClose, onSaved }) {
             <select
               value={country}
               onChange={(e) => setCountry(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm"
             >
               <option value="">국가를 선택하세요</option>
               {COUNTRIES.map((c) => (
@@ -347,7 +347,7 @@ function EditModal({ marker, onClose, onSaved }) {
             <label className="block text-xs text-gray-600">
               위치 (지도를 클릭하면 좌표가 바뀝니다)
             </label>
-            <div className="h-72 w-full overflow-hidden rounded-md border border-gray-300">
+            <div className="h-72 w-full overflow-hidden rounded-md border border-border">
               <LeafletMapWrapper
                 markers={mapMarkers}
                 center={mapCenter}
@@ -363,7 +363,7 @@ function EditModal({ marker, onClose, onSaved }) {
                   type="text"
                   value={lat}
                   onChange={(e) => setLat(e.target.value)}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-md border border-border px-3 py-2 text-sm"
                 />
               </div>
               <div>
@@ -372,7 +372,7 @@ function EditModal({ marker, onClose, onSaved }) {
                   type="text"
                   value={lng}
                   onChange={(e) => setLng(e.target.value)}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-md border border-border px-3 py-2 text-sm"
                 />
               </div>
             </div>
@@ -399,7 +399,7 @@ function EditModal({ marker, onClose, onSaved }) {
               type="text"
               value={youtubeUrl}
               onChange={(e) => setYoutubeUrl(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm"
             />
             {urlChanged ? (
               <p className="mt-1 text-xs text-orange-600">
@@ -418,7 +418,7 @@ function EditModal({ marker, onClose, onSaved }) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+            className="rounded-md border border-border px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
           >
             취소
           </button>
@@ -428,7 +428,7 @@ function EditModal({ marker, onClose, onSaved }) {
             disabled={saving}
             className={
               "rounded-md px-4 py-2 text-sm font-semibold text-white " +
-              (saving ? "cursor-not-allowed bg-gray-300" : "bg-blue-600 hover:bg-blue-700")
+              (saving ? "cursor-not-allowed bg-gray-300" : "bg-brand hover:bg-brand-hover")
             }
           >
             {saving ? "저장 중..." : "저장"}
@@ -745,7 +745,7 @@ export default function MarkerList({ refreshSignal }) {
           value={filterText}
           onChange={(e) => setFilterText(e.target.value)}
           placeholder="검색 (장소명 · 도시 · 국가)"
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
         />
 
         {/* 드롭다운 필터 3종 + 초기화 버튼 */}
@@ -754,7 +754,7 @@ export default function MarkerList({ refreshSignal }) {
           <select
             value={filterContinent}
             onChange={(e) => setFilterContinent(e.target.value)}
-            className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+            className="rounded-md border border-border px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
           >
             <option value="all">대륙 전체</option>
             {availableContinents.map((cont) => (
@@ -768,7 +768,7 @@ export default function MarkerList({ refreshSignal }) {
           <select
             value={filterCountry}
             onChange={(e) => setFilterCountry(e.target.value)}
-            className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+            className="rounded-md border border-border px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
           >
             <option value="all">국가 전체</option>
             {availableCountries.map((code) => (
@@ -782,7 +782,7 @@ export default function MarkerList({ refreshSignal }) {
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+            className="rounded-md border border-border px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
           >
             <option value="all">상태 전체</option>
             {STATUS_OPTIONS.map((s) => (
@@ -796,7 +796,7 @@ export default function MarkerList({ refreshSignal }) {
           <button
             type="button"
             onClick={resetFilters}
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+            className="rounded-md border border-border px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
           >
             필터 초기화
           </button>
@@ -855,7 +855,7 @@ export default function MarkerList({ refreshSignal }) {
 
       {/* 표 */}
       {!loading && !loadError && filteredMarkers.length > 0 && (
-        <div className="max-h-[70vh] overflow-auto rounded-md border border-gray-200">
+        <div className="max-h-[70vh] overflow-auto rounded-md border border-border">
           <table className="min-w-full border-collapse text-left text-sm">
             {/* sticky 헤더 */}
             <thead className="sticky top-0 z-10 bg-gray-100 text-xs text-gray-600">
@@ -892,7 +892,7 @@ export default function MarkerList({ refreshSignal }) {
                 return (
                   <tr
                     key={marker.id}
-                    className="border-t border-gray-100 align-middle hover:bg-gray-50"
+                    className="border-t border-gray-100 align-middle hover:bg-bg"
                   >
                     {/* 썸네일 */}
                     <td className="px-2 py-2">
@@ -908,7 +908,7 @@ export default function MarkerList({ refreshSignal }) {
                       )}
                     </td>
                     {/* 장소명 */}
-                    <td className="px-2 py-2 font-medium text-gray-900">
+                    <td className="px-2 py-2 font-medium text-ink">
                       {marker.location || "(장소명 없음)"}
                     </td>
                     {/* 도시 */}
@@ -926,7 +926,7 @@ export default function MarkerList({ refreshSignal }) {
                           {marker.tags.map((tag) => (
                             <span
                               key={tag}
-                              className="whitespace-nowrap rounded-full bg-blue-100 px-1.5 py-0.5 text-xs text-blue-800"
+                              className="whitespace-nowrap rounded-full bg-brand-light px-1.5 py-0.5 text-xs text-brand"
                             >
                               #{tag}
                             </span>
@@ -958,7 +958,7 @@ export default function MarkerList({ refreshSignal }) {
                             className={
                               "whitespace-nowrap rounded border px-2 py-0.5 text-xs " +
                               (verifyingId === marker.id
-                                ? "cursor-not-allowed border-gray-200 text-gray-400"
+                                ? "cursor-not-allowed border-border text-gray-400"
                                 : "border-green-300 text-green-700 hover:bg-green-50")
                             }
                           >
@@ -974,7 +974,7 @@ export default function MarkerList({ refreshSignal }) {
                           href={channelUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-blue-600 hover:underline"
+                          className="text-brand hover:underline"
                         >
                           {channelName} ↗
                         </a>
@@ -1007,7 +1007,7 @@ export default function MarkerList({ refreshSignal }) {
                         <button
                           type="button"
                           onClick={() => handleOpenAi(marker)}
-                          className="rounded border border-indigo-300 px-2 py-1 text-xs text-indigo-600 hover:bg-indigo-50"
+                          className="rounded border border-brand px-2 py-1 text-xs text-brand hover:bg-brand-light"
                         >
                           AI 설명
                         </button>
@@ -1018,7 +1018,7 @@ export default function MarkerList({ refreshSignal }) {
                       <button
                         type="button"
                         onClick={() => handleEdit(marker)}
-                        className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-100"
+                        className="rounded border border-border px-2 py-1 text-xs text-gray-700 hover:bg-gray-100"
                       >
                         수정
                       </button>

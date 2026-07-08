@@ -20,6 +20,7 @@ import { useCallback, useMemo, useState } from "react";
 import LeafletMapWrapper from "@/components/LeafletMapWrapper";
 import MainCategoryTree from "@/components/MainCategoryTree";
 import VideoListPanel from "@/components/VideoListPanel";
+import LiveDot from "@/components/LiveDot";
 
 // 대륙 코드 → 한국어 라벨 (패널 제목/지역 표시에 사용)
 const CONTINENT_LABELS = {
@@ -204,48 +205,61 @@ export default function MainMapView({ markers, tags }) {
   }, [selectedCity, selectedTag, filteredMarkers]);
 
   return (
-    // ⚠️ 모바일 기초 안전장치: 각 패널에 min-width 를 두어 좁은 화면에서도 요소가
-    //    0폭으로 찌그러져 텍스트가 겹치거나 버튼이 사라지지 않게 한다. 폰트는 text-xs 로 작게.
-    //    좁으면 가로 스크롤이 생길 수 있으나 콘텐츠 자체는 깨지지 않는다.
+    // 세로 flex: 상단 헤더 + 나머지(flex-1) 콘텐츠 → 헤더 높이만큼 자동으로 빠진다.
+    // ⚠️ 모바일 기초 안전장치: 각 패널에 min-width 를 둬서 좁은 화면에서도 요소가 찌그러지지 않게 한다.
     //    (본격적인 모바일 전용 UI — 하단 드로어 방식 등 — 는 추후 디자인 작업에서 진행 예정)
-    <div className="flex h-screen w-full overflow-x-auto">
-      {/* 왼쪽: 카테고리 트리 (10%, 최소 200px) */}
-      <aside className="h-full w-[10%] min-w-[200px] overflow-auto border-r border-gray-200 bg-white">
-        <MainCategoryTree
-          markers={markerList}
-          tags={tagList}
-          onSelectLocation={handleSelectLocation}
-          onSelectTag={handleSelectTag}
-          selectedCity={selectedCity}
-          selectedTag={selectedTag}
-        />
-      </aside>
+    <div className="flex h-screen flex-col bg-bg">
+      {/* 상단 헤더 바 (얇게, 로고 텍스트) */}
+      <header className="flex h-12 flex-shrink-0 items-center gap-2 border-b border-border bg-surface px-4">
+        <LiveDot size="sm" />
+        <span className="font-display text-base font-bold tracking-tight text-ink">
+          LiveCam Map
+        </span>
+        <span className="hidden text-xs text-ink-muted sm:inline">
+          세계 라이브 지도
+        </span>
+      </header>
 
-      {/* 중간: 영상 목록 패널 (열렸을 때만, 30%) */}
-      {isPanelOpen && (
-        <section className="h-full w-[30%] min-w-[260px] overflow-hidden border-r border-gray-200 bg-gray-50">
-          <VideoListPanel
-            markers={filteredMarkers}
-            title={panelTitle}
-            onClose={closePanel}
-            onSelectMarker={handleSelectMarker}
-            expandedMarkerId={expandedMarkerId}
+      {/* 콘텐츠 영역 (남은 높이 전부) */}
+      <div className="flex min-h-0 flex-1 overflow-x-auto">
+        {/* 왼쪽: 카테고리 트리 (10%, 최소 200px) */}
+        <aside className="h-full w-[10%] min-w-[200px] overflow-auto border-r border-border bg-surface">
+          <MainCategoryTree
+            markers={markerList}
+            tags={tagList}
+            onSelectLocation={handleSelectLocation}
+            onSelectTag={handleSelectTag}
+            selectedCity={selectedCity}
+            selectedTag={selectedTag}
           />
-        </section>
-      )}
+        </aside>
 
-      {/* 오른쪽: 지도 (패널 열림 시 60%, 닫힘 시 90%) */}
-      <main className="h-full flex-1">
-        {/* 카드로 이동 지정이 있으면 그 좌표/줌을, 없으면 기본 세계 뷰를 사용 */}
-        <LeafletMapWrapper
-          markers={markerList}
-          center={mapCenter || DEFAULT_CENTER}
-          zoom={mapZoom || DEFAULT_ZOOM}
-          onMapClick={handleMapClick}
-          onMarkerClick={handleMarkerClick}
-          selectedMarkerId={expandedMarkerId}
-        />
-      </main>
+        {/* 중간: 영상 목록 패널 (열렸을 때만, 30%) */}
+        {isPanelOpen && (
+          <section className="h-full w-[30%] min-w-[260px] overflow-hidden border-r border-border bg-bg">
+            <VideoListPanel
+              markers={filteredMarkers}
+              title={panelTitle}
+              onClose={closePanel}
+              onSelectMarker={handleSelectMarker}
+              expandedMarkerId={expandedMarkerId}
+            />
+          </section>
+        )}
+
+        {/* 오른쪽: 지도 (패널 열림 시 60%, 닫힘 시 90%) */}
+        <main className="h-full flex-1">
+          {/* 카드로 이동 지정이 있으면 그 좌표/줌을, 없으면 기본 세계 뷰를 사용 */}
+          <LeafletMapWrapper
+            markers={markerList}
+            center={mapCenter || DEFAULT_CENTER}
+            zoom={mapZoom || DEFAULT_ZOOM}
+            onMapClick={handleMapClick}
+            onMarkerClick={handleMarkerClick}
+            selectedMarkerId={expandedMarkerId}
+          />
+        </main>
+      </div>
     </div>
   );
 }

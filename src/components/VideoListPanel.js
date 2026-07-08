@@ -19,6 +19,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { COUNTRY_NAME_BY_CODE } from "@/lib/countryList";
+import LiveDot from "@/components/LiveDot";
 
 // ─── 유튜브 IFrame API 로더 (전역, 한 번만 로드) ──────────────
 let ytApiPromise = null;
@@ -79,12 +80,46 @@ function getThumb(marker) {
 // 우선순위: 비활성(is_active===false) → 재생불가(auto_disabled===true) → LIVE
 function getStatusBadge(marker) {
   if (marker.is_active === false) {
-    return { text: "⚫ 비활성", className: "bg-gray-200 text-gray-700" };
+    return { kind: "inactive", label: "비활성" };
   }
   if (marker.auto_disabled === true) {
-    return { text: "⚫ 재생불가", className: "bg-orange-100 text-orange-700" };
+    return { kind: "disabled", label: "재생불가" };
   }
-  return { text: "🔴 LIVE", className: "bg-red-100 text-red-700" };
+  return { kind: "live", label: "LIVE" };
+}
+
+// 상태 배지 컴포넌트 (썸네일 위/카드에 올리는 작은 배지)
+function StatusBadge({ badge }) {
+  if (badge.kind === "live") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-live-light px-2 py-0.5 text-xs font-semibold text-live shadow-card">
+        <LiveDot size="sm" />
+        {badge.label}
+      </span>
+    );
+  }
+  // 재생불가/비활성은 회색조로 톤다운
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-ink/70 px-2 py-0.5 text-xs font-semibold text-white">
+      {badge.label}
+    </span>
+  );
+}
+
+// 위치 핀 아이콘 (작은 SVG)
+function PinIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="12"
+      height="12"
+      aria-hidden="true"
+      className="flex-none"
+      fill="currentColor"
+    >
+      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z" />
+    </svg>
+  );
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -272,30 +307,30 @@ export default function VideoListPanel({
   const visibleList = list.filter((m) => m && !removedIds.has(m.id));
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col bg-bg">
       {/* 상단: 제목 + 닫기 버튼 */}
-      <div className="flex flex-shrink-0 items-center justify-between border-b border-gray-200 bg-white px-3 py-2">
-        <h2 className="truncate text-sm font-bold text-gray-800">
+      <div className="flex flex-shrink-0 items-center justify-between border-b border-border bg-surface px-4 py-3">
+        <h2 className="truncate font-display text-sm font-bold text-ink">
           {title || "영상 목록"}
         </h2>
         <button
           type="button"
           onClick={handleClose}
           aria-label="패널 닫기"
-          className="ml-2 rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+          className="ml-2 rounded-md p-1 text-ink-muted transition hover:bg-brand-light hover:text-brand"
         >
           ✕
         </button>
       </div>
 
       {/* 카드 목록 (세로 스크롤) */}
-      <div className="flex-1 overflow-auto p-2">
+      <div className="flex-1 overflow-auto p-3">
         {visibleList.length === 0 ? (
-          <p className="mt-4 text-center text-sm text-gray-400">
+          <p className="mt-6 text-center text-sm text-ink-muted">
             등록된 영상이 없습니다.
           </p>
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-4">
             {visibleList.map((marker) => {
               // 각 카드는 이 marker 의 고유 데이터만 참조한다.
               const thumb = getThumb(marker);
@@ -319,7 +354,7 @@ export default function VideoListPanel({
               return (
                 <div
                   key={marker.id}
-                  className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition hover:shadow-md"
+                  className="overflow-hidden rounded-lg border border-border bg-surface shadow-card transition duration-150 hover:-translate-y-0.5 hover:shadow-card"
                 >
                   {/* 클릭 영역(헤더): 썸네일 + 정보 */}
                   <button
@@ -327,51 +362,48 @@ export default function VideoListPanel({
                     onClick={() => handleCardClick(marker)}
                     className="block w-full text-left"
                   >
-                    {/* 썸네일 (카드 상단, 넓게) */}
-                    {thumb ? (
-                      // 원격 이미지라 next/image 대신 일반 img 사용
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={thumb}
-                        alt={marker.location || "썸네일"}
-                        className="h-32 w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-32 w-full items-center justify-center bg-gray-100 text-xs text-gray-400">
-                        썸네일 없음
+                    {/* 썸네일 (16:9) + 좌상단 상태 배지 */}
+                    <div className="relative aspect-video w-full overflow-hidden rounded-md bg-ink/5">
+                      {thumb ? (
+                        // 원격 이미지라 next/image 대신 일반 img 사용
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={thumb}
+                          alt={marker.location || "썸네일"}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-xs text-ink-muted">
+                          썸네일 없음
+                        </div>
+                      )}
+                      <div className="absolute left-2 top-2">
+                        <StatusBadge badge={badge} />
                       </div>
-                    )}
+                    </div>
 
                     {/* 본문 */}
-                    <div className="p-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <h3 className="truncate text-sm font-bold text-gray-900">
-                          {marker.location || "(장소명 없음)"}
-                        </h3>
-                        <span
-                          className={
-                            "flex-shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold " +
-                            badge.className
-                          }
-                        >
-                          {badge.text}
-                        </span>
-                      </div>
+                    <div className="p-3">
+                      {/* 장소명 (제목, 2줄까지) */}
+                      <h3 className="line-clamp-2 font-display text-sm font-semibold leading-snug text-ink">
+                        {marker.location || "(장소명 없음)"}
+                      </h3>
 
-                      {/* 지역 정보 */}
+                      {/* 지역 정보 (위치 핀 + 도시/국가) */}
                       {regionText && (
-                        <p className="mt-0.5 text-xs text-gray-500">
-                          {regionText}
+                        <p className="mt-1 flex items-center gap-1 text-xs text-ink-muted">
+                          <PinIcon />
+                          <span className="truncate">{regionText}</span>
                         </p>
                       )}
 
-                      {/* 특성 태그 배지 */}
+                      {/* 특성 태그 (알약 배지) */}
                       {tags.length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-1">
+                        <div className="mt-2 flex flex-wrap gap-1">
                           {tags.map((tag) => (
                             <span
                               key={tag}
-                              className="rounded-full bg-blue-100 px-1.5 py-0.5 text-xs text-blue-800"
+                              className="rounded-full bg-brand-light px-2 py-0.5 text-xs font-medium text-brand"
                             >
                               #{tag}
                             </span>
@@ -383,21 +415,21 @@ export default function VideoListPanel({
 
                   {/* 펼쳐진 경우: 카드 바로 아래 인라인 영상 (아코디언) */}
                   {isExpanded && (
-                    <div className="border-t border-gray-200 p-2">
-                      <div className="relative">
+                    <div className="border-t border-border p-3">
+                      <div className="relative overflow-hidden rounded-md">
                         {/* 접기(X) 버튼 — 영상만 접고 지도 위치는 유지 */}
                         <button
                           type="button"
                           onClick={handleCollapse}
                           aria-label="영상 접기"
-                          className="absolute right-1 top-1 z-10 rounded bg-black/60 px-1.5 py-0.5 text-xs text-white hover:bg-black/80"
+                          className="absolute right-1 top-1 z-10 rounded-md bg-ink/70 px-1.5 py-0.5 text-xs text-white transition hover:bg-ink"
                         >
                           ✕
                         </button>
 
                         {notice ? (
                           // 재생불가 신고 안내 (영상 대신 표시)
-                          <div className="flex min-h-24 w-full items-center justify-center rounded bg-yellow-50 px-3 py-4 text-center text-xs text-yellow-800">
+                          <div className="flex min-h-24 w-full items-center justify-center rounded-md bg-live-light px-3 py-4 text-center text-xs text-live">
                             {notice}
                           </div>
                         ) : videoId ? (
@@ -408,7 +440,7 @@ export default function VideoListPanel({
                             onError={(reason) => handleUnplayable(marker, reason)}
                           />
                         ) : (
-                          <div className="flex h-24 w-full items-center justify-center rounded bg-gray-100 text-xs text-gray-500">
+                          <div className="flex h-24 w-full items-center justify-center rounded-md bg-ink/5 text-xs text-ink-muted">
                             영상 정보가 없습니다.
                           </div>
                         )}

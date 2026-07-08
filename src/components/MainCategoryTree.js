@@ -77,14 +77,16 @@ function CollapsibleRow({
       <button
         type="button"
         onClick={handleClick}
-        style={{ paddingLeft: `${depth * 10 + 4}px` }}
-        className="flex w-full items-center gap-1 py-0.5 text-left text-xs hover:bg-gray-100"
+        style={{ paddingLeft: `${depth * 12 + 6}px` }}
+        className="flex w-full items-center gap-1 rounded-md py-1 pr-1 text-left text-xs text-ink transition hover:bg-brand-light"
       >
-        <span className="w-3 text-gray-400">
-          {hasChildren ? (open ? "▾" : "▸") : "·"}
+        <span className="w-3 text-ink-muted">
+          {hasChildren ? (open ? "▾" : "▸") : ""}
         </span>
-        <span className="truncate text-gray-800">{label}</span>
-        <span className="ml-auto pr-1 text-gray-400">({count})</span>
+        <span className="truncate">{label}</span>
+        <span className="ml-auto font-mono text-[11px] text-ink-muted">
+          {count}
+        </span>
       </button>
       {hasChildren && open ? <div>{children}</div> : null}
     </div>
@@ -183,12 +185,14 @@ export default function MainCategoryTree({
   }, [tree]);
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col bg-surface">
       {/* ── 지역 섹션 ─────────────────────────────────────────── */}
-      <div className="border-b border-gray-200 px-1 py-2">
-        <h2 className="mb-1 px-1 text-xs font-bold text-gray-700">지역</h2>
+      <div className="border-b border-border px-2 py-3">
+        <h2 className="mb-2 px-1 font-display text-[11px] font-bold uppercase tracking-wide text-ink-muted">
+          지역
+        </h2>
         {markerList.length === 0 ? (
-          <p className="px-1 text-xs text-gray-400">표시할 마커가 없습니다.</p>
+          <p className="px-1 text-xs text-ink-muted">표시할 마커가 없습니다.</p>
         ) : (
           <div className="overflow-auto">
             {continentKeys.map((continent) => {
@@ -257,20 +261,18 @@ export default function MainCategoryTree({
                                     typeof onSelectLocation === "function" &&
                                     onSelectLocation({ continent, country, city })
                                   }
-                                  style={{ paddingLeft: "24px" }}
+                                  style={{ paddingLeft: "30px" }}
                                   className={
-                                    "flex w-full items-center gap-1 py-0.5 text-left text-xs hover:bg-gray-100 " +
+                                    "flex w-full items-center gap-1 rounded-md py-1 pr-1 text-left text-xs transition hover:bg-brand-light " +
                                     (active
-                                      ? "bg-blue-100 font-semibold text-blue-800"
-                                      : "")
+                                      ? "bg-brand-light font-semibold text-brand"
+                                      : "text-ink")
                                   }
                                 >
-                                  <span className="w-3 text-gray-300">·</span>
-                                  <span className="truncate text-gray-700">
-                                    {city}
-                                  </span>
-                                  <span className="ml-auto pr-1 text-gray-400">
-                                    ({countryObj[city]})
+                                  <span className="w-3 text-ink-muted">·</span>
+                                  <span className="truncate">{city}</span>
+                                  <span className="ml-auto font-mono text-[11px] text-ink-muted">
+                                    {countryObj[city]}
                                   </span>
                                 </button>
                               );
@@ -286,11 +288,13 @@ export default function MainCategoryTree({
       </div>
 
       {/* ── 특성 태그 섹션 ────────────────────────────────────── */}
-      <div className="px-1 py-2">
-        <h2 className="mb-1 px-1 text-xs font-bold text-gray-700">특성 태그</h2>
+      <div className="px-2 py-3">
+        <h2 className="mb-2 px-1 font-display text-[11px] font-bold uppercase tracking-wide text-ink-muted">
+          특성 태그
+        </h2>
         {/* 마커가 1개 이상 등록된 태그만 표시(0개는 숨김), 옆에 개수 표기 */}
         {visibleTags.length === 0 ? (
-          <p className="px-1 text-xs text-gray-400">표시할 태그가 없습니다.</p>
+          <p className="px-1 text-xs text-ink-muted">표시할 태그가 없습니다.</p>
         ) : (
           <div className="flex flex-col">
             {visibleTags.map((tag) => {
@@ -304,15 +308,15 @@ export default function MainCategoryTree({
                     typeof onSelectTag === "function" && onSelectTag(tag.name)
                   }
                   className={
-                    "flex w-full items-center gap-1 px-2 py-0.5 text-left text-xs hover:bg-gray-100 " +
+                    "flex w-full items-center gap-1 rounded-md px-2 py-1 text-left text-xs transition hover:bg-brand-light " +
                     (active
-                      ? "bg-blue-100 font-semibold text-blue-800"
-                      : "text-blue-700")
+                      ? "bg-brand-light font-semibold text-brand"
+                      : "text-brand")
                   }
                 >
                   <span className="truncate">#{tag.name}</span>
-                  <span className="ml-auto pr-1 text-gray-400">
-                    ({tag.count})
+                  <span className="ml-auto font-mono text-[11px] text-ink-muted">
+                    {tag.count}
                   </span>
                 </button>
               );
