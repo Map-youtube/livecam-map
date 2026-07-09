@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Cesium 정적 자산 (postinstall 로 생성 — scripts/copy-cesium.mjs)
+/public/cesium/

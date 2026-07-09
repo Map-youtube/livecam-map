@@ -6,9 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "node scripts/copy-cesium.mjs"
   },
   "dependencies": {
+    "cesium": "^1.143.0",
     "firebase": "^12.15.0",
     "firebase-admin": "^14.1.0",
     "leaflet": "^1.9.4",

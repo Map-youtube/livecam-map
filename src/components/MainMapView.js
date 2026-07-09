@@ -18,6 +18,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import LeafletMapWrapper from "@/components/LeafletMapWrapper";
 import MainCategoryTree from "@/components/MainCategoryTree";
 import VideoListPanel from "@/components/VideoListPanel";
@@ -354,6 +355,13 @@ export default function MainMapView({ markers, tags }) {
         <span className="hidden text-xs text-ink-muted sm:inline">
           세계 라이브 지도
         </span>
+        {/* 3D 우주 지도(/space-map)로 이동 */}
+        <Link
+          href="/space-map"
+          className="ml-auto rounded-md border border-brand bg-brand px-3 py-1.5 text-xs font-medium text-white shadow-card transition hover:bg-brand-hover"
+        >
+          🌐 3D로 보기
+        </Link>
       </header>
 
       {/* 콘텐츠 영역 (남은 높이 전부) */}
