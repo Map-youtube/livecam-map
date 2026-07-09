@@ -4,24 +4,22 @@
 // IssVideoPanel — ISS(Space) 선택 시 표시되는 NASA 라이브 영상 목록 패널
 //
 // props:
-//   - issInfo : 현재 ISS 위치 정보 { lat, lng, altKm, speedKmh, visibility } | null
-//               (패널 상단에 작게 표시. IssTracker → MainMapView 를 거쳐 전달됨)
+//   - videos  : NASA 라이브 영상 배열 [{videoId,title,thumbnailUrl,channelName}]
+//               (MainMapView 가 /api/iss/videos 를 5분마다 호출해 목록을 관리하고 내려준다.
+//                트리의 개수 배지와 같은 목록을 공유 → 중복 호출 방지)
+//               null 이면 "불러오는 중", 빈 배열이면 "라이브 없음".
+//   - issInfo : 현재 ISS 위치 정보 { lat, lng, altKm, speedKmh, visibility } | null (상단 표시)
 //   - onClose : 패널 닫기 콜백
 //
 // 동작:
-//   - 마운트 시 + 5분마다 /api/iss/videos 호출 → 라이브 카드 목록 렌더링.
 //   - 카드 클릭 → 카드 아래 인라인 YouTube iframe 재생(아코디언, 한 번에 하나).
 //   - 라이브 0개 → "현재 진행 중인 NASA 라이브가 없습니다" 빈 상태 표시.
 //
-// ⚠️ 5분 갱신 interval 은 언마운트 시 반드시 clearInterval 한다(누수/중복 방지).
 // ⚠️ NASA 라이브는 관리자 등록 마커가 아니므로 재생불가 신고(report-error)는 하지 않는다.
 // ─────────────────────────────────────────────────────────────
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import LiveDot from "@/components/LiveDot";
-
-// 목록 자동 갱신 주기 (5분)
-const REFRESH_MS = 5 * 60 * 1000;
 
 // ─── ISS 위치 정보 한 줄 요약 (null 값은 생략) ────────────────
 function IssInfoBar({ issInfo }) {
@@ -48,44 +46,13 @@ function IssInfoBar({ issInfo }) {
   );
 }
 
-export default function IssVideoPanel({ issInfo, onClose }) {
-  const [videos, setVideos] = useState([]);
-  const [loading, setLoading] = useState(true);
+export default function IssVideoPanel({ videos, issInfo, onClose }) {
   // 현재 펼쳐진(재생 중인) 영상 videoId (없으면 null)
   const [expandedId, setExpandedId] = useState(null);
-  // 5분 갱신 타이머
-  const timerRef = useRef(null);
 
-  // ─── 목록 로드 + 5분 주기 자동 갱신 ────────────────────────
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      try {
-        const res = await fetch("/api/iss/videos", { cache: "no-store" });
-        const data = await res.json();
-        if (cancelled) return;
-        setVideos(Array.isArray(data.videos) ? data.videos : []);
-      } catch (error) {
-        console.error("[IssVideoPanel] 라이브 목록 조회 실패:", error); // TODO: 배포 전 제거
-        if (!cancelled) setVideos([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    load(); // 즉시 1회
-    timerRef.current = setInterval(load, REFRESH_MS); // 5분마다 갱신
-
-    // 정리: 타이머 해제 (누수/중복 방지)
-    return () => {
-      cancelled = true;
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, []);
+  // videos 가 아직 안 온 상태(null/undefined)면 로딩으로 취급
+  const loading = videos == null;
+  const list = Array.isArray(videos) ? videos : [];
 
   // ─── 카드 클릭 → 재생 토글 (같은 카드 다시 클릭하면 접기) ───
   function toggleExpand(videoId) {
@@ -106,10 +73,10 @@ export default function IssVideoPanel({ issInfo, onClose }) {
 
   return (
     <div className="flex h-full flex-col bg-bg">
-      {/* 상단: 제목 + 닫기 */}
+      {/* 상단: 제목(개수 포함) + 닫기 */}
       <div className="flex flex-shrink-0 items-center justify-between border-b border-border bg-surface px-4 py-3">
         <h2 className="truncate font-display text-sm font-bold text-ink">
-          🛰️ ISS · NASA 라이브
+          🛰️ ISS · NASA 라이브{!loading ? ` (${list.length})` : ""}
         </h2>
         <button
           type="button"
@@ -130,7 +97,7 @@ export default function IssVideoPanel({ issInfo, onClose }) {
           <p className="mt-6 text-center text-sm text-ink-muted">
             NASA 라이브를 불러오는 중...
           </p>
-        ) : videos.length === 0 ? (
+        ) : list.length === 0 ? (
           // 빈 상태 (빈 공간 금지 원칙)
           <div className="mt-6 flex flex-col items-center gap-2 px-4 text-center">
             <span className="text-3xl">🛰️</span>
@@ -143,7 +110,7 @@ export default function IssVideoPanel({ issInfo, onClose }) {
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-            {videos.map((v) => {
+            {list.map((v) => {
               // 각 카드는 이 영상의 고유 videoId 만 참조한다.
               const isExpanded = expandedId === v.videoId;
               return (

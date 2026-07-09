@@ -102,6 +102,7 @@ export default function MainCategoryTree({
   selectedCity,
   selectedTag,
   selectedSpace,
+  spaceVideoCount,
 }) {
   const markerList = Array.isArray(markers) ? markers : [];
   const tagList = Array.isArray(tags) ? tags : [];
@@ -290,6 +291,8 @@ export default function MainCategoryTree({
           {/* Space (고정 항목 — Firestore 마커 데이터와 무관하게 항상 표시) */}
           <CollapsibleRow
             label="🛰️ Space"
+            // 라이브 개수(로딩 전 null 이면 배지 미표시). NASA 라이브 영상 수.
+            count={spaceVideoCount != null ? spaceVideoCount : undefined}
             depth={0}
             defaultOpen={false}
             // ISS 가 선택되면 자동으로 펼친다
@@ -311,6 +314,10 @@ export default function MainCategoryTree({
             >
               <span className="w-3 text-ink-muted">·</span>
               <span className="truncate">ISS (국제우주정거장)</span>
+              {/* ISS 도 Space 하위 유일 항목이라 같은 라이브 개수를 표시 */}
+              <span className="ml-auto font-mono text-[11px] text-ink-muted">
+                {spaceVideoCount != null ? spaceVideoCount : ""}
+              </span>
             </button>
           </CollapsibleRow>
         </div>

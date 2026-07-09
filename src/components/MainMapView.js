@@ -16,7 +16,7 @@
 // 필터링은 이미 받은 markers 배열을 클라이언트에서 걸러내기만 한다 (추가 API 호출 없음).
 // ─────────────────────────────────────────────────────────────
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import LeafletMapWrapper from "@/components/LeafletMapWrapper";
 import MainCategoryTree from "@/components/MainCategoryTree";
@@ -66,6 +66,8 @@ export default function MainMapView({ markers, tags }) {
   // issInfo    : 패널 상단에 표시할 현재 ISS 위치 정보 (열려 있을 때만 갱신)
   const [issSelected, setIssSelected] = useState(false);
   const [issInfo, setIssInfo] = useState(null);
+  // NASA 라이브 영상 목록 (트리 개수 배지 + ISS 패널이 공유). null=아직 로딩 전
+  const [issVideos, setIssVideos] = useState(null);
   // 최신 ISS 위치(2초마다 갱신)를 리렌더 없이 보관 → 선택 시점에 지도 이동 기준값으로 사용
   const issPositionRef = useRef(null);
   // 현재 ISS 선택 여부를 콜백(2초 주기)에서 즉시 참조하기 위한 ref
@@ -224,6 +226,35 @@ export default function MainMapView({ markers, tags }) {
     }
   }, []);
 
+  // ─── NASA 라이브 목록 로드 + 5분마다 자동 갱신 ───────────────
+  // 트리의 Space/ISS 개수 배지와 ISS 패널이 이 목록을 공유한다(호출 1곳으로 통합).
+  // 서버 라우트가 5분 캐시라, 방문자가 5분마다 호출해도 videos.list 는 5분 1회.
+  // ⚠️ interval 은 언마운트 시 반드시 clearInterval (누수/중복 방지).
+  useEffect(() => {
+    let cancelled = false;
+    let timer = null;
+
+    async function loadIssVideos() {
+      try {
+        const res = await fetch("/api/iss/videos", { cache: "no-store" });
+        const data = await res.json();
+        if (cancelled) return;
+        setIssVideos(Array.isArray(data.videos) ? data.videos : []);
+      } catch (error) {
+        console.error("[MainMapView] NASA 라이브 목록 조회 실패:", error); // TODO: 배포 전 제거
+        if (!cancelled) setIssVideos([]);
+      }
+    }
+
+    loadIssVideos(); // 즉시 1회
+    timer = setInterval(loadIssVideos, 5 * 60 * 1000); // 5분마다 갱신
+
+    return () => {
+      cancelled = true;
+      if (timer) clearInterval(timer);
+    };
+  }, []);
+
   // ─── 지도 마커 직접 클릭 처리 (경로 B) ───────────────────────
   // 트리에서 도시를 클릭한 것(경로 A)과 "동일한 결과 화면"이 되도록 통합한다:
   //   1) 그 마커의 도시로 selectedCity 설정 → 트리 강조/자동 펼침 + 패널 열림
@@ -313,6 +344,7 @@ export default function MainMapView({ markers, tags }) {
             selectedCity={selectedCity}
             selectedTag={selectedTag}
             selectedSpace={issSelected}
+            spaceVideoCount={issVideos ? issVideos.length : null}
           />
         </aside>
 
@@ -320,7 +352,11 @@ export default function MainMapView({ markers, tags }) {
         {isPanelOpen && (
           <section className="h-full w-[30%] min-w-[260px] overflow-hidden border-r border-border bg-bg">
             {issSelected ? (
-              <IssVideoPanel issInfo={issInfo} onClose={closePanel} />
+              <IssVideoPanel
+                videos={issVideos}
+                issInfo={issInfo}
+                onClose={closePanel}
+              />
             ) : (
               <VideoListPanel
                 markers={filteredMarkers}
