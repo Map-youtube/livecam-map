@@ -216,6 +216,19 @@ function EditModal({ marker, onClose, onSaved }) {
   const originalUrl = marker.youtube_url || "";
   const urlChanged = youtubeUrl.trim() !== originalUrl;
 
+  // ─── 선택된 대륙에 속한 국가만 추림 (국가가 많아 찾기 어려우므로) ──
+  // 현재 선택된 국가가 (수동 대륙 지정 등으로) 목록에 없으면 그대로 유지되도록 포함한다.
+  const filteredCountries = useMemo(() => {
+    const base = continent
+      ? COUNTRIES.filter((c) => getContinentByCountry(c.code) === continent)
+      : [];
+    if (country && !base.some((c) => c.code === country)) {
+      const cur = COUNTRIES.find((c) => c.code === country);
+      if (cur) return [cur, ...base];
+    }
+    return base;
+  }, [continent, country]);
+
   // ─── 좌표 유효성 + 지도용 값 ───────────────────────────────
   const latNum = Number(lat);
   const lngNum = Number(lng);
@@ -332,12 +345,17 @@ function EditModal({ marker, onClose, onSaved }) {
             />
           </div>
 
-          {/* 대륙 (국가 선택 시 자동으로 채워지며, 직접 변경 가능) */}
+          {/* 대륙 (선택 시 국가 목록이 그 대륙으로 추려짐) */}
           <div>
             <label className="block text-xs text-gray-600">대륙</label>
             <select
               value={continent}
-              onChange={(e) => setContinent(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setContinent(val);
+                // 대륙이 바뀌면 국가 목록이 달라지므로 기존 국가 선택을 초기화한다.
+                setCountry("");
+              }}
               className="w-full rounded-md border border-border px-3 py-2 text-sm"
             >
               <option value="">대륙 선택</option>
@@ -349,22 +367,25 @@ function EditModal({ marker, onClose, onSaved }) {
             </select>
           </div>
 
-          {/* 국가 (선택 시 대륙 자동 설정) */}
+          {/* 국가 (대륙을 먼저 골라야 활성화, 선택 시 대륙 자동 보정) */}
           <div>
             <label className="block text-xs text-gray-600">국가</label>
             <select
               value={country}
+              disabled={!continent}
               onChange={(e) => {
                 const code = e.target.value;
                 setCountry(code);
-                // 국가를 고르면 대륙을 자동으로 맞춰준다(관리자가 대륙을 바꿔 덮어쓸 수 있음).
+                // 방어적으로 대륙도 국가에 맞춰 보정 (필터로 이미 일치하지만 안전하게)
                 const c = getContinentByCountry(code);
                 if (c) setContinent(c);
               }}
-              className="w-full rounded-md border border-border px-3 py-2 text-sm"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm disabled:bg-gray-100 disabled:text-gray-400"
             >
-              <option value="">국가를 선택하세요</option>
-              {COUNTRIES.map((c) => (
+              <option value="">
+                {continent ? "국가를 선택하세요" : "대륙을 먼저 선택하세요"}
+              </option>
+              {filteredCountries.map((c) => (
                 <option key={c.code} value={c.code}>
                   {c.name} ({c.code})
                 </option>

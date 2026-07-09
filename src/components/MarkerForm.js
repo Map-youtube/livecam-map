@@ -16,12 +16,12 @@
 //   - /api/markers (등록)
 // ─────────────────────────────────────────────────────────────
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import LeafletMapWrapper from "@/components/LeafletMapWrapper";
 import { getContinentByCountry } from "@/lib/continentUtils";
 import { getAdminIdToken } from "@/lib/clientAuth";
 import TagSelector from "@/components/TagSelector";
-import { COUNTRIES } from "@/lib/countryList";
+import { COUNTRIES, COUNTRY_GEO } from "@/lib/countryList";
 
 // ─── 대륙 코드 → 한국어 라벨 ───────────────────────────────────
 const CONTINENT_LABELS = {
@@ -91,9 +91,11 @@ export default function MarkerForm({ onRegistered }) {
   const [location, setLocation] = useState("");
   const [city, setCity] = useState("");
   const [country, setCountry] = useState("");
-  // 대륙 (국가 선택 시 자동으로 맞춰지되, 관리자가 직접 바꿀 수 있음)
+  // 대륙 (국가 목록을 추리는 기준. 국가 선택 시에도 자동으로 맞춰짐)
   const [continent, setContinent] = useState("");
   const [isLive, setIsLive] = useState(true);
+  // 지도 중심/줌 (국가 선택 시 해당 국가 전체로 이동/확대하는 데 사용)
+  const [mapView, setMapView] = useState({ center: DEFAULT_CENTER, zoom: 4 });
   // 장소 특성 태그 (지역 분류와 별개, 최대 3개)
   const [tags, setTags] = useState([]);
 
@@ -205,7 +207,12 @@ export default function MarkerForm({ onRegistered }) {
     ? [{ id: "selected", lat: latNum, lng: lngNum, location: "선택한 위치" }]
     : [];
 
-  const mapCenter = hasValidCoord ? { lat: latNum, lng: lngNum } : DEFAULT_CENTER;
+  // ─── 선택된 대륙에 속한 국가만 추림 (대륙 미선택 시 빈 목록) ──
+  // 국가가 너무 많아 찾기 어려우므로, 대륙을 먼저 고르면 그 대륙 국가만 보여준다.
+  const filteredCountries = useMemo(() => {
+    if (!continent) return [];
+    return COUNTRIES.filter((c) => getContinentByCountry(c.code) === continent);
+  }, [continent]);
 
   // ─── 등록 버튼 활성화 조건 ───────────────────────────────────
   // 필수: 유튜브 URL(중복 아님 & 유효), 장소명, 위도/경도, 도시, 국가
@@ -375,21 +382,117 @@ export default function MarkerForm({ onRegistered }) {
         )}
       </section>
 
-      {/* ── 2단계: 지도에서 위치 지정 ─────────────────────────── */}
-      <section className="space-y-2">
+      {/* ── 2단계: 장소 정보 ──────────────────────────────────── */}
+      <section className="space-y-4">
         <label className="block text-sm font-semibold text-gray-800">
-          2. 위치 지정 <span className="text-red-500">*</span>
+          2. 장소 정보 <span className="text-red-500">*</span>
         </label>
         <p className="text-xs text-gray-500">
-          지도를 클릭하면 그 지점의 좌표가 자동 입력됩니다. 아래 입력창에서 미세 조정도 가능합니다.
+          장소명 입력 → 대륙 선택 → (대륙에 맞는) 국가 선택 → 도시 입력 순서로 진행하세요.
+          국가를 선택하면 아래 지도가 그 국가로 자동 이동합니다.
+        </p>
+
+        {/* 장소명 · 대륙 · 국가 · 도시 (한 줄) */}
+        <div className="grid grid-cols-4 gap-3">
+          {/* 장소명 */}
+          <div>
+            <label className="block text-xs text-gray-600">장소명</label>
+            <input
+              type="text"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="예: 도쿄 시부야 교차로"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
+            />
+          </div>
+
+          {/* 대륙 드롭다운 (선택 시 국가 목록이 그 대륙으로 추려짐) */}
+          <div>
+            <label className="block text-xs text-gray-600">대륙</label>
+            <select
+              value={continent}
+              onChange={(e) => {
+                const val = e.target.value;
+                setContinent(val);
+                // 대륙이 바뀌면 국가 목록이 달라지므로 기존 국가 선택을 초기화한다.
+                setCountry("");
+              }}
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
+            >
+              <option value="">대륙 선택</option>
+              {CONTINENT_ORDER.map((c) => (
+                <option key={c} value={c}>
+                  {CONTINENT_LABELS[c]}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 국가 드롭다운 (대륙을 먼저 골라야 활성화, 선택 시 지도 이동) */}
+          <div>
+            <label className="block text-xs text-gray-600">국가</label>
+            <select
+              value={country}
+              disabled={!continent}
+              onChange={(e) => {
+                const code = e.target.value;
+                setCountry(code);
+                // 방어적으로 대륙도 국가에 맞춰 보정 (필터로 이미 일치하지만 안전하게)
+                const c = getContinentByCountry(code);
+                if (c) setContinent(c);
+                // 국가를 고르면 그 국가 전체가 보이도록 지도를 이동/확대한다.
+                const geo = COUNTRY_GEO[code];
+                if (geo) {
+                  setMapView({
+                    center: { lat: geo.lat, lng: geo.lng },
+                    zoom: geo.zoom,
+                  });
+                }
+              }}
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none disabled:bg-gray-100 disabled:text-gray-400"
+            >
+              <option value="">
+                {continent ? "국가를 선택하세요" : "대륙을 먼저 선택하세요"}
+              </option>
+              {filteredCountries.map((c) => (
+                // 각 옵션은 자신의 고유 코드(c.code)를 value 로 사용한다.
+                <option key={c.code} value={c.code}>
+                  {c.name} ({c.code})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 도시 */}
+          <div>
+            <label className="block text-xs text-gray-600">도시</label>
+            <input
+              type="text"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              placeholder="예: Tokyo"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ── 3단계: 지도에서 위치 지정 ─────────────────────────── */}
+      <section className="space-y-2">
+        <label className="block text-sm font-semibold text-gray-800">
+          3. 위치 지정 <span className="text-red-500">*</span>
+        </label>
+        <p className="text-xs text-gray-500">
+          지도를 클릭하면 그 지점의 좌표가 자동 입력됩니다. 위에서 국가를 선택하면 지도가 그 국가로 이동하니,
+          클릭으로 정확한 위치를 지정하세요. 아래 입력창에서 미세 조정도 가능합니다.
         </p>
 
         {/* 지도 (크게 — 왼쪽 절반 폭을 거의 채움) */}
         <div className="h-[560px] w-full overflow-hidden rounded-md border border-border">
           <LeafletMapWrapper
             markers={mapMarkers}
-            center={mapCenter}
-            zoom={hasValidCoord ? 8 : 4}
+            center={mapView.center}
+            zoom={mapView.zoom}
             onMapClick={handleMapClick}
             selectedMarkerId={hasValidCoord ? "selected" : null}
           />
@@ -423,79 +526,11 @@ export default function MarkerForm({ onRegistered }) {
         )}
       </section>
 
-      {/* ── 3단계: 장소 정보 ──────────────────────────────────── */}
+      {/* ── 4단계: 장소 특성 태그 ─────────────────────────────── */}
       <section className="space-y-4">
         <label className="block text-sm font-semibold text-gray-800">
-          3. 장소 정보 <span className="text-red-500">*</span>
+          4. 장소 특성 태그
         </label>
-
-        {/* 장소명 · 대륙 · 국가 · 도시 (한 줄) */}
-        <div className="grid grid-cols-4 gap-3">
-          {/* 장소명 */}
-          <div>
-            <label className="block text-xs text-gray-600">장소명</label>
-            <input
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="예: 도쿄 시부야 교차로"
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
-            />
-          </div>
-
-          {/* 대륙 드롭다운 (국가 선택 시 자동으로 채워지며, 직접 변경 가능) */}
-          <div>
-            <label className="block text-xs text-gray-600">대륙</label>
-            <select
-              value={continent}
-              onChange={(e) => setContinent(e.target.value)}
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
-            >
-              <option value="">대륙 선택</option>
-              {CONTINENT_ORDER.map((c) => (
-                <option key={c} value={c}>
-                  {CONTINENT_LABELS[c]}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* 국가 드롭다운 (선택 시 대륙 자동 설정) */}
-          <div>
-            <label className="block text-xs text-gray-600">국가</label>
-            <select
-              value={country}
-              onChange={(e) => {
-                const code = e.target.value;
-                setCountry(code);
-                // 국가를 고르면 대륙을 자동으로 맞춰준다(관리자가 대륙을 바꿔 덮어쓸 수 있음).
-                const c = getContinentByCountry(code);
-                if (c) setContinent(c);
-              }}
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
-            >
-              <option value="">국가를 선택하세요</option>
-              {COUNTRIES.map((c) => (
-                // 각 옵션은 자신의 고유 코드(c.code)를 value 로 사용한다.
-                <option key={c.code} value={c.code}>
-                  {c.name} ({c.code})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* 도시 */}
-          <div>
-            <label className="block text-xs text-gray-600">도시</label>
-            <input
-              type="text"
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              placeholder="예: Tokyo"
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
-            />
-          </div>
-        </div>
 
         {/* 장소 특성 태그 (지역 분류와 별개, 최대 3개) */}
         <div>
