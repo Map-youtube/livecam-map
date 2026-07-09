@@ -29,9 +29,9 @@ import * as satellite from "satellite.js";
 
 import { getIssTrajectory } from "@/lib/issUtils";
 import { getMagnitudeColor, getMagnitudeRadiusKm } from "@/lib/earthquakeUtils";
-import { parseAuroraGrid } from "@/lib/auroraUtils";
+import { renderAuroraToCanvas } from "@/lib/auroraUtils";
 import { getEventIcon } from "@/lib/naturalEventsUtils";
-import { toCesiumCoordRaw } from "@/lib/coordUtils";
+import { toCesiumCoordRaw, zoomToCesiumHeight } from "@/lib/coordUtils";
 
 // ─── 갱신 주기 상수 (기존 레이어들과 동일) ────────────────────
 const ISS_POLL_MS = 2000;
@@ -106,25 +106,6 @@ function makeEmojiCanvas(emoji, size = 44) {
   }
 }
 
-// ─── 오로라 확률(0~1) → 색상 (파랑→빨강) ──────────────────────
-function auroraColor(Cesium, t) {
-  try {
-    if (t < 0.4) return Cesium.Color.BLUE.withAlpha(0.7);
-    if (t < 0.6) return Cesium.Color.LIME.withAlpha(0.75);
-    if (t < 0.8) return Cesium.Color.YELLOW.withAlpha(0.8);
-    if (t < 0.9) return Cesium.Color.ORANGE.withAlpha(0.85);
-    return Cesium.Color.RED.withAlpha(0.9);
-  } catch (error) {
-    return Cesium.Color.LIME.withAlpha(0.7);
-  }
-}
-
-// Leaflet 줌 → Cesium 카메라 높이(m) 근사 (웹 메르카토르 기준)
-function zoomToHeightM(zoom) {
-  const z = typeof zoom === "number" && !Number.isNaN(zoom) ? zoom : 6;
-  return 591657550.5 / Math.pow(2, z);
-}
-
 // ⚠️ next/dynamic 은 ref 를 자동 전달하지 않으므로, 공통 인터페이스는 forwardRef 대신
 //    apiRef 프롭(콜백/ref 객체)으로 받아 useImperativeHandle 로 연결한다.
 export default function CesiumMapView({
@@ -148,7 +129,6 @@ export default function CesiumMapView({
   const livecamEntsRef = useRef([]);
   const issEntsRef = useRef([]);
   const eqEntsRef = useRef([]);
-  const auroraEntsRef = useRef([]);
   const disasterEntsRef = useRef([]);
 
   // 콜백을 ref 로 최신 유지 (뷰어 재생성 없이 최신 핸들러 참조)
@@ -158,6 +138,17 @@ export default function CesiumMapView({
   const [ready, setReady] = useState(false);
   // 지진/자연재해 클릭 시 뜨는 간단 정보 오버레이 (2D의 지도 팝업에 해당)
   const [info, setInfo] = useState(null); // { kind:'earthquake'|'event', data } | null
+
+  // ─── 성능: requestRenderMode 에서 화면을 갱신하려면 명시적으로 호출 ──
+  // (매 프레임 그리기를 끈 상태라, 데이터가 바뀌면 이 함수로 1회 다시 그리도록 요청한다)
+  function requestRender() {
+    try {
+      const v = viewerRef.current;
+      if (v && !v.isDestroyed()) v.scene.requestRender();
+    } catch (error) {
+      // 렌더 요청 실패는 무시
+    }
+  }
 
   // ─── 엔티티 배열 제거 헬퍼 ────────────────────────────────────
   function removeEntities(entRef) {
@@ -170,6 +161,8 @@ export default function CesiumMapView({
         } catch (inner) {}
       }
       entRef.current = [];
+      // 제거 후에도(토글 끄기 등) 화면을 다시 그려 반영
+      requestRender();
     } catch (error) {
       console.error("[CesiumMapView] 엔티티 제거 실패:", error); // TODO: 배포 전 제거
     }
@@ -186,11 +179,14 @@ export default function CesiumMapView({
         const lat = Number(target.lat);
         const lng = Number(target.lng);
         if (Number.isNaN(lat) || Number.isNaN(lng)) return;
-        const heightM = zoomToHeightM(target.zoom);
+        // Leaflet 줌 → Cesium 고도(표준 변환). 대륙/국가/도시 모두 이 경로로 일관 처리.
+        const heightM = zoomToCesiumHeight(target.zoom);
         // 그 지점 상공 heightM 높이에 카메라 배치 (altKm = heightM/1000)
         const dest = toCesiumCoordRaw(Cesium, lat, lng, heightM / 1000);
         if (!dest) return;
         viewer.camera.flyTo({ destination: dest, duration: 1.2 });
+        // 이동 시작 시 렌더 요청 (카메라 애니메이션은 이후 자동 갱신됨)
+        requestRender();
       } catch (error) {
         console.error("[CesiumMapView] flyToLocation 실패:", error); // TODO: 배포 전 제거
       }
@@ -221,15 +217,22 @@ export default function CesiumMapView({
           if (disposed || !containerRef.current) return;
           cesiumRef.current = Cesium;
 
-          // Ion 미사용 — CartoDB voyager 무료 타일 (우주 배경과 대비되어 지구가 뚜렷)
-          const voyager = new Cesium.UrlTemplateImageryProvider({
-            url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+          // Ion 미사용 — CartoDB dark_matter 무료 타일 (검은 우주 배경과 대비되어 대륙 윤곽 뚜렷)
+          const dark = new Cesium.UrlTemplateImageryProvider({
+            url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
             credit:
-              "© OpenStreetMap contributors © CARTO",
+              "Map tiles by CartoDB, under CC BY 3.0. Data by OpenStreetMap, under ODbL.",
           });
 
+          // 베이스 타일 레이어(밝기/대비 약간 올려 가독성 향상)
+          const baseLayer = new Cesium.ImageryLayer(dark);
+          try {
+            baseLayer.brightness = 1.1;
+            baseLayer.contrast = 1.1;
+          } catch (e) {}
+
           const viewer = new Cesium.Viewer(containerRef.current, {
-            baseLayer: new Cesium.ImageryLayer(voyager),
+            baseLayer,
             baseLayerPicker: false,
             geocoder: false,
             terrain: undefined,
@@ -247,6 +250,13 @@ export default function CesiumMapView({
           // 지구 반대편(뒷면) 엔티티가 지구에 가려지도록 깊이 테스트 활성화
           try {
             viewer.scene.globe.depthTestAgainstTerrain = true;
+          } catch (e) {}
+
+          // ★ 성능: "필요할 때만 다시 그리기" 모드 (매 프레임 렌더 끄기 → CPU/배터리 절약)
+          //   이후 데이터가 바뀌는 지점마다 requestRender() 를 호출해야 화면이 갱신된다.
+          try {
+            viewer.scene.requestRenderMode = true;
+            viewer.scene.maximumRenderTimeChange = Infinity;
           } catch (e) {}
 
           // 클릭: 엔티티면 종류별 처리, 빈 곳이면 onMapClick
@@ -356,6 +366,7 @@ export default function CesiumMapView({
           continue;
         }
       }
+      requestRender();
     } catch (error) {
       console.error("[CesiumMapView] 라이브캠 렌더 실패:", error); // TODO: 배포 전 제거
     }
@@ -416,6 +427,7 @@ export default function CesiumMapView({
           issMarker.position = pos;
           payloadRef.current.set(issMarker, { kind: "iss", data: d });
         }
+        requestRender();
       } catch (error) {
         console.error("[CesiumMapView] ISS 위치 갱신 실패:", error); // TODO: 배포 전 제거
       }
@@ -456,6 +468,7 @@ export default function CesiumMapView({
           });
           issEntsRef.current.push(line);
         }
+        requestRender();
       } catch (error) {
         console.error("[CesiumMapView] 궤적 그리기 실패:", error); // TODO: 배포 전 제거
       }
@@ -530,6 +543,7 @@ export default function CesiumMapView({
             continue;
           }
         }
+        requestRender();
       } catch (error) {
         console.error("[CesiumMapView] 지진 로드 실패:", error); // TODO: 배포 전 제거
       }
@@ -544,7 +558,9 @@ export default function CesiumMapView({
     };
   }, [ready, eqEnabled]);
 
-  // ─── 5) 오로라 레이어 (점묘화) ───────────────────────────────
+  // ─── 5) 오로라 레이어 (캔버스 히트맵 이미지 오버레이) ────────
+  // leaflet.heat 와 동일한 느낌: 격자 데이터를 부드러운 색 구름 이미지로 만들어
+  // 지구 표면 전체에 SingleTileImageryProvider 로 얹는다. (점묘화 방식 대체)
   useEffect(() => {
     if (!ready || !auroraEnabled) return undefined;
     let cancelled = false;
@@ -553,30 +569,49 @@ export default function CesiumMapView({
     const Cesium = cesiumRef.current;
     if (!viewer || !Cesium) return undefined;
 
+    // 현재 얹혀 있는 오로라 ImageryLayer (재조회 시 제거용)
+    let auroraLayer = null;
+
+    function removeLayer() {
+      try {
+        if (auroraLayer) {
+          viewer.imageryLayers.remove(auroraLayer, true);
+          auroraLayer = null;
+          requestRender();
+        }
+      } catch (e) {}
+    }
+
     async function load() {
       try {
         const res = await fetch("/api/aurora-forecast", { cache: "no-store" });
         const data = await res.json();
         if (cancelled || !viewer || viewer.isDestroyed()) return;
-        removeEntities(auroraEntsRef);
-        const points = parseAuroraGrid(data.coordinates);
-        for (const p of points) {
-          try {
-            const intensity = Number(p[2]);
-            if (intensity < 0.2) continue; // 확률 20%+ 만
-            const ent = viewer.entities.add({
-              position: toCesiumCoordRaw(Cesium, p[0], p[1], 0),
-              point: {
-                pixelSize: 6,
-                color: auroraColor(Cesium, intensity),
-                outlineWidth: 0,
-              },
-            });
-            auroraEntsRef.current.push(ent);
-          } catch (inner) {
-            continue;
-          }
+
+        // 격자 → 히트맵 이미지(data URL)
+        const dataUrl = renderAuroraToCanvas(data.coordinates);
+        if (!dataUrl) {
+          // 표시할 오로라가 없으면 이전 레이어만 제거
+          removeLayer();
+          return;
         }
+
+        // 전 지구 범위에 단일 타일 이미지로 얹기 (비동기 fromUrl)
+        const provider = await Cesium.SingleTileImageryProvider.fromUrl(
+          dataUrl,
+          {
+            rectangle: Cesium.Rectangle.fromDegrees(-180, -90, 180, 90),
+            tileWidth: 1024,
+            tileHeight: 512,
+          }
+        );
+        if (cancelled || !viewer || viewer.isDestroyed()) return;
+
+        // 이전 레이어 제거 후 새 레이어 추가 (겹쳐 쌓이지 않도록)
+        removeLayer();
+        auroraLayer = viewer.imageryLayers.addImageryProvider(provider);
+        auroraLayer.alpha = 0.65; // 은은하게(0.55~0.7 범위)
+        requestRender();
       } catch (error) {
         console.error("[CesiumMapView] 오로라 로드 실패:", error); // TODO: 배포 전 제거
       }
@@ -587,7 +622,7 @@ export default function CesiumMapView({
     return () => {
       cancelled = true;
       if (timer) clearInterval(timer);
-      removeEntities(auroraEntsRef);
+      removeLayer();
     };
   }, [ready, auroraEnabled]);
 
@@ -623,6 +658,7 @@ export default function CesiumMapView({
             continue;
           }
         }
+        requestRender();
       } catch (error) {
         console.error("[CesiumMapView] 자연재해 로드 실패:", error); // TODO: 배포 전 제거
       }

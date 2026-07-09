@@ -58,6 +58,23 @@ export function toCesiumCoord(Cesium, point) {
   }
 }
 
+// ─── Leaflet 줌 → Cesium 카메라 고도(m) 표준 변환 ─────────────
+// Web Mercator 타일 체계에서 널리 쓰이는 상수(적도 둘레/256 기준)로,
+// 대륙/국가의 { zoom } 값을 3D 카메라 높이로 일관되게 환산한다.
+//   예) zoom 3 ≈ 7,395만 m(대륙 전체), zoom 5 ≈ 1,849만 m, zoom 10 ≈ 57.8만 m
+// zoom 이 숫자가 아니면 기본 고도(1,000만 m)를 반환한다.
+export function zoomToCesiumHeight(zoom) {
+  try {
+    if (typeof zoom !== "number" || Number.isNaN(zoom)) {
+      return 10000000; // 기본 고도 1,000만 m
+    }
+    return 591657527.591555 / Math.pow(2, zoom);
+  } catch (error) {
+    console.error("[coordUtils] zoomToCesiumHeight 실패:", error); // TODO: 배포 전 제거
+    return 10000000;
+  }
+}
+
 // ─── 도시 중심 좌표 (그 도시 마커들의 평균) ───────────────────
 // markersInCity: [{ lat, lng }, ...]. 1개뿐이면 그 좌표 그대로.
 // 반환: { lat, lng } (유효 마커 없으면 null)
