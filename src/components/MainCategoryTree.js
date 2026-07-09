@@ -49,9 +49,14 @@ function CollapsibleRow({
   forceOpen,
   onSelect,
   children,
+  // ancestorActive: 이 노드의 하위(자식 도시/ISS)가 선택되어 있으면 약하게 강조
+  ancestorActive,
 }) {
   const [open, setOpen] = useState(!!defaultOpen);
   const hasChildren = Boolean(children);
+
+  // 최상위(대륙/Space) 레벨은 글자를 살짝 크게(+1pt) + 굵게 표시한다.
+  const isTop = depth === 0;
 
   // forceOpen 이 true 로 바뀌면(예: 지도에서 마커를 클릭해 그 도시가 선택된 경우)
   // 이 노드를 자동으로 펼친다. (사용자가 이후 수동으로 접는 것은 그대로 허용)
@@ -78,7 +83,13 @@ function CollapsibleRow({
         type="button"
         onClick={handleClick}
         style={{ paddingLeft: `${depth * 12 + 6}px` }}
-        className="flex w-full items-center gap-1 rounded-md py-1 pr-1 text-left text-xs text-ink transition hover:bg-brand-light"
+        className={
+          "flex w-full items-center gap-1 rounded-md py-1 pr-1 text-left transition hover:bg-brand-light " +
+          // 최상위(대륙/Space)는 13px + bold, 하위(국가 등)는 기존 12px
+          (isTop ? "text-[13px] font-bold text-ink " : "text-xs text-ink ") +
+          // 하위가 선택된 조상 노드는 옅은 파란 배경으로 약하게 강조
+          (ancestorActive ? "bg-blue-50" : "")
+        }
       >
         <span className="w-3 text-ink-muted">
           {hasChildren ? (open ? "▾" : "▸") : ""}
@@ -209,8 +220,11 @@ export default function MainCategoryTree({
                   count={countContinent(continentObj)}
                   depth={0}
                   defaultOpen={false}
-                  // 선택된 도시가 이 대륙에 속하면 자동으로 펼친다
+                  // 선택된 도시가 이 대륙에 속하면 자동으로 펼친다 + 조상 강조
                   forceOpen={Boolean(
+                    selectedCity && selectedCity.continent === continent
+                  )}
+                  ancestorActive={Boolean(
                     selectedCity && selectedCity.continent === continent
                   )}
                   onSelect={() =>
@@ -235,8 +249,13 @@ export default function MainCategoryTree({
                           count={countCountry(countryObj)}
                           depth={1}
                           defaultOpen={false}
-                          // 선택된 도시가 이 국가에 속하면 자동으로 펼친다
+                          // 선택된 도시가 이 국가에 속하면 자동으로 펼친다 + 조상 강조
                           forceOpen={Boolean(
+                            selectedCity &&
+                              selectedCity.continent === continent &&
+                              selectedCity.country === country
+                          )}
+                          ancestorActive={Boolean(
                             selectedCity &&
                               selectedCity.continent === continent &&
                               selectedCity.country === country
@@ -267,8 +286,9 @@ export default function MainCategoryTree({
                                   style={{ paddingLeft: "30px" }}
                                   className={
                                     "flex w-full items-center gap-1 rounded-md py-1 pr-1 text-left text-xs transition hover:bg-brand-light " +
+                                    // 실제 선택된 도시는 옅은 파란 배경 + 굵게 강조
                                     (active
-                                      ? "bg-brand-light font-semibold text-brand"
+                                      ? "bg-blue-100 font-bold text-blue-800"
                                       : "text-ink")
                                   }
                                 >
@@ -295,8 +315,9 @@ export default function MainCategoryTree({
             count={spaceVideoCount != null ? spaceVideoCount : undefined}
             depth={0}
             defaultOpen={false}
-            // ISS 가 선택되면 자동으로 펼친다
+            // ISS 가 선택되면 자동으로 펼친다 + 조상 강조
             forceOpen={Boolean(selectedSpace)}
+            ancestorActive={Boolean(selectedSpace)}
           >
             {/* 하위: ISS 항목 (말단 — 클릭 시 부모에 ISS 선택 전달) */}
             <button
@@ -307,8 +328,9 @@ export default function MainCategoryTree({
               style={{ paddingLeft: "30px" }}
               className={
                 "flex w-full items-center gap-1 rounded-md py-1 pr-1 text-left text-xs transition hover:bg-brand-light " +
+                // 실제 선택된 ISS 항목은 옅은 파란 배경 + 굵게 강조
                 (selectedSpace
-                  ? "bg-brand-light font-semibold text-brand"
+                  ? "bg-blue-100 font-bold text-blue-800"
                   : "text-ink")
               }
             >

@@ -19,7 +19,7 @@
 // 마커 1~2개짜리 소규모 지도(관리자 등록/수정 폼)에서도 문제없이 동작한다.
 // ─────────────────────────────────────────────────────────────
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MapContainer, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 
@@ -35,6 +35,52 @@ import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 // 마커가 보이지 않는 알려진 문제가 있다. 그래서 아이콘 이미지를 unpkg CDN 기준으로
 // 수동 지정한다. (leaflet 1.9.x 이미지 경로)
 const ICON_BASE = "https://unpkg.com/leaflet@1.9.4/dist/images/";
+
+// ─── 지도 타일 스타일 정의 (일반 / 지형도) ────────────────────
+// URL 을 환경변수로 분리해 두어(없으면 기본값 사용) 나중에 타일 서비스가 불안정해지면
+// URL 만 교체하면 되도록 설계한다. (예: OpenTopoMap → Thunderforest)
+const MAP_STYLES = [
+  {
+    key: "standard",
+    label: "일반 지도",
+    url:
+      process.env.NEXT_PUBLIC_MAP_TILE_URL_STANDARD ||
+      process.env.NEXT_PUBLIC_MAP_TILE_URL || // 기존 환경변수도 호환
+      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution:
+      process.env.NEXT_PUBLIC_MAP_ATTRIBUTION ||
+      "© OpenStreetMap contributors",
+    maxZoom: 19,
+  },
+  {
+    key: "terrain",
+    label: "지형도",
+    url:
+      process.env.NEXT_PUBLIC_MAP_TILE_URL_TERRAIN ||
+      "https://tile.opentopomap.org/{z}/{x}/{y}.png",
+    // OpenTopoMap 저작권 표기 필수 (CC-BY-SA)
+    attribution:
+      "© OpenStreetMap contributors, © OpenTopoMap (CC-BY-SA)",
+    // ⚠️ OpenTopoMap 은 확대레벨 13 이상 타일이 없을 수 있어 maxZoom 을 17 로 제한한다.
+    //    그래도 13 이상으로 확대하면 빈(회색) 타일이 보일 수 있는데, 이는 정상 현상이다.
+    maxZoom: 17,
+  },
+];
+
+// localStorage 저장 키 (새로고침해도 선택한 지도 스타일 유지)
+const MAP_STYLE_STORAGE_KEY = "livecam_map_style";
+
+// 저장된 스타일 키를 읽어온다 (없거나 잘못된 값이면 "standard").
+// LeafletMap 은 ssr:false 로 클라이언트에서만 로드되므로 window 접근이 안전하다.
+function readSavedMapStyle() {
+  try {
+    const saved = window.localStorage.getItem(MAP_STYLE_STORAGE_KEY);
+    if (saved && MAP_STYLES.some((s) => s.key === saved)) return saved;
+  } catch (error) {
+    // localStorage 사용 불가 시 기본값으로
+  }
+  return "standard";
+}
 
 // ─── 기본 아이콘 전역 설정 (한 번만 적용) ─────────────────────
 try {
@@ -274,6 +320,71 @@ function MarkerClusterLayer({ markers, onMarkerClick, selectedMarkerId }) {
   return null;
 }
 
+// ─── 지도 스타일(타일) 전환 컨트롤 (지도 위 오버레이 버튼) ─────
+// 겹친 사각형(레이어) 아이콘 버튼 → 클릭 시 "일반 지도"/"지형도" 드롭다운을 연다.
+// 좌측 하단에 배치(줌=좌상단, 저작권=우하단, ISS 토글=우상단과 겹치지 않음).
+// ⚠️ MapContainer 의 자식이 아니라 형제(오버레이)로 렌더 → Leaflet 드래그가 클릭을 가로채지 않는다.
+function LayerSwitcher({ currentKey, onChange }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="absolute bottom-3 left-3 z-[1000]">
+      {/* 열렸을 때: 옵션 목록 (버튼 위쪽으로 펼침) */}
+      {open ? (
+        <div className="mb-2 overflow-hidden rounded-md border border-border bg-surface shadow-card">
+          {MAP_STYLES.map((s) => {
+            const selected = s.key === currentKey;
+            return (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => {
+                  onChange(s.key);
+                  setOpen(false);
+                }}
+                className={
+                  "flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-xs transition hover:bg-brand-light " +
+                  // 현재 선택된 스타일은 체크 + 강조
+                  (selected ? "font-bold text-brand" : "text-ink")
+                }
+              >
+                <span className="w-3">{selected ? "✓" : ""}</span>
+                <span>{s.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {/* 토글 버튼 (겹친 사각형 = 레이어 아이콘) */}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        title="지도 스타일 변경 (일반/지형도)"
+        aria-label="지도 스타일 변경"
+        className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-surface text-ink shadow-card transition hover:bg-brand-light"
+      >
+        {/* 겹친 사각형(레이어) SVG — 외부 아이콘 라이브러리 없이 직접 그림 */}
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <polygon points="12 2 2 7 12 12 22 7 12 2" />
+          <polyline points="2 17 12 22 22 17" />
+          <polyline points="2 12 12 17 22 12" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
 // ─── 메인 컴포넌트 ─────────────────────────────────────────────
 export default function LeafletMap({
   markers = [],
@@ -284,25 +395,42 @@ export default function LeafletMap({
   selectedMarkerId,
   onMapReady,
 }) {
-  // ─── 타일 URL / 저작권 표기 (환경변수 우선, 없으면 OSM 기본값) ───
-  const tileUrl =
-    process.env.NEXT_PUBLIC_MAP_TILE_URL ||
-    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-  const attribution =
-    process.env.NEXT_PUBLIC_MAP_ATTRIBUTION || "© OpenStreetMap contributors";
+  // ─── 지도 타일 스타일 (일반/지형도) — localStorage 로 유지 ───
+  const [mapStyle, setMapStyle] = useState(readSavedMapStyle);
+  // 현재 스타일 설정 (없으면 첫 번째=일반)
+  const currentStyle =
+    MAP_STYLES.find((s) => s.key === mapStyle) || MAP_STYLES[0];
+
+  // 스타일 변경 → 상태 갱신 + localStorage 저장 (새로고침해도 유지)
+  function handleStyleChange(key) {
+    try {
+      setMapStyle(key);
+      window.localStorage.setItem(MAP_STYLE_STORAGE_KEY, key);
+    } catch (error) {
+      console.error("[LeafletMap] 지도 스타일 저장 실패:", error); // TODO: 배포 전 제거
+    }
+  }
 
   try {
     return (
       // 컨테이너 높이는 부모가 정한다 (부모에서 height 지정 필수).
-      <div style={{ height: "100%", width: "100%" }}>
+      // position:relative → 레이어 전환 버튼(absolute 오버레이)의 기준이 된다.
+      <div style={{ height: "100%", width: "100%", position: "relative" }}>
         <MapContainer
           center={[center.lat, center.lng]}
           zoom={zoom}
+          maxZoom={19}
           scrollWheelZoom={true}
           style={{ height: "100%", width: "100%" }}
         >
-          {/* OSM(또는 유료) 타일 레이어 */}
-          <TileLayer url={tileUrl} attribution={attribution} />
+          {/* 베이스 타일 레이어. key 를 스타일 키로 주어 스타일이 바뀌면
+              이전 타일 레이어를 제거하고 새로 그린다(그 위의 마커/오버레이는 유지됨). */}
+          <TileLayer
+            key={currentStyle.key}
+            url={currentStyle.url}
+            attribution={currentStyle.attribution}
+            maxZoom={currentStyle.maxZoom}
+          />
 
           {/* center/zoom 변경 시 지도 이동 */}
           <ChangeView center={center} zoom={zoom} />
@@ -323,6 +451,9 @@ export default function LeafletMap({
             selectedMarkerId={selectedMarkerId}
           />
         </MapContainer>
+
+        {/* 지도 스타일 전환 버튼 (지도 위 오버레이 — 베이스 타일만 바뀌고 마커는 유지) */}
+        <LayerSwitcher currentKey={mapStyle} onChange={handleStyleChange} />
       </div>
     );
   } catch (error) {
