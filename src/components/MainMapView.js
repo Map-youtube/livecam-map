@@ -16,11 +16,12 @@
 // 필터링은 이미 받은 markers 배열을 클라이언트에서 걸러내기만 한다 (추가 API 호출 없음).
 // ─────────────────────────────────────────────────────────────
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import LeafletMapWrapper from "@/components/LeafletMapWrapper";
 import MainCategoryTree from "@/components/MainCategoryTree";
 import VideoListPanel from "@/components/VideoListPanel";
+import IssVideoPanel from "@/components/IssVideoPanel";
 import LiveDot from "@/components/LiveDot";
 
 // ISS 추적 레이어는 Leaflet(브라우저 전용)을 직접 사용하므로 ssr:false 로 로드한다.
@@ -60,8 +61,19 @@ export default function MainMapView({ markers, tags }) {
   const [issMap, setIssMap] = useState(null);
   const [issEnabled, setIssEnabled] = useState(true);
 
-  // 패널 열림 여부 = 둘 중 하나라도 선택됨
-  const isPanelOpen = selectedCity !== null || selectedTag !== null;
+  // ─── ISS(Space) 선택 상태 ────────────────────────────────────
+  // issSelected: 트리 Space>ISS 또는 지도 ISS 마커를 선택해 NASA 라이브 패널이 열린 상태
+  // issInfo    : 패널 상단에 표시할 현재 ISS 위치 정보 (열려 있을 때만 갱신)
+  const [issSelected, setIssSelected] = useState(false);
+  const [issInfo, setIssInfo] = useState(null);
+  // 최신 ISS 위치(2초마다 갱신)를 리렌더 없이 보관 → 선택 시점에 지도 이동 기준값으로 사용
+  const issPositionRef = useRef(null);
+  // 현재 ISS 선택 여부를 콜백(2초 주기)에서 즉시 참조하기 위한 ref
+  const issSelectedRef = useRef(false);
+
+  // 패널 열림 여부 = 도시/태그/ISS 중 하나라도 선택됨
+  const isPanelOpen =
+    selectedCity !== null || selectedTag !== null || issSelected;
 
   // 지도 기본 중심/줌 (카드로 이동 지정 전)
   const DEFAULT_CENTER = { lat: 20, lng: 0 };
@@ -78,6 +90,9 @@ export default function MainMapView({ markers, tags }) {
           city: selection.city,
         });
         setSelectedTag(null);
+        // ISS 선택도 해제 (배타적)
+        setIssSelected(false);
+        issSelectedRef.current = false;
         // 필터가 바뀌면 이전에 펼쳐진 영상 상태는 초기화 (지도 위치는 유지)
         setExpandedMarkerId(null);
       }
@@ -92,6 +107,9 @@ export default function MainMapView({ markers, tags }) {
       if (tagName) {
         setSelectedTag(tagName);
         setSelectedCity(null);
+        // ISS 선택도 해제 (배타적)
+        setIssSelected(false);
+        issSelectedRef.current = false;
         // 필터가 바뀌면 이전에 펼쳐진 영상 상태는 초기화 (지도 위치는 유지)
         setExpandedMarkerId(null);
       }
@@ -105,6 +123,9 @@ export default function MainMapView({ markers, tags }) {
     try {
       setSelectedCity(null);
       setSelectedTag(null);
+      // ISS 선택도 해제
+      setIssSelected(false);
+      issSelectedRef.current = false;
       // 패널을 닫으면 펼쳐진 영상 상태도 함께 초기화
       setExpandedMarkerId(null);
     } catch (error) {
@@ -168,6 +189,41 @@ export default function MainMapView({ markers, tags }) {
     }
   }, []);
 
+  // ─── ISS 위치 갱신 수신 (IssTracker 가 2초마다 호출) ─────────
+  // 리렌더 폭주를 막기 위해 항상 ref 에만 저장하고,
+  // ISS 패널이 열려 있을 때만 상단 정보(issInfo) state 를 갱신한다.
+  const handleIssPosition = useCallback((d) => {
+    try {
+      issPositionRef.current = d;
+      if (issSelectedRef.current) setIssInfo(d);
+    } catch (error) {
+      console.error("[MainMapView] ISS 위치 갱신 실패:", error); // TODO: 배포 전 제거
+    }
+  }, []);
+
+  // ─── ISS(Space) 선택 → NASA 라이브 패널 열기 + 지도 이동 ─────
+  // 트리 Space>ISS 클릭과 지도 ISS 마커 클릭이 모두 이 핸들러를 호출한다(동일 동작).
+  const handleSelectIss = useCallback(() => {
+    try {
+      // 다른 선택은 해제 (배타적)
+      setSelectedCity(null);
+      setSelectedTag(null);
+      setExpandedMarkerId(null);
+      setIssSelected(true);
+      issSelectedRef.current = true;
+
+      // 현재 ISS 위치가 있으면 그 위치로 지도 이동 + 패널 상단 정보 세팅
+      const pos = issPositionRef.current;
+      if (pos && typeof pos.lat === "number" && typeof pos.lng === "number") {
+        setMapCenter({ lat: pos.lat, lng: pos.lng });
+        setMapZoom(4);
+        setIssInfo(pos);
+      }
+    } catch (error) {
+      console.error("[MainMapView] ISS 선택 처리 실패:", error); // TODO: 배포 전 제거
+    }
+  }, []);
+
   // ─── 지도 마커 직접 클릭 처리 (경로 B) ───────────────────────
   // 트리에서 도시를 클릭한 것(경로 A)과 "동일한 결과 화면"이 되도록 통합한다:
   //   1) 그 마커의 도시로 selectedCity 설정 → 트리 강조/자동 펼침 + 패널 열림
@@ -183,6 +239,9 @@ export default function MainMapView({ markers, tags }) {
         city: marker.city || "",
       });
       setSelectedTag(null);
+      // ISS 선택도 해제 (배타적)
+      setIssSelected(false);
+      issSelectedRef.current = false;
       setExpandedMarkerId(marker.id);
     } catch (error) {
       console.error("[MainMapView] 지도 마커 클릭 처리 실패:", error); // TODO: 배포 전 제거
@@ -250,21 +309,27 @@ export default function MainMapView({ markers, tags }) {
             tags={tagList}
             onSelectLocation={handleSelectLocation}
             onSelectTag={handleSelectTag}
+            onSelectSpace={handleSelectIss}
             selectedCity={selectedCity}
             selectedTag={selectedTag}
+            selectedSpace={issSelected}
           />
         </aside>
 
-        {/* 중간: 영상 목록 패널 (열렸을 때만, 30%) */}
+        {/* 중간: 패널 (열렸을 때만, 30%) — ISS 선택 시 NASA 라이브, 그 외 라이브캠 목록 */}
         {isPanelOpen && (
           <section className="h-full w-[30%] min-w-[260px] overflow-hidden border-r border-border bg-bg">
-            <VideoListPanel
-              markers={filteredMarkers}
-              title={panelTitle}
-              onClose={closePanel}
-              onSelectMarker={handleSelectMarker}
-              expandedMarkerId={expandedMarkerId}
-            />
+            {issSelected ? (
+              <IssVideoPanel issInfo={issInfo} onClose={closePanel} />
+            ) : (
+              <VideoListPanel
+                markers={filteredMarkers}
+                title={panelTitle}
+                onClose={closePanel}
+                onSelectMarker={handleSelectMarker}
+                expandedMarkerId={expandedMarkerId}
+              />
+            )}
           </section>
         )}
 
@@ -297,7 +362,13 @@ export default function MainMapView({ markers, tags }) {
           </button>
 
           {/* ISS 실시간 위치·궤적 레이어 (enabled=false 면 타이머 정지+레이어 제거) */}
-          <IssTracker map={issMap} enabled={issEnabled} />
+          {/* onIssClick: 마커 클릭 시 NASA 라이브 패널 오픈 / onPositionUpdate: 최신 좌표 수신 */}
+          <IssTracker
+            map={issMap}
+            enabled={issEnabled}
+            onIssClick={handleSelectIss}
+            onPositionUpdate={handleIssPosition}
+          />
         </main>
       </div>
     </div>

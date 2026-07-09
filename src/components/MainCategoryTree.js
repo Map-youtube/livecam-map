@@ -98,8 +98,10 @@ export default function MainCategoryTree({
   tags,
   onSelectLocation,
   onSelectTag,
+  onSelectSpace,
   selectedCity,
   selectedTag,
+  selectedSpace,
 }) {
   const markerList = Array.isArray(markers) ? markers : [];
   const tagList = Array.isArray(tags) ? tags : [];
@@ -191,11 +193,11 @@ export default function MainCategoryTree({
         <h2 className="mb-2 px-1 font-display text-[11px] font-bold uppercase tracking-wide text-ink-muted">
           지역
         </h2>
-        {markerList.length === 0 ? (
-          <p className="px-1 text-xs text-ink-muted">표시할 마커가 없습니다.</p>
-        ) : (
-          <div className="overflow-auto">
-            {continentKeys.map((continent) => {
+        <div className="overflow-auto">
+          {markerList.length === 0 ? (
+            <p className="px-1 text-xs text-ink-muted">표시할 마커가 없습니다.</p>
+          ) : (
+            continentKeys.map((continent) => {
               const continentObj = tree[continent];
               const continentLabel =
                 CONTINENT_LABELS[continent] || continent || "미분류";
@@ -282,9 +284,36 @@ export default function MainCategoryTree({
                     })}
                 </CollapsibleRow>
               );
-            })}
-          </div>
-        )}
+            })
+          )}
+
+          {/* Space (고정 항목 — Firestore 마커 데이터와 무관하게 항상 표시) */}
+          <CollapsibleRow
+            label="🛰️ Space"
+            depth={0}
+            defaultOpen={false}
+            // ISS 가 선택되면 자동으로 펼친다
+            forceOpen={Boolean(selectedSpace)}
+          >
+            {/* 하위: ISS 항목 (말단 — 클릭 시 부모에 ISS 선택 전달) */}
+            <button
+              type="button"
+              onClick={() =>
+                typeof onSelectSpace === "function" && onSelectSpace()
+              }
+              style={{ paddingLeft: "30px" }}
+              className={
+                "flex w-full items-center gap-1 rounded-md py-1 pr-1 text-left text-xs transition hover:bg-brand-light " +
+                (selectedSpace
+                  ? "bg-brand-light font-semibold text-brand"
+                  : "text-ink")
+              }
+            >
+              <span className="w-3 text-ink-muted">·</span>
+              <span className="truncate">ISS (국제우주정거장)</span>
+            </button>
+          </CollapsibleRow>
+        </div>
       </div>
 
       {/* ── 특성 태그 섹션 ────────────────────────────────────── */}

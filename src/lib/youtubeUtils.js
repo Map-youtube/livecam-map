@@ -253,6 +253,74 @@ export async function getVideosLiveStatus(videoIds) {
   return result;
 }
 
+// ─── 여러 영상 중 "현재 라이브 중"인 것만 정보 반환 (videos.list, 배치) ──
+// part=snippet 으로 배치 조회(50개/1유닛)한 뒤 snippet.liveBroadcastContent === "live"
+// 인 영상만 남긴다. (NASA 채널 최근 영상 중 실시간 방송만 골라내는 용도)
+//   반환: [{ videoId, title, thumbnailUrl, channelName }]  (라이브인 것만, 순서 보존)
+// 실패(키 없음/네트워크/배치 오류) 시 빈 배열 반환 — throw 하지 않는다.
+export async function getLiveVideos(videoIds) {
+  const liveVideos = [];
+  try {
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (!apiKey) {
+      console.error(
+        "[youtubeUtils] 환경변수 YOUTUBE_API_KEY 가 없어 라이브 영상 조회를 건너뜁니다."
+      ); // TODO: 배포 전 제거
+      return liveVideos;
+    }
+
+    const ids = (Array.isArray(videoIds) ? videoIds : [])
+      .map((v) => String(v || "").trim())
+      .filter((v) => v.length > 0);
+
+    // 50개씩 배치 (videos.list 최대 id 수, 배치당 1유닛)
+    for (let i = 0; i < ids.length; i += 50) {
+      const chunk = ids.slice(i, i + 50);
+      const endpoint = new URL("https://www.googleapis.com/youtube/v3/videos");
+      endpoint.searchParams.set("part", "snippet");
+      endpoint.searchParams.set("id", chunk.join(","));
+      endpoint.searchParams.set("key", apiKey);
+
+      const res = await fetch(endpoint.toString(), {
+        method: "GET",
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        // 이 배치는 건너뛴다 (전체 실패로 보지 않음)
+        console.error(
+          `[youtubeUtils] getLiveVideos 배치 실패 (status ${res.status})`
+        ); // TODO: 배포 전 제거
+        continue;
+      }
+      const data = await res.json();
+      const items = Array.isArray(data.items) ? data.items : [];
+
+      for (const it of items) {
+        const snippet = it.snippet || {};
+        // 현재 실시간 방송 중인 영상만 (upcoming/none 제외)
+        if (snippet.liveBroadcastContent !== "live") continue;
+
+        const thumbnails = snippet.thumbnails || {};
+        const thumbnailUrl =
+          (thumbnails.high && thumbnails.high.url) ||
+          (thumbnails.medium && thumbnails.medium.url) ||
+          (thumbnails.default && thumbnails.default.url) ||
+          getThumbnailUrl(it.id);
+
+        liveVideos.push({
+          videoId: it.id,
+          title: snippet.title || "",
+          thumbnailUrl,
+          channelName: snippet.channelTitle || "NASA",
+        });
+      }
+    }
+  } catch (error) {
+    console.error("[youtubeUtils] getLiveVideos 에러:", error); // TODO: 배포 전 제거
+  }
+  return liveVideos;
+}
+
 // ─── 영상 존재 여부 빠른 확인 (oEmbed, 무료) ──────────────────
 // 엑셀 매크로(location.xlsm) IsYouTubeVideoValid() 와 동일한 방식.
 //   https://www.youtube.com/oembed?url=...&format=json 에 GET 요청 →

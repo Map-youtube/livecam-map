@@ -8,7 +8,8 @@
 //   - enabled : true 면 추적 시작, false 면 모든 타이머 정지 + 레이어 제거
 //
 // 구성:
-//   [마커] 2초마다 /api/iss/position → 마커 위치/팝업 갱신.
+//   [마커] 2초마다 /api/iss/position → 마커 위치 갱신 + 위치 정보를 부모(onPositionUpdate)에 전달.
+//          마커 클릭 시 onIssClick 호출(트리 ISS 항목 클릭과 동일 → 영상 패널 오픈).
 //          5회 연속 실패 시 마커 숨김 + 30초 간격 재시도, 성공하면 2초 모드로 자동 복귀.
 //   [궤적선] 마운트 시 /api/iss/tle → satellite.js 로 "미래 구간(현재~+90분)만" 궤적 계산,
 //            1분마다 재계산(선이 항상 현재 위치에서 뻗어나가도록). 진한 빨간 실선 1개.
@@ -66,44 +67,12 @@ function makeIssIcon() {
   });
 }
 
-// ─── 팝업 HTML (null 값은 줄 자체를 렌더링하지 않음) ──────────
-function buildPopupHtml(d) {
-  const rows = [];
-  rows.push(
-    '<div style="font-weight:700;margin-bottom:4px;">🛰️ ISS (국제우주정거장)</div>'
-  );
-  // 위도/경도 (소수점 2자리)
-  rows.push(
-    "<div>위도 " +
-      d.lat.toFixed(2) +
-      ", 경도 " +
-      d.lng.toFixed(2) +
-      "</div>"
-  );
-  // 고도 (km) — null 이면 줄 생략
-  if (d.altKm != null) {
-    rows.push(
-      "<div>고도: " + Math.round(d.altKm).toLocaleString("en-US") + " km</div>"
-    );
-  }
-  // 속도 (km/h, 천단위 콤마) — null 이면 줄 생략
-  if (d.speedKmh != null) {
-    rows.push(
-      "<div>속도: " +
-        Math.round(d.speedKmh).toLocaleString("en-US") +
-        " km/h</div>"
-    );
-  }
-  // 낮/밤 구간 (WTIA visibility 있을 때만)
-  if (d.visibility === "daylight") {
-    rows.push("<div>현재: 낮 구간 ☀️</div>");
-  } else if (d.visibility === "eclipsed") {
-    rows.push("<div>현재: 밤 구간 🌙</div>");
-  }
-  return '<div style="font-size:12px;line-height:1.5;">' + rows.join("") + "</div>";
-}
-
-export default function IssTracker({ map, enabled = true }) {
+export default function IssTracker({
+  map,
+  enabled = true,
+  onIssClick,
+  onPositionUpdate,
+}) {
   // 지도 레이어 참조 (imperative 조작 대상)
   const markerRef = useRef(null); // L.Marker
   const circlesRef = useRef([]); // L.Circle[]
@@ -113,6 +82,17 @@ export default function IssTracker({ map, enabled = true }) {
   const satrecRef = useRef(null);
   const tleOkRef = useRef(false);
   const lastDataRef = useRef(null); // 마지막 위치 응답(동심원 즉시 표시용)
+
+  // 콜백을 ref 로 최신 유지 → 부모 리렌더로 콜백이 바뀌어도 메인 effect(타이머/레이어)를
+  // 재실행하지 않게 한다(VideoListPanel 의 onErrorRef 와 동일 패턴).
+  const onIssClickRef = useRef(onIssClick);
+  const onPositionUpdateRef = useRef(onPositionUpdate);
+  useEffect(() => {
+    onIssClickRef.current = onIssClick;
+  }, [onIssClick]);
+  useEffect(() => {
+    onPositionUpdateRef.current = onPositionUpdate;
+  }, [onPositionUpdate]);
 
   useEffect(() => {
     // 지도 인스턴스가 없거나 비활성화면 아무것도 하지 않음
@@ -177,12 +157,32 @@ export default function IssTracker({ map, enabled = true }) {
             icon: issIcon,
             zIndexOffset: 3000, // 라이브캠 마커/클러스터보다 위에
           });
-          markerRef.current.bindPopup(buildPopupHtml(d));
+          // 팝업 대신: 마커 클릭 시 부모에 ISS 선택 이벤트 전달
+          // (카테고리 트리 ISS 항목 클릭과 동일하게 → 패널 오픈 + 트리 하이라이트)
+          // 위/경도/고도/속도는 팝업이 아니라 영상 목록 패널 상단에 표시한다.
+          // ⚠️ on("click") 은 최초 1회만 등록(매 갱신마다 등록하면 핸들러가 중복된다).
+          markerRef.current.on("click", () => {
+            try {
+              if (typeof onIssClickRef.current === "function") {
+                onIssClickRef.current();
+              }
+            } catch (clickError) {
+              console.error("[IssTracker] ISS 마커 클릭 처리 실패:", clickError); // TODO: 배포 전 제거
+            }
+          });
           markerRef.current.addTo(map);
         } else {
-          // 위치/팝업만 갱신
+          // 위치만 갱신
           markerRef.current.setLatLng(latlng);
-          markerRef.current.setPopupContent(buildPopupHtml(d));
+        }
+
+        // 현재 위치 정보를 부모에 전달(패널 상단 표시 + 지도 이동 기준값으로 사용)
+        try {
+          if (typeof onPositionUpdateRef.current === "function") {
+            onPositionUpdateRef.current(d);
+          }
+        } catch (posError) {
+          console.error("[IssTracker] 위치 콜백 처리 실패:", posError); // TODO: 배포 전 제거
         }
 
         // 동심원: TLE 성공(tleOkRef) 일 때만 표시. 없으면 생성, 있으면 이동.
