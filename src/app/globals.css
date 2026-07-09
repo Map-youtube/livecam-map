@@ -81,6 +81,12 @@ body {
   background: transparent;
   border: 0;
 }
+
+/* ISS 추적 마커 (Leaflet divIcon — 기본 흰 배경/테두리 제거하고 SVG 만 표시) */
+.iss-divicon {
+  background: transparent;
+  border: 0;
+}
 .lm-marker {
   position: relative;
 }

@@ -137,6 +137,23 @@ function ChangeView({ center, zoom }) {
   return null;
 }
 
+// ─── 지도 인스턴스 준비 알림 (내부 헬퍼 컴포넌트) ─────────────
+// react-leaflet 의 useMap() 으로 실제 L.Map 인스턴스를 얻어 상위로 전달한다.
+// (ISS 추적 등 지도에 직접 레이어를 얹는 기능이 map 인스턴스를 imperative 하게 쓰도록)
+function MapReadyHandler({ onMapReady }) {
+  const map = useMap();
+  useEffect(() => {
+    try {
+      if (typeof onMapReady === "function" && map) {
+        onMapReady(map);
+      }
+    } catch (error) {
+      console.error("[LeafletMap] onMapReady 처리 실패:", error); // TODO: 배포 전 제거
+    }
+  }, [map, onMapReady]);
+  return null;
+}
+
 // ─── 컨테이너 크기 변경 감지 → invalidateSize (내부 헬퍼) ─────
 // 지도 컨테이너의 너비/높이가 바뀌면(예: 메인 화면에서 영상 패널이 열리고 닫혀
 // 지도 영역 너비가 90% ↔ 60% 로 변할 때) Leaflet 은 타일이 어긋나는 렌더링 버그가 있다.
@@ -265,6 +282,7 @@ export default function LeafletMap({
   onMarkerClick,
   onMapClick,
   selectedMarkerId,
+  onMapReady,
 }) {
   // ─── 타일 URL / 저작권 표기 (환경변수 우선, 없으면 OSM 기본값) ───
   const tileUrl =
@@ -288,6 +306,9 @@ export default function LeafletMap({
 
           {/* center/zoom 변경 시 지도 이동 */}
           <ChangeView center={center} zoom={zoom} />
+
+          {/* 지도 인스턴스 준비되면 상위로 전달 (ISS 추적 레이어용) */}
+          {onMapReady ? <MapReadyHandler onMapReady={onMapReady} /> : null}
 
           {/* 컨테이너 크기 변경 시 invalidateSize */}
           <MapResizeHandler />

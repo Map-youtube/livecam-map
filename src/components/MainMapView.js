@@ -17,10 +17,16 @@
 // ─────────────────────────────────────────────────────────────
 
 import { useCallback, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import LeafletMapWrapper from "@/components/LeafletMapWrapper";
 import MainCategoryTree from "@/components/MainCategoryTree";
 import VideoListPanel from "@/components/VideoListPanel";
 import LiveDot from "@/components/LiveDot";
+
+// ISS 추적 레이어는 Leaflet(브라우저 전용)을 직접 사용하므로 ssr:false 로 로드한다.
+const IssTracker = dynamic(() => import("@/components/IssTracker"), {
+  ssr: false,
+});
 
 // 대륙 코드 → 한국어 라벨 (패널 제목/지역 표시에 사용)
 const CONTINENT_LABELS = {
@@ -47,6 +53,12 @@ export default function MainMapView({ markers, tags }) {
   // 카드 클릭으로 지도를 이동시킬 때 사용할 중심/줌 (null 이면 기본값 유지)
   const [mapCenter, setMapCenter] = useState(null);
   const [mapZoom, setMapZoom] = useState(null);
+
+  // ─── ISS 추적 상태 ───────────────────────────────────────────
+  // issMap: LeafletMap 이 준비되면 전달하는 실제 지도 인스턴스
+  // issEnabled: ISS 추적 표시 여부 (기본 켜짐)
+  const [issMap, setIssMap] = useState(null);
+  const [issEnabled, setIssEnabled] = useState(true);
 
   // 패널 열림 여부 = 둘 중 하나라도 선택됨
   const isPanelOpen = selectedCity !== null || selectedTag !== null;
@@ -146,6 +158,15 @@ export default function MainMapView({ markers, tags }) {
     },
     [expandedMarkerId]
   );
+
+  // ─── 지도 인스턴스 준비 → ISS 레이어에 전달 ──────────────────
+  const handleMapReady = useCallback((mapInstance) => {
+    try {
+      setIssMap(mapInstance);
+    } catch (error) {
+      console.error("[MainMapView] 지도 준비 처리 실패:", error); // TODO: 배포 전 제거
+    }
+  }, []);
 
   // ─── 지도 마커 직접 클릭 처리 (경로 B) ───────────────────────
   // 트리에서 도시를 클릭한 것(경로 A)과 "동일한 결과 화면"이 되도록 통합한다:
@@ -248,7 +269,7 @@ export default function MainMapView({ markers, tags }) {
         )}
 
         {/* 오른쪽: 지도 (패널 열림 시 60%, 닫힘 시 90%) */}
-        <main className="h-full flex-1">
+        <main className="relative h-full flex-1">
           {/* 카드로 이동 지정이 있으면 그 좌표/줌을, 없으면 기본 세계 뷰를 사용 */}
           <LeafletMapWrapper
             markers={markerList}
@@ -257,7 +278,26 @@ export default function MainMapView({ markers, tags }) {
             onMapClick={handleMapClick}
             onMarkerClick={handleMarkerClick}
             selectedMarkerId={expandedMarkerId}
+            onMapReady={handleMapReady}
           />
+
+          {/* ISS 추적 토글 (우측 상단 — 줌 버튼은 좌측 상단이라 겹치지 않음) */}
+          <button
+            type="button"
+            onClick={() => setIssEnabled((v) => !v)}
+            className={
+              "absolute right-3 top-3 z-[1000] rounded-md border px-3 py-1.5 text-sm font-medium shadow-card transition " +
+              (issEnabled
+                ? "border-brand bg-brand text-white hover:bg-brand-hover"
+                : "border-border bg-surface text-ink hover:bg-bg")
+            }
+            title="ISS(국제우주정거장) 실시간 위치 추적 켜기/끄기"
+          >
+            🛰️ ISS 추적 {issEnabled ? "켜짐" : "꺼짐"}
+          </button>
+
+          {/* ISS 실시간 위치·궤적 레이어 (enabled=false 면 타이머 정지+레이어 제거) */}
+          <IssTracker map={issMap} enabled={issEnabled} />
         </main>
       </div>
     </div>
