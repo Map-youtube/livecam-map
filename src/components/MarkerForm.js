@@ -18,6 +18,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import LeafletMapWrapper from "@/components/LeafletMapWrapper";
+import Thumbnail from "@/components/DefaultThumbnail";
 import { getContinentByCountry } from "@/lib/continentUtils";
 import { getAdminIdToken } from "@/lib/clientAuth";
 import TagSelector from "@/components/TagSelector";
@@ -450,9 +451,8 @@ export default function MarkerForm({ onRegistered }) {
         {thumbnailUrl && (
           <div className="mt-2">
             <p className="mb-1 text-xs text-gray-500">썸네일 미리보기</p>
-            {/* 원격 이미지라 next/image 대신 일반 img 사용 (도메인 설정 불필요) */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            {/* 로딩 실패(깨진 URL 등) 시 기본 이미지로 대체 */}
+            <Thumbnail
               src={thumbnailUrl}
               alt="유튜브 썸네일 미리보기"
               className="w-64 rounded-md border border-border"

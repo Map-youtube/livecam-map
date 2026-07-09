@@ -20,6 +20,7 @@
 
 import { useState } from "react";
 import LiveDot from "@/components/LiveDot";
+import Thumbnail from "@/components/DefaultThumbnail";
 
 // ─── ISS 위치 정보 한 줄 요약 (null 값은 생략) ────────────────
 function IssInfoBar({ issInfo }) {
@@ -126,19 +127,12 @@ export default function IssVideoPanel({ videos, issInfo, onClose }) {
                   >
                     {/* 썸네일 (16:9) + 좌상단 LIVE 배지 */}
                     <div className="relative aspect-video w-full overflow-hidden rounded-md bg-ink/5">
-                      {v.thumbnailUrl ? (
-                        // 원격 이미지라 next/image 대신 일반 img 사용
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={v.thumbnailUrl}
-                          alt={v.title || "NASA 라이브"}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-xs text-ink-muted">
-                          썸네일 없음
-                        </div>
-                      )}
+                      {/* 없거나 로딩 실패 시 기본 이미지로 대체 */}
+                      <Thumbnail
+                        src={v.thumbnailUrl}
+                        alt={v.title || "NASA 라이브"}
+                        className="h-full w-full object-cover"
+                      />
                       <div className="absolute left-2 top-2">
                         <span className="inline-flex items-center gap-1 rounded-full bg-live-light px-2 py-0.5 text-xs font-semibold text-live shadow-card">
                           <LiveDot size="sm" />

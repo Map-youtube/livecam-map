@@ -20,6 +20,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { COUNTRY_NAME_BY_CODE } from "@/lib/countryList";
 import LiveDot from "@/components/LiveDot";
+import Thumbnail from "@/components/DefaultThumbnail";
 
 // ─── 유튜브 IFrame API 로더 (전역, 한 번만 로드) ──────────────
 let ytApiPromise = null;
@@ -364,19 +365,12 @@ export default function VideoListPanel({
                   >
                     {/* 썸네일 (16:9) + 좌상단 상태 배지 */}
                     <div className="relative aspect-video w-full overflow-hidden rounded-md bg-ink/5">
-                      {thumb ? (
-                        // 원격 이미지라 next/image 대신 일반 img 사용
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={thumb}
-                          alt={marker.location || "썸네일"}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-xs text-ink-muted">
-                          썸네일 없음
-                        </div>
-                      )}
+                      {/* 없거나 로딩 실패 시 기본 이미지로 대체 */}
+                      <Thumbnail
+                        src={thumb}
+                        alt={marker.location || "썸네일"}
+                        className="h-full w-full object-cover"
+                      />
                       <div className="absolute left-2 top-2">
                         <StatusBadge badge={badge} />
                       </div>

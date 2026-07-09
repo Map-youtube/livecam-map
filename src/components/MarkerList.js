@@ -20,6 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LeafletMapWrapper from "@/components/LeafletMapWrapper";
 import AiDescriptionEditor from "@/components/AiDescriptionEditor";
 import TagSelector from "@/components/TagSelector";
+import Thumbnail from "@/components/DefaultThumbnail";
 import { getContinentByCountry } from "@/lib/continentUtils";
 import { getAdminIdToken } from "@/lib/clientAuth";
 
@@ -1166,18 +1167,13 @@ export default function MarkerList({ refreshSignal }) {
                     key={marker.id}
                     className="border-t border-gray-100 align-top hover:bg-bg"
                   >
-                    {/* 썸네일 (컬럼 폭에 맞춰 축소) */}
+                    {/* 썸네일 (컬럼 폭에 맞춰 축소, 없거나 로딩 실패 시 기본 이미지) */}
                     <td className="px-1.5 py-1">
-                      {thumb ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={thumb}
-                          alt={marker.location || "썸네일"}
-                          className="h-8 w-full rounded object-cover"
-                        />
-                      ) : (
-                        <div className="h-8 w-full rounded bg-gray-100" />
-                      )}
+                      <Thumbnail
+                        src={thumb}
+                        alt={marker.location || "썸네일"}
+                        className="h-8 w-full rounded object-cover"
+                      />
                     </td>
                     {/* 장소명 (넘치면 2줄까지 표시, 나머지는 …+툴팁) */}
                     <td className="px-1.5 py-1 font-medium text-ink">
