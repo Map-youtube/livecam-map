@@ -10,7 +10,8 @@
 // 구성:
 //   [마커] 2초마다 /api/iss/position → 마커 위치/팝업 갱신.
 //          5회 연속 실패 시 마커 숨김 + 30초 간격 재시도, 성공하면 2초 모드로 자동 복귀.
-//   [궤적선] 마운트 시 /api/iss/tle → satellite.js 로 궤적 계산, 5분마다 재계산.
+//   [궤적선] 마운트 시 /api/iss/tle → satellite.js 로 "미래 구간(현재~+90분)만" 궤적 계산,
+//            1분마다 재계산(선이 항상 현재 위치에서 뻗어나가도록). 진한 빨간 실선 1개.
 //            TLE 실패 시 궤적선·동심원만 생략하고 마커는 정상 동작.
 //   [동심원] ISS 중심 반경 500/1000/1500km 원 3개 (TLE 성공 시에만 표시, 마커 따라 이동).
 //
@@ -28,7 +29,7 @@ import { getIssTrajectory } from "@/lib/issUtils";
 const POSITION_POLL_MS = 2000; // 위치 갱신 간격 (정상 모드)
 const POSITION_RETRY_MS = 30000; // 위치 실패 후 재시도 간격
 const MAX_FAILS = 5; // 이 횟수만큼 연속 실패하면 마커 숨김 + 백오프
-const TRAJ_RECOMPUTE_MS = 5 * 60 * 1000; // 궤적 재계산 간격 (5분)
+const TRAJ_RECOMPUTE_MS = 1 * 60 * 1000; // 궤적 재계산 간격 (1분)
 const CIRCLE_RADII_M = [500000, 1000000, 1500000]; // 동심원 반경(m): 500/1000/1500km
 const TRACK_COLOR = "#e53935"; // 궤적선 빨간색 (isstracker.pl 스타일)
 
@@ -106,8 +107,8 @@ export default function IssTracker({ map, enabled = true }) {
   // 지도 레이어 참조 (imperative 조작 대상)
   const markerRef = useRef(null); // L.Marker
   const circlesRef = useRef([]); // L.Circle[]
-  const pastLinesRef = useRef([]); // L.Polyline[] (과거 궤적)
-  const futureLinesRef = useRef([]); // L.Polyline[] (미래 궤적)
+  // 미래 궤적선 레이어(날짜변경선 분리로 선분이 여러 개일 수 있어 배열로 관리)
+  const lineLayersRef = useRef([]); // L.Polyline[]
   // 궤적 계산용 상태
   const satrecRef = useRef(null);
   const tleOkRef = useRef(false);
@@ -154,18 +155,12 @@ export default function IssTracker({ map, enabled = true }) {
     }
     function removeLines() {
       try {
-        for (const p of pastLinesRef.current) {
+        for (const line of lineLayersRef.current) {
           try {
-            map.removeLayer(p);
+            map.removeLayer(line);
           } catch (e) {}
         }
-        for (const f of futureLinesRef.current) {
-          try {
-            map.removeLayer(f);
-          } catch (e) {}
-        }
-        pastLinesRef.current = [];
-        futureLinesRef.current = [];
+        lineLayersRef.current = [];
       } catch (error) {
         console.error("[IssTracker] 궤적선 제거 실패:", error); // TODO: 배포 전 제거
       }
@@ -254,27 +249,15 @@ export default function IssTracker({ map, enabled = true }) {
       }
     }
 
-    // ── 궤적선 그리기 ──
-    function drawLines(traj) {
+    // ── 궤적선 그리기 (미래 구간 진한 빨간 실선 1종류) ──
+    function drawLines(segments) {
       try {
         removeLines();
-        if (!traj) return;
-        // 과거: 투명도 0.4, 미래: 실선(불투명 1)
-        for (const seg of traj.past) {
+        if (!Array.isArray(segments)) return;
+        // 날짜변경선 분리로 선분이 여러 개일 수 있으나 스타일은 동일(실선, 불투명 1)
+        for (const seg of segments) {
           if (seg.length >= 2) {
-            pastLinesRef.current.push(
-              L.polyline(seg, {
-                color: TRACK_COLOR,
-                weight: 2,
-                opacity: 0.4,
-                interactive: false,
-              }).addTo(map)
-            );
-          }
-        }
-        for (const seg of traj.future) {
-          if (seg.length >= 2) {
-            futureLinesRef.current.push(
+            lineLayersRef.current.push(
               L.polyline(seg, {
                 color: TRACK_COLOR,
                 weight: 2,
@@ -289,13 +272,37 @@ export default function IssTracker({ map, enabled = true }) {
       }
     }
 
-    // ── 궤적 재계산 ──
+    // ── 궤적 재계산 (미래 구간만) ──
     function recomputeTrajectory() {
       try {
         if (!satrecRef.current) return; // TLE 아직 없음
-        const traj = getIssTrajectory(satrecRef.current);
+        const segments = getIssTrajectory(satrecRef.current);
         if (cancelled) return;
-        drawLines(traj);
+
+        // 선 시작점을 마커 실측 위치에 고정:
+        //   현재 마커의 실측 좌표(WTIA/Open Notify 응답 lat/lng)를 첫 선분 맨 앞에 추가한다.
+        //   → TLE 계산 첫 점과 실측 위치의 미세한 차이로 선이 마커에서 떨어져 보이는 문제 보정.
+        //   단, 실측점과 첫 계산점의 경도차가 180도를 넘으면(날짜변경선 근처) 지도를 가로지르는
+        //   오동작이 나므로 prepend 하지 않는다.
+        try {
+          const d = lastDataRef.current;
+          if (
+            d &&
+            typeof d.lat === "number" &&
+            typeof d.lng === "number" &&
+            segments.length > 0 &&
+            segments[0].length > 0
+          ) {
+            const firstCalc = segments[0][0]; // [lat, lng]
+            if (Math.abs(d.lng - firstCalc[1]) <= 180) {
+              segments[0].unshift([d.lat, d.lng]);
+            }
+          }
+        } catch (prependError) {
+          console.error("[IssTracker] 궤적 시작점 보정 실패:", prependError); // TODO: 배포 전 제거
+        }
+
+        drawLines(segments);
       } catch (error) {
         console.error("[IssTracker] 궤적 재계산 실패:", error); // TODO: 배포 전 제거
       }

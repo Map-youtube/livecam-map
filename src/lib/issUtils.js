@@ -1,11 +1,13 @@
 // ─────────────────────────────────────────────────────────────
 // issUtils — ISS 궤적선 계산 유틸 (satellite.js 기반)
 //
-// getIssTrajectory(satrec, minutesBefore, minutesAfter, stepMinutes)
-//   - 현재시각 기준 과거~미래 구간을 일정 간격으로 propagate 하여 지상 좌표(위경도)를 구한다.
+// getIssTrajectory(satrec, minutesAhead, stepSeconds)
+//   - 현재시각 ~ +minutesAhead(기본 90분) "미래 구간만" 일정 간격으로 propagate 하여
+//     지상 좌표(위경도)를 구한다. (과거 구간은 계산하지 않는다)
+//   - 간격은 20초(stepSeconds)로 촘촘히 계산해 마커 위치와의 어긋남을 최소화한다.
 //   - ★ 날짜변경선(경도 ±180) 처리: 연속 두 점의 경도 차가 180도를 넘으면 그 지점에서
 //     배열을 끊어 여러 선분으로 분리한다(지도를 가로지르는 엉뚱한 직선 방지).
-//   - 반환: { past: [선분들], future: [선분들] }  (각 선분 = [[lat,lng], ...])
+//   - 반환: [선분들]  (각 선분 = [[lat,lng], ...])  ← 단일 선분 배열로 단순화
 //
 // ⚠️ 반복문 안에서 매번 new Date(...) 를 새로 만들어 각 시점의 고유 좌표를 계산한다
 //    (같은 Date 객체를 재사용/공유하는 클로저 버그 방지 — CLAUDE.md 버그 예방 규칙).
@@ -38,25 +40,21 @@ function splitByDateline(points) {
   return segments;
 }
 
-// ─── 궤적 계산 ────────────────────────────────────────────────
-export function getIssTrajectory(
-  satrec,
-  minutesBefore = 90,
-  minutesAfter = 90,
-  stepMinutes = 2
-) {
-  const pastPoints = [];
-  const futurePoints = [];
+// ─── 궤적 계산 (미래 구간만) ─────────────────────────────────
+export function getIssTrajectory(satrec, minutesAhead = 90, stepSeconds = 20) {
+  const points = [];
 
   try {
-    if (!satrec) return { past: [], future: [] };
+    if (!satrec) return [];
 
     const nowMs = Date.now();
+    const totalSeconds = minutesAhead * 60;
 
-    for (let i = -minutesBefore; i <= minutesAfter; i += stepMinutes) {
+    // 현재시각(s=0) ~ +minutesAhead 를 stepSeconds(기본 20초) 간격으로 계산
+    for (let s = 0; s <= totalSeconds; s += stepSeconds) {
       try {
         // 매 반복마다 그 시점의 새 Date 를 만든다 (각 지점의 고유 시각)
-        const date = new Date(nowMs + i * 60000);
+        const date = new Date(nowMs + s * 1000);
 
         // ECI 좌표로 전파. 실패 시 position 이 false → 건너뜀
         const pv = satellite.propagate(satrec, date);
@@ -69,22 +67,17 @@ export function getIssTrajectory(
         const lng = satellite.degreesLong(geo.longitude);
         if (Number.isNaN(lat) || Number.isNaN(lng)) continue;
 
-        const point = { lat, lng };
-        // i<=0 → 과거(현재 포함), i>=0 → 미래(현재 포함). i==0 은 양쪽에 넣어 선을 이어준다.
-        if (i <= 0) pastPoints.push(point);
-        if (i >= 0) futurePoints.push(point);
+        points.push({ lat, lng });
       } catch (innerError) {
         // 특정 시점 계산 실패는 그 지점만 건너뛴다
         continue;
       }
     }
 
-    return {
-      past: splitByDateline(pastPoints),
-      future: splitByDateline(futurePoints),
-    };
+    // 날짜변경선 기준으로 여러 선분으로 분리해 반환 (단일 선분 배열)
+    return splitByDateline(points);
   } catch (error) {
     console.error("[issUtils] 궤적 계산 실패:", error); // TODO: 배포 전 제거
-    return { past: [], future: [] };
+    return [];
   }
 }
