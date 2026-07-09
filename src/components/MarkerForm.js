@@ -16,7 +16,7 @@
 //   - /api/markers (등록)
 // ─────────────────────────────────────────────────────────────
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import LeafletMapWrapper from "@/components/LeafletMapWrapper";
 import { getContinentByCountry } from "@/lib/continentUtils";
 import { getAdminIdToken } from "@/lib/clientAuth";
@@ -96,6 +96,11 @@ export default function MarkerForm({ onRegistered }) {
   const [isLive, setIsLive] = useState(true);
   // 지도 중심/줌 (국가 선택 시 해당 국가 전체로 이동/확대하는 데 사용)
   const [mapView, setMapView] = useState({ center: DEFAULT_CENTER, zoom: 4 });
+  // 역지오코딩(클릭 위치 → 도시/국가/대륙 자동입력) 진행 상태 + 결과 안내
+  const [geocoding, setGeocoding] = useState(false);
+  const [geocodeNote, setGeocodeNote] = useState("");
+  // 여러 번 빠르게 클릭할 때 "가장 최근 클릭"의 결과만 반영하기 위한 요청 번호
+  const geocodeReqRef = useRef(0);
   // 장소 특성 태그 (지역 분류와 별개, 최대 3개)
   const [tags, setTags] = useState([]);
 
@@ -179,16 +184,88 @@ export default function MarkerForm({ onRegistered }) {
     };
   }, [youtubeUrl]);
 
-  // ─── 지도 클릭 → 좌표 반영 ───────────────────────────────────
+  // ─── 지도 클릭 → 좌표 반영 + 도시/국가/대륙 자동입력 ─────────
   function handleMapClick(coord) {
     try {
       if (coord && typeof coord.lat === "number" && typeof coord.lng === "number") {
         // 소수점 6자리로 정리해 입력창에 반영
         setLat(coord.lat.toFixed(6));
         setLng(coord.lng.toFixed(6));
+        // 클릭한 위치의 도시/국가/대륙을 역지오코딩으로 자동 채운다(참고용, 수정 가능).
+        reverseGeocodeFill(coord.lat, coord.lng);
       }
     } catch (error) {
       console.error("[MarkerForm] 지도 클릭 좌표 반영 실패:", error); // TODO: 배포 전 제거
+    }
+  }
+
+  // ─── 역지오코딩: 좌표 → 도시/국가/대륙 자동입력 ──────────────
+  // 서버 라우트(/api/geocode/reverse)가 OSM Nominatim(무료)으로 변환해 돌려준다.
+  // 결과는 "참고용 자동입력"이며 부정확하면 관리자가 그 자리에서 수정한다.
+  async function reverseGeocodeFill(lat, lng) {
+    // 이 호출의 고유 번호(가장 최근 클릭 결과만 반영하기 위함)
+    const reqId = ++geocodeReqRef.current;
+    setGeocoding(true);
+    setGeocodeNote("");
+    try {
+      // 관리자 토큰 확보 (없으면 조용히 건너뜀 — 자동입력은 부가 기능)
+      const token = await getAdminIdToken();
+      if (!token) {
+        if (reqId === geocodeReqRef.current) setGeocoding(false);
+        return;
+      }
+
+      const res = await fetch(
+        `/api/geocode/reverse?lat=${encodeURIComponent(
+          lat
+        )}&lng=${encodeURIComponent(lng)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data = await res.json();
+
+      // 더 최근의 클릭이 있었다면 이 오래된 응답은 버린다.
+      if (reqId !== geocodeReqRef.current) return;
+
+      if (res.ok && data.ok) {
+        // 도시명 (있으면 덮어씀 — 클릭한 위치가 기준)
+        if (data.city) setCity(data.city);
+        // 대륙 (continentUtils 로 계산되어 옴)
+        if (data.continent) setContinent(data.continent);
+        // 국가: 우리 드롭다운 목록(COUNTRIES)에 있는 코드만 선택, 없으면 비워 직접 선택 유도
+        if (
+          data.countryCode &&
+          COUNTRIES.some((c) => c.code === data.countryCode)
+        ) {
+          setCountry(data.countryCode);
+        } else {
+          setCountry("");
+        }
+
+        // 안내 문구
+        if (data.city || data.countryCode) {
+          const label = [data.city, data.countryCode]
+            .filter(Boolean)
+            .join(", ");
+          setGeocodeNote(
+            `자동입력됨: ${label} — 정확하지 않으면 직접 수정하세요.`
+          );
+        } else {
+          setGeocodeNote(
+            "이 위치의 도시명을 찾지 못했습니다. 도시를 직접 입력해 주세요."
+          );
+        }
+      } else {
+        setGeocodeNote(
+          data.error || "도시명 자동입력에 실패했습니다. 직접 입력해 주세요."
+        );
+      }
+    } catch (error) {
+      console.error("[MarkerForm] 역지오코딩 실패:", error); // TODO: 배포 전 제거
+      if (reqId === geocodeReqRef.current) {
+        setGeocodeNote("도시명 자동입력 중 오류가 발생했습니다. 직접 입력해 주세요.");
+      }
+    } finally {
+      if (reqId === geocodeReqRef.current) setGeocoding(false);
     }
   }
 
@@ -241,6 +318,8 @@ export default function MarkerForm({ onRegistered }) {
     setContinent("");
     setIsLive(true);
     setTags([]);
+    setGeocodeNote("");
+    setGeocoding(false);
   }
 
   // ─── 등록 처리 (POST /api/markers) ───────────────────────────
@@ -483,8 +562,8 @@ export default function MarkerForm({ onRegistered }) {
           3. 위치 지정 <span className="text-red-500">*</span>
         </label>
         <p className="text-xs text-gray-500">
-          지도를 클릭하면 그 지점의 좌표가 자동 입력됩니다. 위에서 국가를 선택하면 지도가 그 국가로 이동하니,
-          클릭으로 정확한 위치를 지정하세요. 아래 입력창에서 미세 조정도 가능합니다.
+          지도를 클릭하면 그 지점의 좌표와 함께 <strong>도시·국가·대륙이 자동으로 채워집니다</strong>
+          (부정확하면 직접 수정). 위에서 국가를 선택하면 지도가 그 국가로 이동하니, 클릭으로 정확한 위치를 지정하세요.
         </p>
 
         {/* 지도 (크게 — 왼쪽 절반 폭을 거의 채움) */}
@@ -497,6 +576,20 @@ export default function MarkerForm({ onRegistered }) {
             selectedMarkerId={hasValidCoord ? "selected" : null}
           />
         </div>
+
+        {/* 역지오코딩(자동입력) 진행/결과 안내 */}
+        {geocoding && (
+          <p className="flex items-center gap-2 text-xs text-gray-500">
+            <span
+              className="inline-block h-3 w-3 flex-none animate-spin rounded-full border-2 border-gray-300 border-t-brand"
+              aria-hidden="true"
+            />
+            📍 클릭한 위치의 도시·국가를 불러오는 중...
+          </p>
+        )}
+        {!geocoding && geocodeNote && (
+          <p className="text-xs text-gray-500">{geocodeNote}</p>
+        )}
 
         {/* 위도/경도 입력 (직접 수정 가능) */}
         <div className="grid grid-cols-2 gap-3">
