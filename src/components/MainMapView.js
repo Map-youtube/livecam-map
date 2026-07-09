@@ -5,50 +5,27 @@
 //
 // props: markers(배열), tags(배열)
 //
-// 레이아웃:
-//   - 패널 닫힘: 왼쪽 10% 트리 + 나머지 90% 지도
-//   - 패널 열림: 왼쪽 10% 트리 + 중간 30% 영상 목록 패널 + 나머지 60% 지도
+// 지도 영역은 MapView(2D Leaflet / 3D Cesium 통합)를 사용한다. 2D/3D 전환은
+// 우측 상단 토글 버튼 하나로 하며, 상태는 localStorage(livecam_map_mode)에 저장된다.
+// 카테고리 트리/마커/영상 카드 클릭은 "지금 2D인지 3D인지 신경 쓰지 않고"
+// mapRef 의 공통 인터페이스(flyToLocation/focusMarker/highlightSelection)만 호출한다.
 //
-// 패널 열기: 도시 클릭(selectedCity) 또는 태그 클릭(selectedTag).
-//   - 도시/태그는 서로 배타적 — 하나를 고르면 다른 종류의 선택은 해제.
-// 패널 닫기: 패널 X 버튼 또는 지도 빈 곳 클릭(onMapClick) → 선택 상태도 초기화.
-//
-// 필터링은 이미 받은 markers 배열을 클라이언트에서 걸러내기만 한다 (추가 API 호출 없음).
+// 레이어 토글(ISS/지진/오로라/자연재해) 상태는 이 컴포넌트에서 관리하고 MapView 에 전달한다.
+// (2D↔3D 를 오가도 켜둔 토글 상태가 유지됨)
 // ─────────────────────────────────────────────────────────────
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import dynamic from "next/dynamic";
-import Link from "next/link";
-import LeafletMapWrapper from "@/components/LeafletMapWrapper";
+import MapView from "@/components/MapView";
 import MainCategoryTree from "@/components/MainCategoryTree";
 import VideoListPanel from "@/components/VideoListPanel";
 import IssVideoPanel from "@/components/IssVideoPanel";
 import LiveDot from "@/components/LiveDot";
 
-// 지도 오버레이 레이어들은 Leaflet(브라우저 전용)을 직접 사용하므로 ssr:false 로 로드한다.
-const IssTracker = dynamic(() => import("@/components/IssTracker"), {
-  ssr: false,
-});
-const EarthquakeLayer = dynamic(() => import("@/components/EarthquakeLayer"), {
-  ssr: false,
-});
-const AuroraLayer = dynamic(() => import("@/components/AuroraLayer"), {
-  ssr: false,
-});
-const NaturalEventsLayer = dynamic(
-  () => import("@/components/NaturalEventsLayer"),
-  { ssr: false }
-);
-
-// 대륙 코드 → 한국어 라벨 (패널 제목/지역 표시에 사용)
-const CONTINENT_LABELS = {
-  asia: "아시아",
-  europe: "유럽",
-  americas: "아메리카",
-  africa: "아프리카",
-  oceania: "오세아니아",
-  middleeast: "중동",
-};
+// 지도 기본 중심/줌 (최초 표시)
+const DEFAULT_CENTER = { lat: 20, lng: 0 };
+const DEFAULT_ZOOM = 2;
+// 2D/3D 모드 저장 키
+const MODE_STORAGE_KEY = "livecam_map_mode";
 
 // 레이어 토글 버튼 공통 스타일 (켜짐=파랑 강조 / 꺼짐=흰색)
 function toggleBtnClass(on) {
@@ -65,80 +42,103 @@ export default function MainMapView({ markers, tags }) {
   const tagList = Array.isArray(tags) ? tags : [];
 
   // 선택 상태 (도시/태그는 배타적으로 하나만 활성)
-  //   selectedCity: { continent, country, city } | null
-  //   selectedTag : "야경" | null
   const [selectedCity, setSelectedCity] = useState(null);
   const [selectedTag, setSelectedTag] = useState(null);
-
-  // 카드에서 펼쳐진(재생 중인) 마커 id (없으면 null)
+  // 카드에서 펼쳐진(재생 중인) 마커 id
   const [expandedMarkerId, setExpandedMarkerId] = useState(null);
-  // 카드 클릭으로 지도를 이동시킬 때 사용할 중심/줌 (null 이면 기본값 유지)
-  const [mapCenter, setMapCenter] = useState(null);
-  const [mapZoom, setMapZoom] = useState(null);
 
-  // ─── ISS 추적 상태 ───────────────────────────────────────────
-  // issMap: LeafletMap 이 준비되면 전달하는 실제 지도 인스턴스
-  // issEnabled: ISS 추적 표시 여부 (기본 켜짐)
-  const [issMap, setIssMap] = useState(null);
-  const [issEnabled, setIssEnabled] = useState(true);
+  // 2D/3D 모드 ('2d' | '3d') — 초기값은 effect 에서 localStorage 로부터 로드
+  const [mode, setMode] = useState("2d");
+  // 지도 공통 인터페이스 ref (MapView 가 flyToLocation/focusMarker/highlightSelection 제공)
+  const mapRef = useRef(null);
 
-  // ─── 자연현상 오버레이 토글 (기본 전부 꺼짐 — 필요 시 true 로 쉽게 변경 가능) ──
+  // ─── 레이어 토글 (기본 전부 꺼짐, 2D↔3D 전환해도 상태 유지) ──
+  const [issEnabled, setIssEnabled] = useState(false); // ISS
   const [eqEnabled, setEqEnabled] = useState(false); // 지진
   const [auroraEnabled, setAuroraEnabled] = useState(false); // 오로라
   const [disasterEnabled, setDisasterEnabled] = useState(false); // 자연재해
 
-  // ─── ISS(Space) 선택 상태 ────────────────────────────────────
-  // issSelected: 트리 Space>ISS 또는 지도 ISS 마커를 선택해 NASA 라이브 패널이 열린 상태
-  // issInfo    : 패널 상단에 표시할 현재 ISS 위치 정보 (열려 있을 때만 갱신)
+  // ─── ISS(Space) 선택 상태 (NASA 라이브 패널) ─────────────────
   const [issSelected, setIssSelected] = useState(false);
   const [issInfo, setIssInfo] = useState(null);
-  // NASA 라이브 영상 목록 (트리 개수 배지 + ISS 패널이 공유). null=아직 로딩 전
   const [issVideos, setIssVideos] = useState(null);
-  // 최신 ISS 위치(2초마다 갱신)를 리렌더 없이 보관 → 선택 시점에 지도 이동 기준값으로 사용
-  const issPositionRef = useRef(null);
-  // 현재 ISS 선택 여부를 콜백(2초 주기)에서 즉시 참조하기 위한 ref
-  const issSelectedRef = useRef(false);
+  const issPositionRef = useRef(null); // 최신 ISS 위치(리렌더 없이 보관)
+  const issSelectedRef = useRef(false); // 콜백에서 즉시 참조
 
-  // 패널 열림 여부 = 도시/태그/ISS 중 하나라도 선택됨
+  // 패널 열림 여부
   const isPanelOpen =
     selectedCity !== null || selectedTag !== null || issSelected;
 
-  // 지도 기본 중심/줌 (카드로 이동 지정 전)
-  const DEFAULT_CENTER = { lat: 20, lng: 0 };
-  const DEFAULT_ZOOM = 2;
+  // ─── 저장된 지도 모드 로드 (마운트 1회, 클라이언트 전용) ─────
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(MODE_STORAGE_KEY);
+      if (saved === "2d" || saved === "3d") setMode(saved);
+    } catch (error) {
+      console.error("[MainMapView] 지도 모드 로드 실패:", error); // TODO: 배포 전 제거
+    }
+  }, []);
 
-  // ─── 지역(도시) 선택 → 도시 필터, 태그 선택 해제 ─────────────
+  // ─── 2D/3D 토글 (+ localStorage 저장) ────────────────────────
+  const toggleMode = useCallback(() => {
+    setMode((prev) => {
+      const next = prev === "2d" ? "3d" : "2d";
+      try {
+        window.localStorage.setItem(MODE_STORAGE_KEY, next);
+      } catch (error) {
+        console.error("[MainMapView] 지도 모드 저장 실패:", error); // TODO: 배포 전 제거
+      }
+      return next;
+    });
+  }, []);
+
+  // ─── 지역(대륙/국가/도시) 선택 → 포커싱(2D/3D 공통) ──────────
   const handleSelectLocation = useCallback((selection) => {
     try {
-      // 도시까지 선택된 경우에만 패널을 연다 (대륙/국가만 클릭한 경우는 펼치기용)
-      if (selection && selection.city) {
+      if (!selection) return;
+
+      if (selection.city) {
+        // 도시 선택 → 패널 열기 + 그 도시로 포커싱
         setSelectedCity({
           continent: selection.continent || "",
           country: selection.country || "",
           city: selection.city,
         });
         setSelectedTag(null);
-        // ISS 선택도 해제 (배타적)
         setIssSelected(false);
         issSelectedRef.current = false;
-        // 필터가 바뀌면 이전에 펼쳐진 영상 상태는 초기화 (지도 위치는 유지)
         setExpandedMarkerId(null);
+        if (mapRef.current) {
+          mapRef.current.highlightSelection("city", {
+            continent: selection.continent || "",
+            country: selection.country || "",
+            city: selection.city,
+          });
+        }
+      } else if (selection.country) {
+        // 국가만 클릭 → 그 국가로 포커싱 (패널은 열지 않음)
+        if (mapRef.current) {
+          mapRef.current.highlightSelection("country", selection.country);
+        }
+      } else if (selection.continent) {
+        // 대륙만 클릭 → 그 대륙으로 포커싱
+        if (mapRef.current) {
+          mapRef.current.highlightSelection("continent", selection.continent);
+        }
       }
     } catch (error) {
       console.error("[MainMapView] 지역 선택 처리 실패:", error); // TODO: 배포 전 제거
     }
   }, []);
 
-  // ─── 태그 선택 → 태그 필터, 도시 선택 해제 ───────────────────
+  // ─── 태그 선택 → 태그 필터 ───────────────────────────────────
   const handleSelectTag = useCallback((tagName) => {
     try {
       if (tagName) {
         setSelectedTag(tagName);
         setSelectedCity(null);
-        // ISS 선택도 해제 (배타적)
         setIssSelected(false);
         issSelectedRef.current = false;
-        // 필터가 바뀌면 이전에 펼쳐진 영상 상태는 초기화 (지도 위치는 유지)
         setExpandedMarkerId(null);
       }
     } catch (error) {
@@ -146,23 +146,20 @@ export default function MainMapView({ markers, tags }) {
     }
   }, []);
 
-  // ─── 패널 닫기 (선택/영상 상태 초기화) ───────────────────────
+  // ─── 패널 닫기 ───────────────────────────────────────────────
   const closePanel = useCallback(() => {
     try {
       setSelectedCity(null);
       setSelectedTag(null);
-      // ISS 선택도 해제
       setIssSelected(false);
       issSelectedRef.current = false;
-      // 패널을 닫으면 펼쳐진 영상 상태도 함께 초기화
       setExpandedMarkerId(null);
     } catch (error) {
       console.error("[MainMapView] 패널 닫기 실패:", error); // TODO: 배포 전 제거
     }
   }, []);
 
-  // ─── 지도 빈 곳 클릭 → 패널 닫기 ─────────────────────────────
-  // LeafletMap 은 마커가 아닌 빈 곳 클릭만 onMapClick 으로 전달한다.
+  // ─── 지도 빈 곳 클릭 → 패널 닫기 (2D/3D 공통) ────────────────
   const handleMapClick = useCallback(() => {
     try {
       closePanel();
@@ -171,36 +168,21 @@ export default function MainMapView({ markers, tags }) {
     }
   }, [closePanel]);
 
-  // ─── 카드 클릭 처리 (영상 펼치기 + 지도 이동) ────────────────
-  // - marker 가 null(접기 버튼): 영상만 접고 지도 위치는 그대로 유지.
-  // - 이미 펼쳐진 카드를 다시 클릭: 접기만 하고 지도 위치는 그대로 유지.
-  // - 새 카드 선택: 그 카드로 펼치고 지도를 그 마커의 좌표로 이동/확대.
+  // ─── 영상 카드 클릭 (영상 펼치기 + 그 마커로 이동, 2D/3D 공통) ──
   const handleSelectMarker = useCallback(
     (marker) => {
       try {
-        // 접기 버튼(null) → 영상만 접기, 지도 유지
         if (!marker) {
-          setExpandedMarkerId(null);
+          setExpandedMarkerId(null); // 접기
           return;
         }
-
-        // 같은 카드를 다시 클릭 → 접기, 지도 유지
         if (marker.id === expandedMarkerId) {
-          setExpandedMarkerId(null);
+          setExpandedMarkerId(null); // 같은 카드 재클릭 → 접기
           return;
         }
-
-        // 새 카드 선택 → 펼치기 + 그 마커의 "자기 좌표"로 지도 이동/확대
-        // (반복문 밖 고정 좌표가 아니라, 클릭된 marker 자신의 lat/lng 를 사용)
-        const lat = Number(marker.lat);
-        const lng = Number(marker.lng);
-
         setExpandedMarkerId(marker.id);
-
-        if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
-          setMapCenter({ lat, lng });
-          setMapZoom(14); // 충분히 확대
-        }
+        // ⚠️ 클릭된 marker "자신"의 좌표로 이동 (반복문 클로저 고정값 아님)
+        if (mapRef.current) mapRef.current.focusMarker(marker);
       } catch (error) {
         console.error("[MainMapView] 카드 선택 처리 실패:", error); // TODO: 배포 전 제거
       }
@@ -208,18 +190,7 @@ export default function MainMapView({ markers, tags }) {
     [expandedMarkerId]
   );
 
-  // ─── 지도 인스턴스 준비 → ISS 레이어에 전달 ──────────────────
-  const handleMapReady = useCallback((mapInstance) => {
-    try {
-      setIssMap(mapInstance);
-    } catch (error) {
-      console.error("[MainMapView] 지도 준비 처리 실패:", error); // TODO: 배포 전 제거
-    }
-  }, []);
-
-  // ─── ISS 위치 갱신 수신 (IssTracker 가 2초마다 호출) ─────────
-  // 리렌더 폭주를 막기 위해 항상 ref 에만 저장하고,
-  // ISS 패널이 열려 있을 때만 상단 정보(issInfo) state 를 갱신한다.
+  // ─── ISS 위치 갱신 수신 (MapView → 2초마다) ──────────────────
   const handleIssPosition = useCallback((d) => {
     try {
       issPositionRef.current = d;
@@ -229,33 +200,48 @@ export default function MainMapView({ markers, tags }) {
     }
   }, []);
 
-  // ─── ISS(Space) 선택 → NASA 라이브 패널 열기 + 지도 이동 ─────
-  // 트리 Space>ISS 클릭과 지도 ISS 마커 클릭이 모두 이 핸들러를 호출한다(동일 동작).
+  // ─── ISS(Space) 선택 → NASA 라이브 패널 + 지도 이동 (2D/3D 공통) ─
   const handleSelectIss = useCallback(() => {
     try {
-      // 다른 선택은 해제 (배타적)
       setSelectedCity(null);
       setSelectedTag(null);
       setExpandedMarkerId(null);
       setIssSelected(true);
       issSelectedRef.current = true;
 
-      // 현재 ISS 위치가 있으면 그 위치로 지도 이동 + 패널 상단 정보 세팅
       const pos = issPositionRef.current;
       if (pos && typeof pos.lat === "number" && typeof pos.lng === "number") {
-        setMapCenter({ lat: pos.lat, lng: pos.lng });
-        setMapZoom(4);
         setIssInfo(pos);
+        if (mapRef.current) {
+          mapRef.current.flyToLocation({ lat: pos.lat, lng: pos.lng, zoom: 4 });
+        }
       }
     } catch (error) {
       console.error("[MainMapView] ISS 선택 처리 실패:", error); // TODO: 배포 전 제거
     }
   }, []);
 
+  // ─── 지도 마커 직접 클릭 (2D/3D 공통) ────────────────────────
+  // 트리 도시 클릭과 동일 결과: 그 도시로 패널 열기 + 클릭 마커 펼침.
+  // (이미 마커를 클릭했으므로 지도 추가 이동은 하지 않는다)
+  const handleMarkerClick = useCallback((marker) => {
+    try {
+      if (!marker) return;
+      setSelectedCity({
+        continent: marker.continent || "",
+        country: marker.country || "",
+        city: marker.city || "",
+      });
+      setSelectedTag(null);
+      setIssSelected(false);
+      issSelectedRef.current = false;
+      setExpandedMarkerId(marker.id);
+    } catch (error) {
+      console.error("[MainMapView] 지도 마커 클릭 처리 실패:", error); // TODO: 배포 전 제거
+    }
+  }, []);
+
   // ─── NASA 라이브 목록 로드 + 5분마다 자동 갱신 ───────────────
-  // 트리의 Space/ISS 개수 배지와 ISS 패널이 이 목록을 공유한다(호출 1곳으로 통합).
-  // 서버 라우트가 5분 캐시라, 방문자가 5분마다 호출해도 videos.list 는 5분 1회.
-  // ⚠️ interval 은 언마운트 시 반드시 clearInterval (누수/중복 방지).
   useEffect(() => {
     let cancelled = false;
     let timer = null;
@@ -272,8 +258,8 @@ export default function MainMapView({ markers, tags }) {
       }
     }
 
-    loadIssVideos(); // 즉시 1회
-    timer = setInterval(loadIssVideos, 5 * 60 * 1000); // 5분마다 갱신
+    loadIssVideos();
+    timer = setInterval(loadIssVideos, 5 * 60 * 1000);
 
     return () => {
       cancelled = true;
@@ -281,35 +267,10 @@ export default function MainMapView({ markers, tags }) {
     };
   }, []);
 
-  // ─── 지도 마커 직접 클릭 처리 (경로 B) ───────────────────────
-  // 트리에서 도시를 클릭한 것(경로 A)과 "동일한 결과 화면"이 되도록 통합한다:
-  //   1) 그 마커의 도시로 selectedCity 설정 → 트리 강조/자동 펼침 + 패널 열림
-  //   2) 그 마커를 expandedMarkerId 로 설정 → 카드 자동 펼침 + 영상 재생
-  // ⚠️ 이미 지도에서 클릭했으므로 mapCenter/mapZoom 은 다시 설정하지 않는다(화면 튐 방지).
-  //    selectedMarkerId 는 expandedMarkerId 를 통해 지도로 전달되어 강조가 갱신된다.
-  const handleMarkerClick = useCallback((marker) => {
-    try {
-      if (!marker) return;
-      setSelectedCity({
-        continent: marker.continent || "",
-        country: marker.country || "",
-        city: marker.city || "",
-      });
-      setSelectedTag(null);
-      // ISS 선택도 해제 (배타적)
-      setIssSelected(false);
-      issSelectedRef.current = false;
-      setExpandedMarkerId(marker.id);
-    } catch (error) {
-      console.error("[MainMapView] 지도 마커 클릭 처리 실패:", error); // TODO: 배포 전 제거
-    }
-  }, []);
-
-  // ─── 현재 선택 기준으로 필터링된 마커 ────────────────────────
+  // ─── 현재 선택 기준 필터링된 마커 ────────────────────────────
   const filteredMarkers = useMemo(() => {
     try {
       if (selectedCity) {
-        // 도시명 + 국가 + 대륙까지 함께 비교 (다른 나라의 동명 도시 혼입 방지)
         return markerList.filter(
           (m) =>
             m &&
@@ -332,21 +293,14 @@ export default function MainMapView({ markers, tags }) {
 
   // ─── 패널 제목 ───────────────────────────────────────────────
   const panelTitle = useMemo(() => {
-    if (selectedCity) {
-      return `${selectedCity.city} (${filteredMarkers.length})`;
-    }
-    if (selectedTag) {
-      return `#${selectedTag} (${filteredMarkers.length})`;
-    }
+    if (selectedCity) return `${selectedCity.city} (${filteredMarkers.length})`;
+    if (selectedTag) return `#${selectedTag} (${filteredMarkers.length})`;
     return "";
   }, [selectedCity, selectedTag, filteredMarkers]);
 
   return (
-    // 세로 flex: 상단 헤더 + 나머지(flex-1) 콘텐츠 → 헤더 높이만큼 자동으로 빠진다.
-    // ⚠️ 모바일 기초 안전장치: 각 패널에 min-width 를 둬서 좁은 화면에서도 요소가 찌그러지지 않게 한다.
-    //    (본격적인 모바일 전용 UI — 하단 드로어 방식 등 — 는 추후 디자인 작업에서 진행 예정)
     <div className="flex h-screen flex-col bg-bg">
-      {/* 상단 헤더 바 (얇게, 로고 텍스트) */}
+      {/* 상단 헤더 바 */}
       <header className="flex h-12 flex-shrink-0 items-center gap-2 border-b border-border bg-surface px-4">
         <LiveDot size="sm" />
         <span className="font-display text-base font-bold tracking-tight text-ink">
@@ -355,18 +309,11 @@ export default function MainMapView({ markers, tags }) {
         <span className="hidden text-xs text-ink-muted sm:inline">
           세계 라이브 지도
         </span>
-        {/* 3D 우주 지도(/space-map)로 이동 */}
-        <Link
-          href="/space-map"
-          className="ml-auto rounded-md border border-brand bg-brand px-3 py-1.5 text-xs font-medium text-white shadow-card transition hover:bg-brand-hover"
-        >
-          🌐 3D로 보기
-        </Link>
       </header>
 
-      {/* 콘텐츠 영역 (남은 높이 전부) */}
+      {/* 콘텐츠 영역 */}
       <div className="flex min-h-0 flex-1 overflow-x-auto">
-        {/* 왼쪽: 카테고리 트리 (10%, 최소 200px) */}
+        {/* 왼쪽: 카테고리 트리 */}
         <aside className="h-full w-[10%] min-w-[200px] overflow-auto border-r border-border bg-surface">
           <MainCategoryTree
             markers={markerList}
@@ -381,7 +328,7 @@ export default function MainMapView({ markers, tags }) {
           />
         </aside>
 
-        {/* 중간: 패널 (열렸을 때만, 30%) — ISS 선택 시 NASA 라이브, 그 외 라이브캠 목록 */}
+        {/* 중간: 패널 (ISS 선택 시 NASA 라이브, 그 외 라이브캠 목록) */}
         {isPanelOpen && (
           <section className="h-full w-[30%] min-w-[260px] overflow-hidden border-r border-border bg-bg">
             {issSelected ? (
@@ -402,22 +349,36 @@ export default function MainMapView({ markers, tags }) {
           </section>
         )}
 
-        {/* 오른쪽: 지도 (패널 열림 시 60%, 닫힘 시 90%) */}
+        {/* 오른쪽: 지도 (2D/3D 통합) */}
         <main className="relative h-full flex-1">
-          {/* 카드로 이동 지정이 있으면 그 좌표/줌을, 없으면 기본 세계 뷰를 사용 */}
-          <LeafletMapWrapper
+          <MapView
+            ref={mapRef}
+            mode={mode}
             markers={markerList}
-            center={mapCenter || DEFAULT_CENTER}
-            zoom={mapZoom || DEFAULT_ZOOM}
-            onMapClick={handleMapClick}
-            onMarkerClick={handleMarkerClick}
             selectedMarkerId={expandedMarkerId}
-            onMapReady={handleMapReady}
+            issEnabled={issEnabled}
+            eqEnabled={eqEnabled}
+            auroraEnabled={auroraEnabled}
+            disasterEnabled={disasterEnabled}
+            onMarkerClick={handleMarkerClick}
+            onMapClick={handleMapClick}
+            onIssClick={handleSelectIss}
+            onIssPosition={handleIssPosition}
+            defaultCenter={DEFAULT_CENTER}
+            defaultZoom={DEFAULT_ZOOM}
           />
 
-          {/* 레이어 토글 버튼 그룹 (우측 상단 — 줌 버튼은 좌측 상단이라 겹치지 않음) */}
-          {/* 각 버튼 독립 on/off. 켜짐=파랑 강조, 꺼짐=흰색. 좁으면 자동 줄바꿈. */}
+          {/* 우측 상단: 2D/3D 토글 + 레이어 토글 4종 (위치·스타일 유지) */}
           <div className="absolute right-3 top-3 z-[1000] flex flex-wrap justify-end gap-2">
+            {/* 2D/3D 전환 (버튼 하나) */}
+            <button
+              type="button"
+              onClick={toggleMode}
+              className={toggleBtnClass(mode === "3d")}
+              title="2D 지도 ↔ 3D 지구본 전환"
+            >
+              {mode === "3d" ? "🗺️ 2D 보기" : "🌐 3D 보기"}
+            </button>
             <button
               type="button"
               onClick={() => setIssEnabled((v) => !v)}
@@ -451,20 +412,6 @@ export default function MainMapView({ markers, tags }) {
               🔥 자연재해
             </button>
           </div>
-
-          {/* ISS 실시간 위치·궤적 레이어 (enabled=false 면 타이머 정지+레이어 제거) */}
-          {/* onIssClick: 마커 클릭 시 NASA 라이브 패널 오픈 / onPositionUpdate: 최신 좌표 수신 */}
-          <IssTracker
-            map={issMap}
-            enabled={issEnabled}
-            onIssClick={handleSelectIss}
-            onPositionUpdate={handleIssPosition}
-          />
-
-          {/* 실시간 자연현상 오버레이 3종 (꺼져 있으면 API 호출·타이머 없음) */}
-          <EarthquakeLayer map={issMap} enabled={eqEnabled} />
-          <AuroraLayer map={issMap} enabled={auroraEnabled} />
-          <NaturalEventsLayer map={issMap} enabled={disasterEnabled} />
         </main>
       </div>
     </div>
