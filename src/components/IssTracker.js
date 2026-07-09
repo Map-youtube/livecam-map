@@ -273,35 +273,15 @@ export default function IssTracker({ map, enabled = true }) {
     }
 
     // ── 궤적 재계산 (미래 구간만) ──
+    // ⚠️ 궤적선은 "오직 TLE 계산 좌표"로만 그린다.
+    //    (과거에 실측 위치를 선 앞에 붙이는 prepend 보정이 있었으나, 실측점과 계산점의
+    //     미세한 차이로 궤적 중간에 V자 꼭짓점/비정상 직선이 생기는 버그의 주원인이라 제거함.
+    //     20초 간격 촘촘한 계산만으로 마커와의 정합은 충분하다.)
     function recomputeTrajectory() {
       try {
         if (!satrecRef.current) return; // TLE 아직 없음
         const segments = getIssTrajectory(satrecRef.current);
         if (cancelled) return;
-
-        // 선 시작점을 마커 실측 위치에 고정:
-        //   현재 마커의 실측 좌표(WTIA/Open Notify 응답 lat/lng)를 첫 선분 맨 앞에 추가한다.
-        //   → TLE 계산 첫 점과 실측 위치의 미세한 차이로 선이 마커에서 떨어져 보이는 문제 보정.
-        //   단, 실측점과 첫 계산점의 경도차가 180도를 넘으면(날짜변경선 근처) 지도를 가로지르는
-        //   오동작이 나므로 prepend 하지 않는다.
-        try {
-          const d = lastDataRef.current;
-          if (
-            d &&
-            typeof d.lat === "number" &&
-            typeof d.lng === "number" &&
-            segments.length > 0 &&
-            segments[0].length > 0
-          ) {
-            const firstCalc = segments[0][0]; // [lat, lng]
-            if (Math.abs(d.lng - firstCalc[1]) <= 180) {
-              segments[0].unshift([d.lat, d.lng]);
-            }
-          }
-        } catch (prependError) {
-          console.error("[IssTracker] 궤적 시작점 보정 실패:", prependError); // TODO: 배포 전 제거
-        }
-
         drawLines(segments);
       } catch (error) {
         console.error("[IssTracker] 궤적 재계산 실패:", error); // TODO: 배포 전 제거
