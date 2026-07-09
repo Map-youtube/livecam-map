@@ -24,10 +24,20 @@ import VideoListPanel from "@/components/VideoListPanel";
 import IssVideoPanel from "@/components/IssVideoPanel";
 import LiveDot from "@/components/LiveDot";
 
-// ISS 추적 레이어는 Leaflet(브라우저 전용)을 직접 사용하므로 ssr:false 로 로드한다.
+// 지도 오버레이 레이어들은 Leaflet(브라우저 전용)을 직접 사용하므로 ssr:false 로 로드한다.
 const IssTracker = dynamic(() => import("@/components/IssTracker"), {
   ssr: false,
 });
+const EarthquakeLayer = dynamic(() => import("@/components/EarthquakeLayer"), {
+  ssr: false,
+});
+const AuroraLayer = dynamic(() => import("@/components/AuroraLayer"), {
+  ssr: false,
+});
+const NaturalEventsLayer = dynamic(
+  () => import("@/components/NaturalEventsLayer"),
+  { ssr: false }
+);
 
 // 대륙 코드 → 한국어 라벨 (패널 제목/지역 표시에 사용)
 const CONTINENT_LABELS = {
@@ -38,6 +48,16 @@ const CONTINENT_LABELS = {
   oceania: "오세아니아",
   middleeast: "중동",
 };
+
+// 레이어 토글 버튼 공통 스타일 (켜짐=파랑 강조 / 꺼짐=흰색)
+function toggleBtnClass(on) {
+  return (
+    "rounded-md border px-3 py-1.5 text-sm font-medium shadow-card transition " +
+    (on
+      ? "border-brand bg-brand text-white hover:bg-brand-hover"
+      : "border-border bg-surface text-ink hover:bg-bg")
+  );
+}
 
 export default function MainMapView({ markers, tags }) {
   const markerList = Array.isArray(markers) ? markers : [];
@@ -60,6 +80,11 @@ export default function MainMapView({ markers, tags }) {
   // issEnabled: ISS 추적 표시 여부 (기본 켜짐)
   const [issMap, setIssMap] = useState(null);
   const [issEnabled, setIssEnabled] = useState(true);
+
+  // ─── 자연현상 오버레이 토글 (기본 전부 꺼짐 — 필요 시 true 로 쉽게 변경 가능) ──
+  const [eqEnabled, setEqEnabled] = useState(false); // 지진
+  const [auroraEnabled, setAuroraEnabled] = useState(false); // 오로라
+  const [disasterEnabled, setDisasterEnabled] = useState(false); // 자연재해
 
   // ─── ISS(Space) 선택 상태 ────────────────────────────────────
   // issSelected: 트리 Space>ISS 또는 지도 ISS 마커를 선택해 NASA 라이브 패널이 열린 상태
@@ -382,20 +407,42 @@ export default function MainMapView({ markers, tags }) {
             onMapReady={handleMapReady}
           />
 
-          {/* ISS 추적 토글 (우측 상단 — 줌 버튼은 좌측 상단이라 겹치지 않음) */}
-          <button
-            type="button"
-            onClick={() => setIssEnabled((v) => !v)}
-            className={
-              "absolute right-3 top-3 z-[1000] rounded-md border px-3 py-1.5 text-sm font-medium shadow-card transition " +
-              (issEnabled
-                ? "border-brand bg-brand text-white hover:bg-brand-hover"
-                : "border-border bg-surface text-ink hover:bg-bg")
-            }
-            title="ISS(국제우주정거장) 실시간 위치 추적 켜기/끄기"
-          >
-            🛰️ ISS 추적 {issEnabled ? "켜짐" : "꺼짐"}
-          </button>
+          {/* 레이어 토글 버튼 그룹 (우측 상단 — 줌 버튼은 좌측 상단이라 겹치지 않음) */}
+          {/* 각 버튼 독립 on/off. 켜짐=파랑 강조, 꺼짐=흰색. 좁으면 자동 줄바꿈. */}
+          <div className="absolute right-3 top-3 z-[1000] flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setIssEnabled((v) => !v)}
+              className={toggleBtnClass(issEnabled)}
+              title="ISS(국제우주정거장) 실시간 위치 추적 켜기/끄기"
+            >
+              🛰️ ISS 추적
+            </button>
+            <button
+              type="button"
+              onClick={() => setEqEnabled((v) => !v)}
+              className={toggleBtnClass(eqEnabled)}
+              title="실시간 지진(규모 4.5+, 최근 24시간) 표시 켜기/끄기"
+            >
+              🌍 지진
+            </button>
+            <button
+              type="button"
+              onClick={() => setAuroraEnabled((v) => !v)}
+              className={toggleBtnClass(auroraEnabled)}
+              title="오로라 예보 분포도(북반구 고위도) 켜기/끄기"
+            >
+              🌌 오로라
+            </button>
+            <button
+              type="button"
+              onClick={() => setDisasterEnabled((v) => !v)}
+              className={toggleBtnClass(disasterEnabled)}
+              title="자연재해(NASA EONET: 산불·화산·폭풍 등) 표시 켜기/끄기"
+            >
+              🔥 자연재해
+            </button>
+          </div>
 
           {/* ISS 실시간 위치·궤적 레이어 (enabled=false 면 타이머 정지+레이어 제거) */}
           {/* onIssClick: 마커 클릭 시 NASA 라이브 패널 오픈 / onPositionUpdate: 최신 좌표 수신 */}
@@ -405,6 +452,11 @@ export default function MainMapView({ markers, tags }) {
             onIssClick={handleSelectIss}
             onPositionUpdate={handleIssPosition}
           />
+
+          {/* 실시간 자연현상 오버레이 3종 (꺼져 있으면 API 호출·타이머 없음) */}
+          <EarthquakeLayer map={issMap} enabled={eqEnabled} />
+          <AuroraLayer map={issMap} enabled={auroraEnabled} />
+          <NaturalEventsLayer map={issMap} enabled={disasterEnabled} />
         </main>
       </div>
     </div>
