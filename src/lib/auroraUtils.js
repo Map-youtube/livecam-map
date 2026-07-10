@@ -113,6 +113,13 @@ export function renderAuroraToCanvas(coordinates) {
         // 확률에 비례한 불투명도로 브러시를 겹쳐 찍는다(최소 0.05 보장)
         ctx.globalAlpha = Math.min(1, Math.max(0.05, intensity));
         ctx.drawImage(brush, x - R, y - R);
+        // ★ 날짜변경선 이음매 제거: 좌우 끝(반경 이내) 점은 반대쪽 끝에도 한 번 더 그려
+        //   이미지 양 끝이 자연스럽게 이어지도록 "래핑" 처리한다.
+        if (x < R) {
+          ctx.drawImage(brush, x + W - R, y - R); // 왼쪽 끝 → 오른쪽 끝에도
+        } else if (x > W - R) {
+          ctx.drawImage(brush, x - W - R, y - R); // 오른쪽 끝 → 왼쪽 끝에도
+        }
       } catch (innerError) {
         continue;
       }

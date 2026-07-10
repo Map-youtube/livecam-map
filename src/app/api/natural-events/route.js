@@ -6,9 +6,11 @@
 //   https://eonet.gsfc.nasa.gov/api/v3/events?status=open&days=20&category=...
 //   - ?category= 쿼리로 카테고리 필터 가능. 기본값은 아래 6종 전체.
 //
-//   각 이벤트에서 { id, title, category, categoryTitle, sourceUrl, sourceName, lat, lng, date } 추출:
+//   각 이벤트에서 { id, title, category, categoryTitle, sourceUrl, sourceName, lat, lng, date,
+//                  magnitudeValue, magnitudeUnit } 추출:
 //     - geometry 배열의 "마지막" 좌표 = 최신 위치 (Point 형태만 사용, Polygon 등은 스킵)
 //     - categories[0].id / .title, sources[0].url / .id
+//     - geometry.magnitudeValue / magnitudeUnit (태풍 최대풍속, 산불 면적 등, 없으면 null)
 //
 //   캐싱: { next: { revalidate: 900 } } (15분)
 //   실패 시: 빈 배열 반환
@@ -59,6 +61,12 @@ export async function GET(request) {
           Array.isArray(e.categories) && e.categories[0] ? e.categories[0] : {};
         const src = Array.isArray(e.sources) && e.sources[0] ? e.sources[0] : {};
 
+        // geometry 의 magnitudeValue/magnitudeUnit (태풍=최대풍속 kts, 산불=면적 acres 등)
+        const magVal =
+          typeof last.magnitudeValue === "number" ? last.magnitudeValue : null;
+        const magUnit =
+          typeof last.magnitudeUnit === "string" ? last.magnitudeUnit : null;
+
         events.push({
           id: e.id,
           title: e.title || "",
@@ -69,6 +77,8 @@ export async function GET(request) {
           lat,
           lng,
           date: last.date || "",
+          magnitudeValue: magVal, // 규모값 (없으면 null)
+          magnitudeUnit: magUnit, // 규모 단위 (없으면 null)
         });
       } catch (innerError) {
         // 개별 이벤트 파싱 실패는 건너뛴다

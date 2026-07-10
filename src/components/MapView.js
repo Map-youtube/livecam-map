@@ -96,21 +96,36 @@ function MapView(
     (target) => {
       try {
         if (!target) return;
-        const lat = Number(target.lat);
-        const lng = Number(target.lng);
-        if (Number.isNaN(lat) || Number.isNaN(lng)) return;
-        const zoom = typeof target.zoom === "number" ? target.zoom : 6;
+        // 경계 사각형이 있으면(대륙/국가) 영역 전체가 화면에 맞게 이동한다.
+        const hasBounds =
+          typeof target.west === "number" &&
+          typeof target.south === "number" &&
+          typeof target.east === "number" &&
+          typeof target.north === "number";
 
         if (mode === "3d") {
-          // 3D: Cesium 카메라 이동
+          // 3D: Cesium — 경계 사각형/좌표+줌 모두 그대로 전달(내부에서 분기 처리)
           if (cesiumApiRef.current && cesiumApiRef.current.flyToLocation) {
-            cesiumApiRef.current.flyToLocation({ lat, lng, zoom });
+            cesiumApiRef.current.flyToLocation(target);
           }
+          return;
+        }
+
+        // 2D: Leaflet
+        if (!leafletMap) return;
+        if (hasBounds) {
+          // 대륙/국가: 경계 사각형이 화면에 꽉 차도록 (2D/3D 동일 데이터 공유)
+          leafletMap.fitBounds([
+            [target.south, target.west],
+            [target.north, target.east],
+          ]);
         } else {
-          // 2D: Leaflet flyTo (좌표는 coordUtils 로 변환)
-          if (leafletMap) {
-            leafletMap.flyTo(toLeafletCoordRaw(lat, lng), zoom);
-          }
+          // 도시/마커: 좌표 + 줌
+          const lat = Number(target.lat);
+          const lng = Number(target.lng);
+          if (Number.isNaN(lat) || Number.isNaN(lng)) return;
+          const zoom = typeof target.zoom === "number" ? target.zoom : 6;
+          leafletMap.flyTo(toLeafletCoordRaw(lat, lng), zoom);
         }
       } catch (error) {
         console.error("[MapView] flyToLocation 실패:", error); // TODO: 배포 전 제거

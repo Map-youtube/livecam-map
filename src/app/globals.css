@@ -129,6 +129,25 @@ button:disabled,
   background: transparent;
   border: 0;
 }
+
+/* 지진/자연재해 상시 라벨 (Leaflet permanent tooltip — 작고 반투명하게 클러터 최소화) */
+.leaflet-tooltip.eq-label,
+.leaflet-tooltip.event-label {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 5px;
+  color: #12181f;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  border-radius: 4px;
+  box-shadow: none;
+  white-space: nowrap;
+}
+/* 툴팁 꼬리(삼각형)는 숨겨 지저분함 방지 */
+.leaflet-tooltip.eq-label::before,
+.leaflet-tooltip.event-label::before {
+  display: none;
+}
 .lm-marker {
   position: relative;
 }

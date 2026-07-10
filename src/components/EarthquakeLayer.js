@@ -94,15 +94,27 @@ export default function EarthquakeLayer({ map, enabled = false }) {
               continue;
             }
             const color = getMagnitudeColor(eq.magnitude);
+            const magText =
+              typeof eq.magnitude === "number"
+                ? eq.magnitude.toFixed(1)
+                : "-";
             const circle = L.circle([eq.lat, eq.lng], {
               // 반경(km) → 미터로 변환
               radius: getMagnitudeRadiusKm(eq.magnitude) * 1000,
-              color,
+              // 배경이 밝든 어둡든 경계가 뚜렷하도록 어두운 테두리
+              color: "#333333",
               weight: 1,
               fillColor: color,
-              fillOpacity: 0.25, // 채움 투명도 낮게
+              fillOpacity: 0.35,
             });
             circle.bindPopup(buildPopupHtml(eq));
+            // 규모 상시 라벨 (클릭 없이도 항상 표시)
+            circle.bindTooltip(`🌍 지진규모 M${magText}`, {
+              permanent: true,
+              direction: "top",
+              className: "eq-label",
+              offset: [0, -4],
+            });
             circle.addTo(map);
             circlesRef.current.push(circle);
           } catch (innerError) {

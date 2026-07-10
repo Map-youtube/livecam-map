@@ -20,7 +20,7 @@
 
 import { useEffect, useRef } from "react";
 import L from "leaflet";
-import { getEventIcon } from "@/lib/naturalEventsUtils";
+import { getEventIcon, formatEventLabel } from "@/lib/naturalEventsUtils";
 
 const REFRESH_MS = 15 * 60 * 1000; // 15분
 
@@ -137,6 +137,13 @@ export default function NaturalEventsLayer({ map, enabled = false }) {
               zIndexOffset: 500, // 라이브캠 마커보다 약간 위(ISS 3000보다는 아래)
             });
             marker.bindPopup(buildPopupHtml(ev));
+            // 이름 + (태풍 풍속/산불 면적 등) 상시 라벨 (클릭 없이도 표시)
+            marker.bindTooltip(formatEventLabel(ev), {
+              permanent: true,
+              direction: "right",
+              className: "event-label",
+              offset: [10, 0],
+            });
             marker.addTo(map);
             markersRef.current.push(marker);
           } catch (innerError) {

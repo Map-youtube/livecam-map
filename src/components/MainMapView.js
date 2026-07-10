@@ -236,6 +236,9 @@ export default function MainMapView({ markers, tags }) {
       setIssSelected(false);
       issSelectedRef.current = false;
       setExpandedMarkerId(marker.id);
+      // 마커 클릭 시 그 위치로 카메라 이동 (2D는 LeafletMap 내부에서도 이동하지만,
+      // 3D는 이 호출이 있어야 이동한다 → 영상 카드 클릭과 동일한 focusMarker 흐름 재사용)
+      if (mapRef.current) mapRef.current.focusMarker(marker);
     } catch (error) {
       console.error("[MainMapView] 지도 마커 클릭 처리 실패:", error); // TODO: 배포 전 제거
     }

@@ -58,6 +58,28 @@ export function toCesiumCoord(Cesium, point) {
   }
 }
 
+// ─── 경계 사각형 → Cesium.Rectangle (Cesium 은 인자로 주입) ──
+// { west, south, east, north }(도 단위) → Cesium.Rectangle.fromDegrees(west, south, east, north)
+// 대륙/국가 이동 시 이 사각형을 카메라 destination 으로 주면 영역이 화면에 꽉 차게 자동 계산된다.
+export function toCesiumRectangle(Cesium, bounds) {
+  try {
+    if (!Cesium || !Cesium.Rectangle || !bounds) return null;
+    const { west, south, east, north } = bounds;
+    if (
+      typeof west !== "number" ||
+      typeof south !== "number" ||
+      typeof east !== "number" ||
+      typeof north !== "number"
+    ) {
+      return null;
+    }
+    return Cesium.Rectangle.fromDegrees(west, south, east, north);
+  } catch (error) {
+    console.error("[coordUtils] toCesiumRectangle 실패:", error); // TODO: 배포 전 제거
+    return null;
+  }
+}
+
 // ─── Leaflet 줌 → Cesium 카메라 고도(m) 표준 변환 ─────────────
 // Web Mercator 타일 체계에서 널리 쓰이는 상수(적도 둘레/256 기준)로,
 // 대륙/국가의 { zoom } 값을 3D 카메라 높이로 일관되게 환산한다.

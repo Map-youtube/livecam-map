@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────
 // earthquakeUtils — 지진 표시용 계산 유틸
 //
-// - getMagnitudeColor(mag)   : 규모에 따른 색상 (<4 초록 / 4~5 노랑 / 5~6 주황 / 6+ 빨강)
+// - getMagnitudeColor(mag)   : 규모에 따른 색상 (<4 연두 / 4~5 진한주황 / 5~6 빨강 / 6+ 진한빨강)
 // - getMagnitudeRadiusKm(mag): 규모에 비례한 원 반경(km). 지수적으로 커진다.
 //
 // ⚠️ 반환 반경은 km 단위다. Leaflet L.circle 의 radius 는 "미터"이므로 사용처에서 ×1000 한다.
@@ -10,15 +10,16 @@
 // ─── 규모 → 색상 ─────────────────────────────────────────────
 export function getMagnitudeColor(mag) {
   try {
+    // 밝은 지도에서도 잘 보이도록 채도 높은 팔레트 (연두→진한주황→빨강→진한빨강)
     const m = Number(mag);
-    if (Number.isNaN(m)) return "#22c55e"; // 값이 없으면 기본 초록
-    if (m < 4) return "#22c55e"; // 초록
-    if (m < 5) return "#eab308"; // 노랑
-    if (m < 6) return "#f97316"; // 주황
-    return "#ef4444"; // 빨강 (6 이상)
+    if (Number.isNaN(m)) return "#8BC34A"; // 값이 없으면 기본 연두
+    if (m < 4) return "#8BC34A"; // 연두
+    if (m < 5) return "#F57C00"; // 진한 주황
+    if (m < 6) return "#E53935"; // 빨강
+    return "#B71C1C"; // 진한 빨강 (6 이상)
   } catch (error) {
     console.error("[earthquakeUtils] getMagnitudeColor 에러:", error); // TODO: 배포 전 제거
-    return "#22c55e";
+    return "#8BC34A";
   }
 }
 

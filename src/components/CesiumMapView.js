@@ -30,8 +30,12 @@ import * as satellite from "satellite.js";
 import { getIssTrajectory } from "@/lib/issUtils";
 import { getMagnitudeColor, getMagnitudeRadiusKm } from "@/lib/earthquakeUtils";
 import { renderAuroraToCanvas } from "@/lib/auroraUtils";
-import { getEventIcon } from "@/lib/naturalEventsUtils";
-import { toCesiumCoordRaw, zoomToCesiumHeight } from "@/lib/coordUtils";
+import { getEventIcon, formatEventLabel } from "@/lib/naturalEventsUtils";
+import {
+  toCesiumCoordRaw,
+  toCesiumRectangle,
+  zoomToCesiumHeight,
+} from "@/lib/coordUtils";
 
 // ─── 갱신 주기 상수 (기존 레이어들과 동일) ────────────────────
 const ISS_POLL_MS = 2000;
@@ -176,16 +180,23 @@ export default function CesiumMapView({
         const viewer = viewerRef.current;
         const Cesium = cesiumRef.current;
         if (!viewer || !Cesium || viewer.isDestroyed() || !target) return;
+
+        // ① 경계 사각형(대륙/국가)이 있으면 그 영역이 화면에 꽉 차도록 자동 계산 (훨씬 정확)
+        const rect = toCesiumRectangle(Cesium, target);
+        if (rect) {
+          viewer.camera.flyTo({ destination: rect, duration: 1.2 });
+          requestRender();
+          return;
+        }
+
+        // ② 없으면(도시/마커) 좌표+줌 → 고도로 폴백
         const lat = Number(target.lat);
         const lng = Number(target.lng);
         if (Number.isNaN(lat) || Number.isNaN(lng)) return;
-        // Leaflet 줌 → Cesium 고도(표준 변환). 대륙/국가/도시 모두 이 경로로 일관 처리.
         const heightM = zoomToCesiumHeight(target.zoom);
-        // 그 지점 상공 heightM 높이에 카메라 배치 (altKm = heightM/1000)
         const dest = toCesiumCoordRaw(Cesium, lat, lng, heightM / 1000);
         if (!dest) return;
         viewer.camera.flyTo({ destination: dest, duration: 1.2 });
-        // 이동 시작 시 렌더 요청 (카메라 애니메이션은 이후 자동 갱신됨)
         requestRender();
       } catch (error) {
         console.error("[CesiumMapView] flyToLocation 실패:", error); // TODO: 배포 전 제거
@@ -217,19 +228,14 @@ export default function CesiumMapView({
           if (disposed || !containerRef.current) return;
           cesiumRef.current = Cesium;
 
-          // Ion 미사용 — CartoDB dark_matter 무료 타일 (검은 우주 배경과 대비되어 대륙 윤곽 뚜렷)
-          const dark = new Cesium.UrlTemplateImageryProvider({
-            url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+          // Ion 미사용 — CartoDB voyager 무료 타일 (밝은 톤, 대륙/국가 윤곽이 자연스럽게 보임)
+          const voyager = new Cesium.UrlTemplateImageryProvider({
+            url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
             credit:
               "Map tiles by CartoDB, under CC BY 3.0. Data by OpenStreetMap, under ODbL.",
           });
-
-          // 베이스 타일 레이어(밝기/대비 약간 올려 가독성 향상)
-          const baseLayer = new Cesium.ImageryLayer(dark);
-          try {
-            baseLayer.brightness = 1.1;
-            baseLayer.contrast = 1.1;
-          } catch (e) {}
+          // 베이스 타일 레이어 (voyager 는 그대로도 자연스러워 밝기/대비 보정 없음)
+          const baseLayer = new Cesium.ImageryLayer(voyager);
 
           const viewer = new Cesium.Viewer(containerRef.current, {
             baseLayer,
@@ -525,6 +531,10 @@ export default function CesiumMapView({
               getMagnitudeColor(eq.magnitude)
             );
             const radiusM = getMagnitudeRadiusKm(eq.magnitude) * 1000;
+            const magText =
+              typeof eq.magnitude === "number"
+                ? eq.magnitude.toFixed(1)
+                : "-";
             const ent = viewer.entities.add({
               position: toCesiumCoordRaw(Cesium, lat, lng, 0),
               ellipse: {
@@ -532,9 +542,21 @@ export default function CesiumMapView({
                 semiMajorAxis: radiusM,
                 material: color.withAlpha(0.35),
                 outline: true,
-                outlineColor: color,
-                outlineWidth: 1,
+                // 밝은/어두운 배경 모두에서 경계가 뚜렷하도록 어두운 테두리
+                outlineColor: Cesium.Color.fromCssColorString("#333333"),
+                outlineWidth: 2,
                 height: 0,
+              },
+              // 규모 상시 라벨 (클릭 없이도 보임, 원과 겹치지 않게 위로 띄움)
+              label: {
+                text: `🌍 지진규모 M${magText}`,
+                font: "bold 12px sans-serif",
+                fillColor: Cesium.Color.WHITE,
+                outlineColor: Cesium.Color.BLACK,
+                outlineWidth: 3,
+                style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+                pixelOffset: new Cesium.Cartesian2(0, -14),
+                verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
               },
             });
             payloadRef.current.set(ent, { kind: "earthquake", data: eq });
@@ -651,6 +673,22 @@ export default function CesiumMapView({
             const ent = viewer.entities.add({
               position: toCesiumCoordRaw(Cesium, lat, lng, 0),
               billboard: { image: icon || undefined, scale: 1 },
+              // 이름 + (태풍 풍속/산불 면적 등) 상시 라벨
+              label: {
+                text: formatEventLabel(ev),
+                font: "bold 12px sans-serif",
+                fillColor: Cesium.Color.WHITE,
+                outlineColor: Cesium.Color.BLACK,
+                outlineWidth: 3,
+                style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+                pixelOffset: new Cesium.Cartesian2(0, -22),
+                verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+                // 긴 라벨이 멀리서 화면을 뒤덮지 않도록 가까이서만 표시
+                distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
+                  0,
+                  12_000_000
+                ),
+              },
             });
             payloadRef.current.set(ent, { kind: "event", data: ev });
             disasterEntsRef.current.push(ent);
