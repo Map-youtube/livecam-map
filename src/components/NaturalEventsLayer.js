@@ -21,6 +21,7 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import { getEventIcon, formatEventLabel } from "@/lib/naturalEventsUtils";
+import { ts, activeLocale } from "@/lib/i18n/static";
 
 const REFRESH_MS = 15 * 60 * 1000; // 15분
 
@@ -62,29 +63,30 @@ function buildPopupHtml(ev) {
     )}</div>`
   );
   if (ev.categoryTitle) {
-    rows.push(`<div>카테고리: ${esc(ev.categoryTitle)}</div>`);
+    rows.push(`<div>${esc(ts("category"))}: ${esc(ev.categoryTitle)}</div>`);
   }
   if (ev.date) {
     let dateText = ev.date;
     try {
-      dateText = new Date(ev.date).toLocaleString("ko-KR");
+      dateText = new Date(ev.date).toLocaleString(activeLocale());
     } catch (e) {
       dateText = ev.date;
     }
-    rows.push(`<div>발생일: ${esc(dateText)}</div>`);
+    rows.push(`<div>${esc(ts("dateOccurred"))}: ${esc(dateText)}</div>`);
   }
   if (ev.sourceUrl) {
     rows.push(
       `<div><a href="${esc(ev.sourceUrl)}" target="_blank" rel="noopener noreferrer" ` +
-        `style="color:#1A73E8;text-decoration:underline;">출처: ${esc(
-          ev.sourceName || "링크"
+        `style="color:#1A73E8;text-decoration:underline;">${esc(ts("source"))}: ${esc(
+          ev.sourceName || ts("link")
         )} ↗</a></div>`
     );
   }
   // ⚠️ 공식 경보가 아님을 반드시 안내
   rows.push(
     '<div style="margin-top:6px;color:#b45309;font-size:11px;">' +
-      "⚠️ 참고용 정보이며 공식 경보가 아닙니다. 정확한 정보는 출처 링크를 확인하세요." +
+      "⚠️ " +
+      esc(ts("disasterDisclaimer")) +
       "</div>"
   );
   return `<div style="font-size:12px;line-height:1.5;max-width:240px;">${rows.join(

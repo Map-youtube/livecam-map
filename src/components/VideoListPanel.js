@@ -18,9 +18,9 @@
 // ─────────────────────────────────────────────────────────────
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { COUNTRY_NAME_BY_CODE } from "@/lib/countryList";
 import LiveDot from "@/components/LiveDot";
 import Thumbnail from "@/components/DefaultThumbnail";
+import { useI18n } from "@/components/i18n/LanguageProvider";
 
 // ─── 유튜브 IFrame API 로더 (전역, 한 번만 로드) ──────────────
 let ytApiPromise = null;
@@ -77,32 +77,28 @@ function getThumb(marker) {
   return null;
 }
 
-// ─── 상태 배지 (기존 로직과 동일 기준) ────────────────────────
+// ─── 상태 배지 종류 판정 (라벨은 다국어라 렌더에서 t 로 처리) ──
 // 우선순위: 비활성(is_active===false) → 재생불가(auto_disabled===true) → LIVE
-function getStatusBadge(marker) {
-  if (marker.is_active === false) {
-    return { kind: "inactive", label: "비활성" };
-  }
-  if (marker.auto_disabled === true) {
-    return { kind: "disabled", label: "재생불가" };
-  }
-  return { kind: "live", label: "LIVE" };
+function getStatusKind(marker) {
+  if (marker.is_active === false) return "inactive";
+  if (marker.auto_disabled === true) return "disabled";
+  return "live";
 }
 
-// 상태 배지 컴포넌트 (썸네일 위/카드에 올리는 작은 배지)
-function StatusBadge({ badge }) {
-  if (badge.kind === "live") {
+// 상태 배지 컴포넌트 (썸네일 위/카드에 올리는 작은 배지). label 은 번역된 문자열.
+function StatusBadge({ kind, label }) {
+  if (kind === "live") {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-live-light px-2 py-0.5 text-xs font-semibold text-live shadow-card">
         <LiveDot size="sm" />
-        {badge.label}
+        {label}
       </span>
     );
   }
   // 재생불가/비활성은 회색조로 톤다운
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-ink/70 px-2 py-0.5 text-xs font-semibold text-white">
-      {badge.label}
+      {label}
     </span>
   );
 }
@@ -212,9 +208,16 @@ export default function VideoListPanel({
   onClose,
   onSelectMarker,
   title,
+  tr,
   expandedMarkerId,
 }) {
   const list = Array.isArray(markers) ? markers : [];
+
+  // 다국어: 정적 문자열(t) + 국가명(countryName). 동적(도시/장소/태그)은 tr 프롭.
+  const { t, countryName } = useI18n();
+  const trFn = typeof tr === "function" ? tr : (x) => x;
+  // 상태 배지 종류 → 번역 라벨
+  const badgeLabel = { live: t("live"), disabled: t("disabled"), inactive: t("inactive") };
 
   // 재생불가로 신고되어 안내를 표시할 마커 (id → 메시지)
   const [noticeIds, setNoticeIds] = useState({});
@@ -256,8 +259,7 @@ export default function VideoListPanel({
         // 안내 표시
         setNoticeIds((prev) => ({
           ...prev,
-          [marker.id]:
-            "이 영상은 현재 재생할 수 없어 목록에서 제외 처리되었습니다.",
+          [marker.id]: t("unplayable"),
         }));
         // 잠시 후 목록에서 제거 (새로고침 없이 사라지게)
         const t = setTimeout(() => {
@@ -272,7 +274,7 @@ export default function VideoListPanel({
     } catch (error) {
       console.error("[VideoListPanel] 재생불가 신고 실패:", error); // TODO: 배포 전 제거
     }
-  }, []);
+  }, [t]);
 
   // 카드 클릭 처리 → 부모가 펼치기/접기 + 지도 이동을 결정
   function handleCardClick(marker) {
@@ -312,12 +314,12 @@ export default function VideoListPanel({
       {/* 상단: 제목 + 닫기 버튼 */}
       <div className="flex flex-shrink-0 items-center justify-between border-b border-border bg-surface px-4 py-3">
         <h2 className="truncate font-display text-sm font-bold text-ink">
-          {title || "영상 목록"}
+          {title || t("videoList")}
         </h2>
         <button
           type="button"
           onClick={handleClose}
-          aria-label="패널 닫기"
+          aria-label={t("closePanel")}
           className="ml-2 rounded-md p-1 text-ink-muted transition hover:bg-brand-light hover:text-brand"
         >
           ✕
@@ -328,18 +330,21 @@ export default function VideoListPanel({
       <div className="flex-1 overflow-auto p-3">
         {visibleList.length === 0 ? (
           <p className="mt-6 text-center text-sm text-ink-muted">
-            등록된 영상이 없습니다.
+            {t("noVideos")}
           </p>
         ) : (
           <div className="flex flex-col gap-4">
             {visibleList.map((marker) => {
               // 각 카드는 이 marker 의 고유 데이터만 참조한다.
               const thumb = getThumb(marker);
-              const badge = getStatusBadge(marker);
+              const badgeKind = getStatusKind(marker);
               const countryLabel = marker.country
-                ? COUNTRY_NAME_BY_CODE[marker.country] || marker.country
+                ? countryName(marker.country)
                 : "";
-              const regionText = [marker.city, countryLabel]
+              const regionText = [
+                marker.city ? trFn(marker.city) : "",
+                countryLabel,
+              ]
                 .filter((v) => v)
                 .join(", ");
               const tags = Array.isArray(marker.tags) ? marker.tags : [];
@@ -368,11 +373,11 @@ export default function VideoListPanel({
                       {/* 없거나 로딩 실패 시 기본 이미지로 대체 */}
                       <Thumbnail
                         src={thumb}
-                        alt={marker.location || "썸네일"}
+                        alt={marker.location ? trFn(marker.location) : t("noName")}
                         className="h-full w-full object-cover"
                       />
                       <div className="absolute left-2 top-2">
-                        <StatusBadge badge={badge} />
+                        <StatusBadge kind={badgeKind} label={badgeLabel[badgeKind]} />
                       </div>
                     </div>
 
@@ -380,7 +385,7 @@ export default function VideoListPanel({
                     <div className="p-3">
                       {/* 장소명 (제목, 2줄까지) */}
                       <h3 className="line-clamp-2 font-display text-sm font-semibold leading-snug text-ink">
-                        {marker.location || "(장소명 없음)"}
+                        {marker.location ? trFn(marker.location) : t("noName")}
                       </h3>
 
                       {/* 지역 정보 (위치 핀 + 도시/국가) */}
@@ -399,7 +404,7 @@ export default function VideoListPanel({
                               key={tag}
                               className="rounded-full bg-brand-light px-2 py-0.5 text-xs font-medium text-brand"
                             >
-                              #{tag}
+                              #{trFn(tag)}
                             </span>
                           ))}
                         </div>
@@ -415,7 +420,7 @@ export default function VideoListPanel({
                         <button
                           type="button"
                           onClick={handleCollapse}
-                          aria-label="영상 접기"
+                          aria-label={t("collapseVideo")}
                           className="absolute right-1 top-1 z-10 rounded-md bg-ink/70 px-1.5 py-0.5 text-xs text-white transition hover:bg-ink"
                         >
                           ✕
@@ -435,7 +440,7 @@ export default function VideoListPanel({
                           />
                         ) : (
                           <div className="flex h-24 w-full items-center justify-center rounded-md bg-ink/5 text-xs text-ink-muted">
-                            영상 정보가 없습니다.
+                            {t("noVideoInfo")}
                           </div>
                         )}
                       </div>

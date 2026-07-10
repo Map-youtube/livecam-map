@@ -16,6 +16,7 @@ import {
   IBM_Plex_Mono,
 } from "next/font/google";
 import "./globals.css";
+import { LanguageProvider } from "@/components/i18n/LanguageProvider";
 
 // 제목/강조용
 const spaceGrotesk = Space_Grotesk({
@@ -59,7 +60,8 @@ export default function RootLayout({ children }) {
       className={`${spaceGrotesk.variable} ${inter.variable} ${notoSansKr.variable} ${ibmPlexMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-bg font-body text-ink">
-        {children}
+        {/* 전역 언어 상태 제공 (브라우저 언어 기본값 + 선택 저장 + RTL 처리) */}
+        <LanguageProvider>{children}</LanguageProvider>
       </body>
     </html>
   );

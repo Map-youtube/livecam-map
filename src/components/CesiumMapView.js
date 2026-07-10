@@ -31,6 +31,8 @@ import { getIssTrajectory, startTrajectoryAtMarker } from "@/lib/issUtils";
 import { getMagnitudeColor, getMagnitudeRadiusKm } from "@/lib/earthquakeUtils";
 import { renderAuroraToCanvas } from "@/lib/auroraUtils";
 import { getEventIcon, formatEventLabel } from "@/lib/naturalEventsUtils";
+import { useI18n } from "@/components/i18n/LanguageProvider";
+import { ts } from "@/lib/i18n/static";
 import {
   toCesiumCoordRaw,
   toCesiumRectangle,
@@ -124,6 +126,9 @@ export default function CesiumMapView({
   auroraEnabled = false,
   disasterEnabled = false,
 }) {
+  // 다국어: 팝업/오버레이 문자열(t) + 날짜 로케일(locale)
+  const { t, locale } = useI18n();
+
   const containerRef = useRef(null);
   const viewerRef = useRef(null);
   const cesiumRef = useRef(null);
@@ -741,7 +746,7 @@ export default function CesiumMapView({
       {/* 로딩 안내 (Cesium 자산 다운로드 동안) */}
       {!ready && (
         <div className="pointer-events-none absolute inset-0 z-[900] flex items-center justify-center text-sm text-white">
-          3D 지구본을 불러오는 중...
+          {t("loading")}...
         </div>
       )}
 
@@ -749,19 +754,23 @@ export default function CesiumMapView({
       {info && info.kind === "earthquake" && (
         <InfoOverlay
           onClose={() => setInfo(null)}
-          title={`🌍 규모 M${
+          title={`🌍 ${t("magnitude")} M${
             typeof info.data.magnitude === "number"
               ? info.data.magnitude.toFixed(1)
               : "-"
           }`}
         >
-          {info.data.depthKm != null && <p>깊이: {Math.round(info.data.depthKm)} km</p>}
+          {info.data.depthKm != null && (
+            <p>
+              {t("depth")}: {Math.round(info.data.depthKm)} km
+            </p>
+          )}
           {info.data.time != null && (
             <p>
-              발생:{" "}
+              {t("dateOccurred")}:{" "}
               {(() => {
                 try {
-                  return new Date(info.data.time).toLocaleString("ko-KR");
+                  return new Date(info.data.time).toLocaleString(locale);
                 } catch (e) {
                   return "-";
                 }
@@ -776,16 +785,20 @@ export default function CesiumMapView({
         <InfoOverlay
           onClose={() => setInfo(null)}
           title={`${getEventIcon(info.data.category)} ${
-            info.data.title || "자연재해"
+            info.data.title || t("disaster")
           }`}
         >
-          {info.data.categoryTitle && <p>카테고리: {info.data.categoryTitle}</p>}
+          {info.data.categoryTitle && (
+            <p>
+              {t("category")}: {info.data.categoryTitle}
+            </p>
+          )}
           {info.data.date && (
             <p>
-              발생일:{" "}
+              {t("dateOccurred")}:{" "}
               {(() => {
                 try {
-                  return new Date(info.data.date).toLocaleString("ko-KR");
+                  return new Date(info.data.date).toLocaleString(locale);
                 } catch (e) {
                   return info.data.date;
                 }
@@ -800,12 +813,12 @@ export default function CesiumMapView({
                 rel="noopener noreferrer"
                 className="text-brand underline"
               >
-                출처: {info.data.sourceName || "링크"} ↗
+                {t("source")}: {info.data.sourceName || t("link")} ↗
               </a>
             </p>
           )}
           <p className="mt-2 text-[11px] text-amber-700">
-            ⚠️ 참고용 정보이며 공식 경보가 아닙니다. 정확한 정보는 출처 링크를 확인하세요.
+            ⚠️ {t("disasterDisclaimer")}
           </p>
         </InfoOverlay>
       )}
@@ -822,7 +835,7 @@ function InfoOverlay({ title, children, onClose }) {
         <button
           type="button"
           onClick={onClose}
-          aria-label="닫기"
+          aria-label={ts("close")}
           className="rounded p-1 text-ink-muted transition hover:bg-brand-light hover:text-brand"
         >
           ✕

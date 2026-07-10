@@ -21,8 +21,11 @@
 import { useState } from "react";
 import LiveDot from "@/components/LiveDot";
 import Thumbnail from "@/components/DefaultThumbnail";
+import { useI18n } from "@/components/i18n/LanguageProvider";
 
 // ─── ISS 위치 정보 한 줄 요약 (null 값은 생략) ────────────────
+// 좌표/고도/속도 라벨은 언어 중립 약어(Lat/Lng/Alt)와 이모지(☀️/🌙)로 표기해
+// 별도 번역 없이 모든 언어에서 통용되게 한다.
 function IssInfoBar({ issInfo }) {
   // 좌표가 없으면(추적 꺼짐 등) 표시하지 않는다.
   if (!issInfo || typeof issInfo.lat !== "number" || typeof issInfo.lng !== "number") {
@@ -31,23 +34,25 @@ function IssInfoBar({ issInfo }) {
   return (
     <div className="flex flex-wrap gap-x-2 gap-y-0.5 border-b border-border bg-surface px-4 py-2 text-[11px] text-ink-muted">
       <span>
-        위도 {issInfo.lat.toFixed(2)}, 경도 {issInfo.lng.toFixed(2)}
+        Lat {issInfo.lat.toFixed(2)}, Lng {issInfo.lng.toFixed(2)}
       </span>
       {issInfo.altKm != null && (
-        <span>· 고도 {Math.round(issInfo.altKm).toLocaleString("en-US")}km</span>
+        <span>· Alt {Math.round(issInfo.altKm).toLocaleString("en-US")}km</span>
       )}
       {issInfo.speedKmh != null && (
         <span>
-          · 속도 {Math.round(issInfo.speedKmh).toLocaleString("en-US")}km/h
+          · {Math.round(issInfo.speedKmh).toLocaleString("en-US")}km/h
         </span>
       )}
-      {issInfo.visibility === "daylight" && <span>· 낮 구간 ☀️</span>}
-      {issInfo.visibility === "eclipsed" && <span>· 밤 구간 🌙</span>}
+      {issInfo.visibility === "daylight" && <span>· ☀️</span>}
+      {issInfo.visibility === "eclipsed" && <span>· 🌙</span>}
     </div>
   );
 }
 
 export default function IssVideoPanel({ videos, issInfo, onClose }) {
+  // 다국어 정적 문자열
+  const { t } = useI18n();
   // 현재 펼쳐진(재생 중인) 영상 videoId (없으면 null)
   const [expandedId, setExpandedId] = useState(null);
 
@@ -77,12 +82,13 @@ export default function IssVideoPanel({ videos, issInfo, onClose }) {
       {/* 상단: 제목(개수 포함) + 닫기 */}
       <div className="flex flex-shrink-0 items-center justify-between border-b border-border bg-surface px-4 py-3">
         <h2 className="truncate font-display text-sm font-bold text-ink">
-          🛰️ ISS · NASA 라이브{!loading ? ` (${list.length})` : ""}
+          🛰️ ISS · {t("nasaLive")}
+          {!loading ? ` (${list.length})` : ""}
         </h2>
         <button
           type="button"
           onClick={handleClose}
-          aria-label="패널 닫기"
+          aria-label={t("closePanel")}
           className="ml-2 rounded-md p-1 text-ink-muted transition hover:bg-brand-light hover:text-brand"
         >
           ✕
@@ -96,18 +102,14 @@ export default function IssVideoPanel({ videos, issInfo, onClose }) {
       <div className="flex-1 overflow-auto p-3">
         {loading ? (
           <p className="mt-6 text-center text-sm text-ink-muted">
-            NASA 라이브를 불러오는 중...
+            {t("loading")}...
           </p>
         ) : list.length === 0 ? (
           // 빈 상태 (빈 공간 금지 원칙)
           <div className="mt-6 flex flex-col items-center gap-2 px-4 text-center">
             <span className="text-3xl">🛰️</span>
-            <p className="text-sm text-ink-muted">
-              현재 진행 중인 NASA 라이브가 없습니다
-            </p>
-            <p className="text-xs text-ink-muted">
-              방송이 시작되면 최대 5분 내 목록에 표시됩니다.
-            </p>
+            <p className="text-sm text-ink-muted">{t("noNasaLive")}</p>
+            <p className="text-xs text-ink-muted">{t("nasaWillAppear")}</p>
           </div>
         ) : (
           <div className="flex flex-col gap-4">
@@ -130,7 +132,7 @@ export default function IssVideoPanel({ videos, issInfo, onClose }) {
                       {/* 없거나 로딩 실패 시 기본 이미지로 대체 */}
                       <Thumbnail
                         src={v.thumbnailUrl}
-                        alt={v.title || "NASA 라이브"}
+                        alt={v.title || t("nasaLive")}
                         className="h-full w-full object-cover"
                       />
                       <div className="absolute left-2 top-2">
@@ -144,7 +146,7 @@ export default function IssVideoPanel({ videos, issInfo, onClose }) {
                     {/* 본문: 제목 + 채널명 */}
                     <div className="p-3">
                       <h3 className="line-clamp-2 font-display text-sm font-semibold leading-snug text-ink">
-                        {v.title || "(제목 없음)"}
+                        {v.title || t("noTitle")}
                       </h3>
                       <p className="mt-1 text-xs text-ink-muted">
                         {v.channelName || "NASA"}

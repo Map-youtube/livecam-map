@@ -22,6 +22,8 @@
 import { useEffect, useRef, useState } from "react";
 import { MapContainer, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
+import { useI18n } from "@/components/i18n/LanguageProvider";
+import { ts } from "@/lib/i18n/static";
 
 // Leaflet 기본 스타일 (이걸 import 하지 않으면 타일이 어긋나고 지도가 깨진다)
 import "leaflet/dist/leaflet.css";
@@ -42,7 +44,7 @@ const ICON_BASE = "https://unpkg.com/leaflet@1.9.4/dist/images/";
 const MAP_STYLES = [
   {
     key: "standard",
-    label: "일반 지도",
+    labelKey: "mapStandard",
     url:
       process.env.NEXT_PUBLIC_MAP_TILE_URL_STANDARD ||
       process.env.NEXT_PUBLIC_MAP_TILE_URL || // 기존 환경변수도 호환
@@ -54,7 +56,7 @@ const MAP_STYLES = [
   },
   {
     key: "terrain",
-    label: "지형도",
+    labelKey: "mapTerrain",
     url:
       process.env.NEXT_PUBLIC_MAP_TILE_URL_TERRAIN ||
       "https://tile.opentopomap.org/{z}/{x}/{y}.png",
@@ -278,8 +280,8 @@ function MarkerClusterLayer({ markers, onMarkerClick, selectedMarkerId }) {
           zIndexOffset: isSelected ? 1000 : 0,
         });
 
-        // 간단한 팝업 (장소명)
-        marker.bindPopup(m.location || "이름 없는 위치");
+        // 간단한 팝업 (장소명). 미지정 시 언어별 대체 문구.
+        marker.bindPopup(m.location || ts("unnamedPlace"));
 
         // 클릭: 상위 콜백 호출 + 해당 마커 좌표로 이동
         // (각 marker 는 자신의 m/lat/lng 를 클로저로 갖는다 → 엉뚱한 마커로 이동하지 않음)
@@ -326,6 +328,7 @@ function MarkerClusterLayer({ markers, onMarkerClick, selectedMarkerId }) {
 // ⚠️ MapContainer 의 자식이 아니라 형제(오버레이)로 렌더 → Leaflet 드래그가 클릭을 가로채지 않는다.
 function LayerSwitcher({ currentKey, onChange }) {
   const [open, setOpen] = useState(false);
+  const { t } = useI18n();
 
   return (
     <div className="absolute bottom-3 left-3 z-[1000]">
@@ -349,7 +352,7 @@ function LayerSwitcher({ currentKey, onChange }) {
                 }
               >
                 <span className="w-3">{selected ? "✓" : ""}</span>
-                <span>{s.label}</span>
+                <span>{t(s.labelKey)}</span>
               </button>
             );
           })}
@@ -360,8 +363,8 @@ function LayerSwitcher({ currentKey, onChange }) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        title="지도 스타일 변경 (일반/지형도)"
-        aria-label="지도 스타일 변경"
+        title={t("mapStyle")}
+        aria-label={t("mapStyle")}
         className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-surface text-ink shadow-card transition hover:bg-brand-light"
       >
         {/* 겹친 사각형(레이어) SVG — 외부 아이콘 라이브러리 없이 직접 그림 */}

@@ -21,6 +21,9 @@ import MainCategoryTree from "@/components/MainCategoryTree";
 import VideoListPanel from "@/components/VideoListPanel";
 import IssVideoPanel from "@/components/IssVideoPanel";
 import LiveDot from "@/components/LiveDot";
+import LanguageSelector from "@/components/i18n/LanguageSelector";
+import { useI18n } from "@/components/i18n/LanguageProvider";
+import { useAutoTranslate } from "@/components/i18n/useAutoTranslate";
 
 // 지도 기본 중심/줌 (최초 표시)
 const DEFAULT_CENTER = { lat: 20, lng: 0 };
@@ -39,6 +42,9 @@ function toggleBtnClass(on) {
 }
 
 export default function MainMapView({ markers, tags }) {
+  // 다국어: 정적 문자열(t) + 현재 언어(locale)
+  const { t, locale } = useI18n();
+
   // ─── 레거시 'americas' 대륙값 정규화 ─────────────────────────
   // 아메리카를 북/남으로 분리했지만 Firestore 에 아직 continent:"americas" 로 남은
   // 마커가 있으면(마이그레이션 전) 트리에 "Americas"로 뜨고 클릭이 안 된다.
@@ -59,6 +65,26 @@ export default function MainMapView({ markers, tags }) {
     });
   }, [markers]);
   const tagList = Array.isArray(tags) ? tags : [];
+
+  // ─── 동적 문자열(도시/장소명/태그) 자동 번역 ─────────────────
+  // 관리자가 한글로 입력한 도시/장소명/태그를 현재 언어로 자동 번역한다(요구사항 5).
+  // 여기서 한 번에 모아 요청하면(캐시 공유) 트리·패널이 같은 번역 결과를 함께 쓴다.
+  const dynamicTexts = useMemo(() => {
+    const set = new Set();
+    for (const m of markerList) {
+      if (!m) continue;
+      if (m.city) set.add(String(m.city));
+      if (m.location) set.add(String(m.location));
+      if (Array.isArray(m.tags)) {
+        for (const tg of m.tags) if (tg) set.add(String(tg));
+      }
+    }
+    for (const tg of tagList) {
+      if (tg && tg.name) set.add(String(tg.name));
+    }
+    return [...set];
+  }, [markerList, tagList]);
+  const { tr } = useAutoTranslate(dynamicTexts, locale);
 
   // 선택 상태 (도시/태그는 배타적으로 하나만 활성)
   const [selectedCity, setSelectedCity] = useState(null);
@@ -315,22 +341,27 @@ export default function MainMapView({ markers, tags }) {
 
   // ─── 패널 제목 ───────────────────────────────────────────────
   const panelTitle = useMemo(() => {
-    if (selectedCity) return `${selectedCity.city} (${filteredMarkers.length})`;
-    if (selectedTag) return `#${selectedTag} (${filteredMarkers.length})`;
+    if (selectedCity)
+      return `${tr(selectedCity.city)} (${filteredMarkers.length})`;
+    if (selectedTag) return `#${tr(selectedTag)} (${filteredMarkers.length})`;
     return "";
-  }, [selectedCity, selectedTag, filteredMarkers]);
+  }, [selectedCity, selectedTag, filteredMarkers, tr]);
 
   return (
     <div className="flex h-screen flex-col bg-bg">
-      {/* 상단 헤더 바 */}
+      {/* 상단 헤더 바 (좌: 로고/태그라인, 우: 언어 선택) */}
       <header className="flex h-12 flex-shrink-0 items-center gap-2 border-b border-border bg-surface px-4">
         <LiveDot size="sm" />
         <span className="font-display text-base font-bold tracking-tight text-ink">
           LiveCam Map
         </span>
         <span className="hidden text-xs text-ink-muted sm:inline">
-          세계 라이브 지도
+          {t("tagline")}
         </span>
+        {/* 우측: 언어 변경 드롭다운 (요구사항 2) */}
+        <div className="ml-auto">
+          <LanguageSelector />
+        </div>
       </header>
 
       {/* 콘텐츠 영역 */}
@@ -340,6 +371,7 @@ export default function MainMapView({ markers, tags }) {
           <MainCategoryTree
             markers={markerList}
             tags={tagList}
+            tr={tr}
             onSelectLocation={handleSelectLocation}
             onSelectTag={handleSelectTag}
             onSelectSpace={handleSelectIss}
@@ -363,6 +395,7 @@ export default function MainMapView({ markers, tags }) {
               <VideoListPanel
                 markers={filteredMarkers}
                 title={panelTitle}
+                tr={tr}
                 onClose={closePanel}
                 onSelectMarker={handleSelectMarker}
                 expandedMarkerId={expandedMarkerId}
@@ -397,41 +430,41 @@ export default function MainMapView({ markers, tags }) {
               type="button"
               onClick={toggleMode}
               className={toggleBtnClass(mode === "3d")}
-              title="2D 지도 ↔ 3D 지구본 전환"
+              title={t("view2d") + " ↔ " + t("view3d")}
             >
-              {mode === "3d" ? "🗺️ 2D 보기" : "🌐 3D 보기"}
+              {mode === "3d" ? `🗺️ ${t("view2d")}` : `🌐 ${t("view3d")}`}
             </button>
             <button
               type="button"
               onClick={() => setIssEnabled((v) => !v)}
               className={toggleBtnClass(issEnabled)}
-              title="ISS(국제우주정거장) 실시간 위치 추적 켜기/끄기"
+              title={t("issTrack")}
             >
-              🛰️ ISS 추적
+              🛰️ {t("issTrack")}
             </button>
             <button
               type="button"
               onClick={() => setEqEnabled((v) => !v)}
               className={toggleBtnClass(eqEnabled)}
-              title="실시간 지진(규모 4.5+, 최근 24시간) 표시 켜기/끄기"
+              title={t("earthquake")}
             >
-              🌍 지진
+              🌍 {t("earthquake")}
             </button>
             <button
               type="button"
               onClick={() => setAuroraEnabled((v) => !v)}
               className={toggleBtnClass(auroraEnabled)}
-              title="오로라 예보 분포도(북반구 고위도) 켜기/끄기"
+              title={t("aurora")}
             >
-              🌌 오로라
+              🌌 {t("aurora")}
             </button>
             <button
               type="button"
               onClick={() => setDisasterEnabled((v) => !v)}
               className={toggleBtnClass(disasterEnabled)}
-              title="자연재해(NASA EONET: 산불·화산·폭풍 등) 표시 켜기/끄기"
+              title={t("disaster")}
             >
-              🔥 자연재해
+              🔥 {t("disaster")}
             </button>
           </div>
         </main>

@@ -23,6 +23,7 @@ import {
   getMagnitudeColor,
   getMagnitudeRadiusKm,
 } from "@/lib/earthquakeUtils";
+import { ts, activeLocale } from "@/lib/i18n/static";
 
 const REFRESH_MS = 5 * 60 * 1000; // 5분
 
@@ -31,20 +32,22 @@ function buildPopupHtml(eq) {
   const rows = [];
   const mag = typeof eq.magnitude === "number" ? eq.magnitude.toFixed(1) : "-";
   rows.push(
-    `<div style="font-weight:700;margin-bottom:4px;">🌍 규모 M${mag}</div>`
+    `<div style="font-weight:700;margin-bottom:4px;">🌍 ${ts(
+      "magnitude"
+    )} M${mag}</div>`
   );
   if (eq.depthKm != null) {
-    rows.push(`<div>깊이: ${Math.round(eq.depthKm)} km</div>`);
+    rows.push(`<div>${ts("depth")}: ${Math.round(eq.depthKm)} km</div>`);
   }
   if (eq.time != null) {
     // 발생시각을 보는 사람의 현지 표기로
     let timeText = "-";
     try {
-      timeText = new Date(eq.time).toLocaleString("ko-KR");
+      timeText = new Date(eq.time).toLocaleString(activeLocale());
     } catch (e) {
       timeText = "-";
     }
-    rows.push(`<div>발생: ${timeText}</div>`);
+    rows.push(`<div>${ts("dateOccurred")}: ${timeText}</div>`);
   }
   if (eq.place) {
     rows.push(`<div>${eq.place}</div>`);
@@ -109,7 +112,7 @@ export default function EarthquakeLayer({ map, enabled = false }) {
             });
             circle.bindPopup(buildPopupHtml(eq));
             // 규모 상시 라벨 (클릭 없이도 항상 표시)
-            circle.bindTooltip(`🌍 지진규모 M${magText}`, {
+            circle.bindTooltip(`🌍 ${ts("magnitude")} M${magText}`, {
               permanent: true,
               direction: "top",
               className: "eq-label",

@@ -17,18 +17,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { useEffect, useMemo, useState } from "react";
-import { COUNTRY_NAME_BY_CODE } from "@/lib/countryList";
-
-// 대륙 코드 → 한국어 라벨
-const CONTINENT_LABELS = {
-  asia: "아시아",
-  europe: "유럽",
-  north_america: "북아메리카",
-  south_america: "남아메리카",
-  africa: "아프리카",
-  oceania: "오세아니아",
-  middleeast: "중동",
-};
+import { useI18n } from "@/components/i18n/LanguageProvider";
 
 // 대륙 표시 순서
 const CONTINENT_ORDER = [
@@ -109,6 +98,7 @@ function CollapsibleRow({
 export default function MainCategoryTree({
   markers,
   tags,
+  tr,
   onSelectLocation,
   onSelectTag,
   onSelectSpace,
@@ -119,6 +109,11 @@ export default function MainCategoryTree({
 }) {
   const markerList = Array.isArray(markers) ? markers : [];
   const tagList = Array.isArray(tags) ? tags : [];
+
+  // 다국어: 정적 문자열(t) + 대륙 라벨(tContinent) + 국가명(countryName)
+  const { t, tContinent, countryName } = useI18n();
+  // 동적 문자열(도시/태그) 번역 함수 (부모가 넘겨줌, 없으면 원문 유지)
+  const trFn = typeof tr === "function" ? tr : (x) => x;
 
   // 현재 선택된 도시인지 판별 (대륙+국가+도시까지 정확히 일치할 때만 강조)
   function isCitySelected(continent, country, city) {
@@ -205,16 +200,15 @@ export default function MainCategoryTree({
       {/* ── 지역 섹션 ─────────────────────────────────────────── */}
       <div className="border-b border-border px-2 py-3">
         <h2 className="mb-2 px-1 font-display text-[11px] font-bold uppercase tracking-wide text-ink-muted">
-          지역
+          {t("region")}
         </h2>
         <div className="overflow-auto">
           {markerList.length === 0 ? (
-            <p className="px-1 text-xs text-ink-muted">표시할 마커가 없습니다.</p>
+            <p className="px-1 text-xs text-ink-muted">{t("noMarkers")}</p>
           ) : (
             continentKeys.map((continent) => {
               const continentObj = tree[continent];
-              const continentLabel =
-                CONTINENT_LABELS[continent] || continent || "미분류";
+              const continentLabel = tContinent(continent);
               return (
                 <CollapsibleRow
                   key={continent}
@@ -236,14 +230,11 @@ export default function MainCategoryTree({
                 >
                   {Object.keys(continentObj)
                     .sort((a, b) =>
-                      (COUNTRY_NAME_BY_CODE[a] || a).localeCompare(
-                        COUNTRY_NAME_BY_CODE[b] || b,
-                        "ko"
-                      )
+                      countryName(a).localeCompare(countryName(b))
                     )
                     .map((country) => {
                       const countryObj = continentObj[country];
-                      const countryLabel = COUNTRY_NAME_BY_CODE[country] || country;
+                      const countryLabel = countryName(country);
                       return (
                         <CollapsibleRow
                           key={country}
@@ -268,7 +259,7 @@ export default function MainCategoryTree({
                           }
                         >
                           {Object.keys(countryObj)
-                            .sort((a, b) => a.localeCompare(b, "ko"))
+                            .sort((a, b) => trFn(a).localeCompare(trFn(b)))
                             .map((city) => {
                               // 도시는 말단 노드 → 자식 없이 클릭 시 해당 도시 선택
                               // 현재 선택된 도시면 배경 강조
@@ -295,7 +286,7 @@ export default function MainCategoryTree({
                                   }
                                 >
                                   <span className="w-3 text-ink-muted">·</span>
-                                  <span className="truncate">{city}</span>
+                                  <span className="truncate">{trFn(city)}</span>
                                   <span className="ml-auto font-mono text-[11px] text-ink-muted">
                                     {countryObj[city]}
                                   </span>
@@ -312,7 +303,7 @@ export default function MainCategoryTree({
 
           {/* Space (고정 항목 — Firestore 마커 데이터와 무관하게 항상 표시) */}
           <CollapsibleRow
-            label="🛰️ Space"
+            label={`🛰️ ${t("space")}`}
             // 라이브 개수(로딩 전 null 이면 배지 미표시). NASA 라이브 영상 수.
             count={spaceVideoCount != null ? spaceVideoCount : undefined}
             depth={0}
@@ -337,7 +328,7 @@ export default function MainCategoryTree({
               }
             >
               <span className="w-3 text-ink-muted">·</span>
-              <span className="truncate">ISS (국제우주정거장)</span>
+              <span className="truncate">{t("issFull")}</span>
               {/* ISS 도 Space 하위 유일 항목이라 같은 라이브 개수를 표시 */}
               <span className="ml-auto font-mono text-[11px] text-ink-muted">
                 {spaceVideoCount != null ? spaceVideoCount : ""}
@@ -350,11 +341,11 @@ export default function MainCategoryTree({
       {/* ── 특성 태그 섹션 ────────────────────────────────────── */}
       <div className="px-2 py-3">
         <h2 className="mb-2 px-1 font-display text-[11px] font-bold uppercase tracking-wide text-ink-muted">
-          특성 태그
+          {t("tags")}
         </h2>
         {/* 마커가 1개 이상 등록된 태그만 표시(0개는 숨김), 옆에 개수 표기 */}
         {visibleTags.length === 0 ? (
-          <p className="px-1 text-xs text-ink-muted">표시할 태그가 없습니다.</p>
+          <p className="px-1 text-xs text-ink-muted">{t("noTags")}</p>
         ) : (
           <div className="flex flex-col">
             {visibleTags.map((tag) => {
@@ -374,7 +365,7 @@ export default function MainCategoryTree({
                       : "text-brand")
                   }
                 >
-                  <span className="truncate">#{tag.name}</span>
+                  <span className="truncate">#{trFn(tag.name)}</span>
                   <span className="ml-auto font-mono text-[11px] text-ink-muted">
                     {tag.count}
                   </span>
