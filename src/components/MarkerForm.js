@@ -28,8 +28,8 @@ import { COUNTRIES, COUNTRY_GEO } from "@/lib/countryList";
 const CONTINENT_LABELS = {
   asia: "아시아",
   europe: "유럽",
-  north_america: "🌎 북아메리카",
-  south_america: "🌎 남아메리카",
+  north_america: "북아메리카",
+  south_america: "남아메리카",
   africa: "아프리카",
   oceania: "오세아니아",
   middleeast: "중동",
@@ -291,7 +291,10 @@ export default function MarkerForm({ onRegistered }) {
   // 국가가 너무 많아 찾기 어려우므로, 대륙을 먼저 고르면 그 대륙 국가만 보여준다.
   const filteredCountries = useMemo(() => {
     if (!continent) return [];
-    return COUNTRIES.filter((c) => getContinentByCountry(c.code) === continent);
+    // 대륙에 속한 모든 국가를 추린 뒤, 국가 수가 많으므로 한국어 이름순으로 정렬한다.
+    return COUNTRIES.filter(
+      (c) => getContinentByCountry(c.code) === continent
+    ).sort((a, b) => a.name.localeCompare(b.name, "ko"));
   }, [continent]);
 
   // ─── 등록 버튼 활성화 조건 ───────────────────────────────────
