@@ -21,10 +21,15 @@
 
 import { useEffect, useRef } from "react";
 
-// Klook 이 제공한 위젯 파라미터 (제공받은 코드 그대로 사용)
+// Klook 위젯 파라미터.
+// ★ data-lang 을 "en-BS"(영어-바하마) → "en-US" 로 변경:
+//   위젯 iframe 은 data-* 값을 그대로 affiliate.klook.com/widget/render 로 넘기는데,
+//   lang=en-BS 는 유효한 상품 링크를 만들지 못해 클릭 시 "Where did that page go?" 후
+//   홈으로 리다이렉트되는 원인이었다. 계정을 식별하는 값은 data-wid(125414)이므로
+//   lang 을 바꿔도 제휴 추적에는 영향이 없다.
 const KLOOK_INS_HTML =
   '<ins class="klk-aff-widget" data-wid="125414" data-bgtype="Play" ' +
-  'data-adid="1334464" data-lang="en-BS" data-prod="banner" ' +
+  'data-adid="1334464" data-lang="en-US" data-prod="banner" ' +
   'data-width="120" data-height="600">' +
   '<a href="//www.klook.com/?aid=">Klook.com</a></ins>';
 
