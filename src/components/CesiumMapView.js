@@ -27,7 +27,7 @@
 import { useEffect, useImperativeHandle, useRef, useState } from "react";
 import * as satellite from "satellite.js";
 
-import { getIssTrajectory } from "@/lib/issUtils";
+import { getIssTrajectory, prependCurrentPosition } from "@/lib/issUtils";
 import { getMagnitudeColor, getMagnitudeRadiusKm } from "@/lib/earthquakeUtils";
 import { renderAuroraToCanvas } from "@/lib/auroraUtils";
 import { getEventIcon, formatEventLabel } from "@/lib/naturalEventsUtils";
@@ -392,6 +392,8 @@ export default function CesiumMapView({
     if (!viewer || !Cesium) return undefined;
 
     let issMarker = null;
+    // 최신 ISS 실측 위치(궤적 시작점을 마커에 맞추는 데 사용)
+    let lastPos = null;
 
     async function pollPosition() {
       try {
@@ -399,6 +401,13 @@ export default function CesiumMapView({
         const d = await res.json();
         if (cancelled || !viewer || viewer.isDestroyed()) return;
         if (!d || d.ok === false || typeof d.lat !== "number") return;
+
+        // 궤적 시작점 보정용 최신 실측 위치 저장
+        lastPos = {
+          lat: d.lat,
+          lng: d.lng,
+          altKm: typeof d.altKm === "number" ? d.altKm : null,
+        };
 
         // 최신 좌표를 부모에도 전달 (2D와 동일하게 ISS 선택 시 이동 기준값으로 사용)
         if (typeof cbRef.current.onIssPosition === "function") {
@@ -456,7 +465,16 @@ export default function CesiumMapView({
         }
         issEntsRef.current = keep;
 
-        const segments = getIssTrajectory(satrecRef.current);
+        let segments = getIssTrajectory(satrecRef.current);
+        // 궤적 시작점을 현재 ISS 실측 위치(마커)에 맞춘다(안전 가드 포함)
+        if (lastPos) {
+          segments = prependCurrentPosition(
+            segments,
+            lastPos.lat,
+            lastPos.lng,
+            lastPos.altKm
+          );
+        }
         for (const seg of segments) {
           if (!Array.isArray(seg) || seg.length < 2) continue;
           // [lat,lng,altKm] → Cesium [경도, 위도, 높이(m)] 평면 배열

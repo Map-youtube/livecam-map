@@ -16,6 +16,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MapView from "@/components/MapView";
+import { getContinentByCountry } from "@/lib/continentUtils";
 import MainCategoryTree from "@/components/MainCategoryTree";
 import VideoListPanel from "@/components/VideoListPanel";
 import IssVideoPanel from "@/components/IssVideoPanel";
@@ -38,7 +39,25 @@ function toggleBtnClass(on) {
 }
 
 export default function MainMapView({ markers, tags }) {
-  const markerList = Array.isArray(markers) ? markers : [];
+  // ─── 레거시 'americas' 대륙값 정규화 ─────────────────────────
+  // 아메리카를 북/남으로 분리했지만 Firestore 에 아직 continent:"americas" 로 남은
+  // 마커가 있으면(마이그레이션 전) 트리에 "Americas"로 뜨고 클릭이 안 된다.
+  // 그래서 표시 직전에 국가코드로 north_america/south_america 를 재계산해 정규화한다.
+  // (마이그레이션이 끝나면 'americas'가 없어 이 로직은 자연히 no-op 가 된다)
+  const markerList = useMemo(() => {
+    const arr = Array.isArray(markers) ? markers : [];
+    return arr.map((m) => {
+      try {
+        if (m && m.continent === "americas") {
+          const c = getContinentByCountry(m.country);
+          if (c) return { ...m, continent: c };
+        }
+      } catch (error) {
+        console.error("[MainMapView] 대륙값 정규화 실패:", error); // TODO: 배포 전 제거
+      }
+      return m;
+    });
+  }, [markers]);
   const tagList = Array.isArray(tags) ? tags : [];
 
   // 선택 상태 (도시/태그는 배타적으로 하나만 활성)

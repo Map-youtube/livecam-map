@@ -25,7 +25,7 @@ import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet-polylinedecorator"; // L.polylineDecorator / L.Symbol.arrowHead 를 L 에 추가
 import * as satellite from "satellite.js";
-import { getIssTrajectory } from "@/lib/issUtils";
+import { getIssTrajectory, prependCurrentPosition } from "@/lib/issUtils";
 
 // ─── 동작 상수 ────────────────────────────────────────────────
 const POSITION_POLL_MS = 2000; // 위치 갱신 간격 (정상 모드)
@@ -317,9 +317,14 @@ export default function IssTracker({
     function recomputeTrajectory() {
       try {
         if (!satrecRef.current) return; // TLE 아직 없음
+        // 현재~공전주기(한 바퀴)만 계산. 시작점을 현재 ISS 실측 위치(마커)에 맞춘다.
         const segments = getIssTrajectory(satrecRef.current);
         if (cancelled) return;
-        drawLines(segments);
+        const d = lastDataRef.current;
+        const withStart = d
+          ? prependCurrentPosition(segments, d.lat, d.lng, d.altKm)
+          : segments;
+        drawLines(withStart);
       } catch (error) {
         console.error("[IssTracker] 궤적 재계산 실패:", error); // TODO: 배포 전 제거
       }

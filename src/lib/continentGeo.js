@@ -17,7 +17,7 @@ export const CONTINENT_GEO = {
   europe: { lat: 54, lng: 15, zoom: 4, west: -25, south: 34, east: 45, north: 72 },
   north_america: { lat: 40, lng: -100, zoom: 3, west: -168, south: 7, east: -52, north: 72 },
   south_america: { lat: -15, lng: -60, zoom: 3, west: -82, south: -56, east: -34, north: 13 },
-  africa: { lat: 2, lng: 20, zoom: 3, west: -18, south: -35, east: 52, north: 38 },
+  africa: { lat: -1, lng: 21, zoom: 4, west: -14, south: -35, east: 51, north: 32 },
   oceania: { lat: -25, lng: 140, zoom: 4, west: 110, south: -50, east: 179, north: 0 },
   middleeast: { lat: 29, lng: 45, zoom: 4, west: 25, south: 12, east: 63, north: 42 },
 };

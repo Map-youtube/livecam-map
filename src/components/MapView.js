@@ -113,7 +113,7 @@ function MapView(
 
         // 2D: Leaflet — 대륙/국가/도시 모두 동일한 부드러운 애니메이션(duration 통일)
         if (!leafletMap) return;
-        const FLY_DURATION = 1.2; // 초 (도시/국가/대륙 이동 느낌 일관화)
+        const FLY_DURATION = 1.8; // 초 (약간 더 느리게 — 도시/국가/대륙 이동 느낌 일관화)
         if (hasBounds) {
           // 대륙/국가: 경계 사각형이 화면에 꽉 차도록 부드럽게 이동(flyToBounds)
           leafletMap.flyToBounds(
