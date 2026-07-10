@@ -22,6 +22,7 @@ import VideoListPanel from "@/components/VideoListPanel";
 import IssVideoPanel from "@/components/IssVideoPanel";
 import LiveDot from "@/components/LiveDot";
 import AdSlot from "@/components/AdSlot";
+import KlookWidget from "@/components/KlookWidget";
 import LanguageSelector from "@/components/i18n/LanguageSelector";
 import { useI18n } from "@/components/i18n/LanguageProvider";
 import { useAutoTranslate } from "@/components/i18n/useAutoTranslate";
@@ -470,15 +471,33 @@ export default function MainMapView({ markers, tags }) {
           </div>
         </main>
 
-        {/* 오른쪽 끝: 세로 배너형 광고 공간 (지도 폭을 줄여 확보, 넓은 화면에서만 표시) */}
-        <aside className="hidden w-40 flex-shrink-0 border-l border-border bg-surface p-2 lg:block">
-          <AdSlot orientation="vertical" />
+        {/* 오른쪽 끝: 세로 배너형 광고 (Klook 120×600, 넓은 화면에서만 표시) */}
+        <aside className="hidden w-[132px] flex-shrink-0 border-l border-border bg-surface lg:block">
+          <AdSlot orientation="vertical">
+            <KlookWidget />
+          </AdSlot>
         </aside>
       </div>
 
-      {/* 하단: 가로 배너형 광고 공간 (전체 폭, 콘텐츠 높이를 줄여 확보) */}
-      <div className="flex h-[90px] flex-shrink-0 items-stretch border-t border-border bg-surface p-2">
-        <AdSlot orientation="horizontal" />
+      {/* 하단: 가로 배너형 광고 (728×90, 전체 폭) */}
+      <div className="flex h-[98px] flex-shrink-0 items-stretch border-t border-border bg-surface">
+        <AdSlot orientation="horizontal">
+          <a
+            href="https://www.kqzyfj.com/click-101809732-17272968"
+            target="_top"
+            rel="sponsored noopener"
+          >
+            {/* 제휴 배너 이미지 (728×90) — 외부 광고 이미지라 next/image 대신 img 사용 */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="https://www.awltovhc.com/image-101809732-17272968"
+              width={728}
+              height={90}
+              alt=""
+              style={{ border: 0 }}
+            />
+          </a>
+        </AdSlot>
       </div>
     </div>
   );

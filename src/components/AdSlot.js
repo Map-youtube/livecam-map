@@ -22,8 +22,13 @@ export default function AdSlot({
   return (
     <div
       className={
-        "relative flex h-full w-full items-center justify-center overflow-hidden bg-surface " +
-        className
+        "relative flex h-full w-full bg-surface " +
+        // 세로 배너(120×600)는 화면이 짧아도 위부터 보이도록 상단 정렬 + 세로 스크롤,
+        // "광고" 라벨과 겹치지 않게 상단 여백(pt-6). 가로 배너는 중앙 정렬.
+        (isVertical
+          ? "items-start justify-center overflow-y-auto pt-6"
+          : "items-center justify-center overflow-hidden") +
+        (className ? " " + className : "")
       }
       // 접근성: 광고 영역임을 명시
       role="complementary"
@@ -46,7 +51,7 @@ export default function AdSlot({
         >
           <span>광고 영역</span>
           <span className="text-ink-muted/70">
-            {isVertical ? "세로 배너 (예: 160×600)" : "가로 배너 (예: 728×90)"}
+            {isVertical ? "세로 배너 (예: 120×600)" : "가로 배너 (예: 728×90)"}
           </span>
         </div>
       )}
