@@ -23,6 +23,7 @@
 
 import { useEffect, useRef } from "react";
 import L from "leaflet";
+import "leaflet-polylinedecorator"; // L.polylineDecorator / L.Symbol.arrowHead 를 L 에 추가
 import * as satellite from "satellite.js";
 import { getIssTrajectory } from "@/lib/issUtils";
 
@@ -78,6 +79,8 @@ export default function IssTracker({
   const circlesRef = useRef([]); // L.Circle[]
   // 미래 궤적선 레이어(날짜변경선 분리로 선분이 여러 개일 수 있어 배열로 관리)
   const lineLayersRef = useRef([]); // L.Polyline[]
+  // 궤적선 위 방향 화살표(polylineDecorator) — 재계산 시 함께 갱신
+  const decoratorRef = useRef(null);
   // 궤적 계산용 상태
   const satrecRef = useRef(null);
   const tleOkRef = useRef(false);
@@ -141,6 +144,13 @@ export default function IssTracker({
           } catch (e) {}
         }
         lineLayersRef.current = [];
+        // 방향 화살표 decorator 도 함께 제거 (겹침/중복 방지)
+        if (decoratorRef.current) {
+          try {
+            map.removeLayer(decoratorRef.current);
+          } catch (e) {}
+          decoratorRef.current = null;
+        }
       } catch (error) {
         console.error("[IssTracker] 궤적선 제거 실패:", error); // TODO: 배포 전 제거
       }
@@ -266,6 +276,33 @@ export default function IssTracker({
               }).addTo(map)
             );
           }
+        }
+
+        // ── 이동방향 화살표: 궤적선을 따라 일정 간격으로 여러 개 표시 ──
+        // leaflet-polylinedecorator 의 arrowHead 심볼을 repeat 간격으로 반복.
+        // repeat/pixelSize 는 눈으로 보고 조정 가능(간격 80px, 화살표 9px 로 시작).
+        if (
+          lineLayersRef.current.length > 0 &&
+          typeof L.polylineDecorator === "function"
+        ) {
+          decoratorRef.current = L.polylineDecorator(lineLayersRef.current, {
+            patterns: [
+              {
+                offset: "5%",
+                repeat: "80px",
+                symbol: L.Symbol.arrowHead({
+                  pixelSize: 9,
+                  polygon: false,
+                  pathOptions: {
+                    stroke: true,
+                    color: TRACK_COLOR,
+                    weight: 2,
+                    opacity: 1,
+                  },
+                }),
+              },
+            ],
+          }).addTo(map);
         }
       } catch (error) {
         console.error("[IssTracker] 궤적선 그리기 실패:", error); // TODO: 배포 전 제거
