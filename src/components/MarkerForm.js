@@ -22,6 +22,7 @@ import Thumbnail from "@/components/DefaultThumbnail";
 import { getContinentByCountry } from "@/lib/continentUtils";
 import { getAdminIdToken } from "@/lib/clientAuth";
 import TagSelector from "@/components/TagSelector";
+import CityAutocomplete from "@/components/CityAutocomplete";
 import { COUNTRIES, COUNTRY_GEO } from "@/lib/countryList";
 
 // ─── 대륙 코드 → 한국어 라벨 ───────────────────────────────────
@@ -106,6 +107,8 @@ export default function MarkerForm({ onRegistered }) {
   const geocodeReqRef = useRef(0);
   // 장소 특성 태그 (지역 분류와 별개, 최대 3개)
   const [tags, setTags] = useState([]);
+  // 도시 자동완성 목록 새로고침 신호 (등록 성공 시 +1 → 방금 추가한 도시도 추천에 반영)
+  const [cityReload, setCityReload] = useState(0);
 
   // ─── 제출 상태 ───────────────────────────────────────────────
   const [submitting, setSubmitting] = useState(false);
@@ -371,6 +374,8 @@ export default function MarkerForm({ onRegistered }) {
         // 성공 → 폼 초기화 + 안내
         setSubmitMessage(data.message || "등록되었습니다.");
         resetForm();
+        // 방금 추가한 도시도 자동완성 추천에 반영되도록 도시 목록을 다시 불러오게 한다.
+        setCityReload((n) => n + 1);
         // 상위(관리자 페이지)에 등록 완료를 알려 목록을 갱신하게 한다.
         if (typeof onRegistered === "function") {
           onRegistered();
@@ -547,15 +552,15 @@ export default function MarkerForm({ onRegistered }) {
             </select>
           </div>
 
-          {/* 도시 */}
+          {/* 도시 (자동완성 — 기존 도시명 추천 + 중복 표기 방지) */}
           <div>
             <label className="block text-xs text-gray-600">도시</label>
-            <input
-              type="text"
+            <CityAutocomplete
               value={city}
-              onChange={(e) => setCity(e.target.value)}
+              onChange={setCity}
+              country={country}
               placeholder="예: Tokyo"
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
+              reloadSignal={cityReload}
             />
           </div>
         </div>
