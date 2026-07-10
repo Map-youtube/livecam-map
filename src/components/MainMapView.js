@@ -21,6 +21,7 @@ import MainCategoryTree from "@/components/MainCategoryTree";
 import VideoListPanel from "@/components/VideoListPanel";
 import IssVideoPanel from "@/components/IssVideoPanel";
 import LiveDot from "@/components/LiveDot";
+import AdSlot from "@/components/AdSlot";
 import LanguageSelector from "@/components/i18n/LanguageSelector";
 import { useI18n } from "@/components/i18n/LanguageProvider";
 import { useAutoTranslate } from "@/components/i18n/useAutoTranslate";
@@ -468,6 +469,16 @@ export default function MainMapView({ markers, tags }) {
             </button>
           </div>
         </main>
+
+        {/* 오른쪽 끝: 세로 배너형 광고 공간 (지도 폭을 줄여 확보, 넓은 화면에서만 표시) */}
+        <aside className="hidden w-40 flex-shrink-0 border-l border-border bg-surface p-2 lg:block">
+          <AdSlot orientation="vertical" />
+        </aside>
+      </div>
+
+      {/* 하단: 가로 배너형 광고 공간 (전체 폭, 콘텐츠 높이를 줄여 확보) */}
+      <div className="flex h-[90px] flex-shrink-0 items-stretch border-t border-border bg-surface p-2">
+        <AdSlot orientation="horizontal" />
       </div>
     </div>
   );
