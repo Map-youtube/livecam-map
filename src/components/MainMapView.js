@@ -484,7 +484,7 @@ export default function MainMapView({ markers, tags }) {
         <AdSlot orientation="horizontal">
           <a
             href="https://www.kqzyfj.com/click-101809732-17272968"
-            target="_top"
+            target="_blank"
             rel="sponsored noopener"
           >
             {/* 제휴 배너 이미지 (728×90) — 외부 광고 이미지라 next/image 대신 img 사용 */}
