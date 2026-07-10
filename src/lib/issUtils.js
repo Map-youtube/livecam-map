@@ -2,8 +2,10 @@
 // issUtils — ISS 궤적선 계산 유틸 (satellite.js 기반)
 //
 // getIssTrajectory(satrec, minutesAhead, stepSeconds)
-//   - 현재시각 ~ +minutesAhead(기본 90분) "미래 구간만" 일정 간격으로 propagate 하여
+//   - 현재시각 ~ +minutesAhead "미래 구간만" 일정 간격으로 propagate 하여
 //     지상 좌표(위경도)를 구한다. (과거 구간은 계산하지 않는다)
+//   - minutesAhead 를 생략하면 TLE 의 평균운동(satrec.no, 라디안/분)으로 실제 공전주기
+//     (약 92~93분)를 계산해 "정확히 한 바퀴"만 그린다.
 //   - 간격은 20초(stepSeconds)로 촘촘히 계산해 마커 위치와의 어긋남을 최소화한다.
 //   - ★ 선분 분리 규칙 (지도를 가로지르는 비정상 직선 방지):
 //       ① 날짜변경선(경도 ±180): 연속 두 점의 경도 차가 180도를 넘으면 그 지점에서 끊는다.
@@ -23,10 +25,36 @@
 
 import * as satellite from "satellite.js";
 
-// ─── 궤적 계산 (미래 구간만) ─────────────────────────────────
-export function getIssTrajectory(satrec, minutesAhead = 90, stepSeconds = 20) {
-  const segments = []; // 완성된 선분들 [[ [lat,lng], ... ], ...]
-  let current = []; // 현재 이어 그리는 중인 선분 [[lat,lng], ...]
+// 공전주기 폴백값(분) — mean motion 계산 실패 시 사용 (ISS 평균 약 92.5분)
+const FALLBACK_PERIOD_MIN = 92.5;
+
+// ─── TLE 평균운동 → 공전주기(분) ─────────────────────────────
+// satrec.no: 평균운동(라디안/분). 한 바퀴 = 2π 라디안이므로 주기 = 2π / no (분).
+// 값이 없거나 비정상(80~120분 범위 밖)이면 폴백값을 반환한다.
+export function getOrbitPeriodMinutes(satrec) {
+  try {
+    // satellite.js 버전에 따라 no 또는 no_kozai 로 제공될 수 있어 둘 다 시도
+    const candidates = [];
+    if (satrec && typeof satrec.no === "number") candidates.push(satrec.no);
+    if (satrec && typeof satrec.no_kozai === "number") {
+      candidates.push(satrec.no_kozai);
+    }
+    for (const no of candidates) {
+      if (no > 0) {
+        const period = (2 * Math.PI) / no; // 분
+        if (period >= 80 && period <= 120) return period;
+      }
+    }
+  } catch (error) {
+    console.error("[issUtils] 공전주기 계산 실패:", error); // TODO: 배포 전 제거
+  }
+  return FALLBACK_PERIOD_MIN;
+}
+
+// ─── 궤적 계산 (현재~미래 정확히 한 바퀴) ────────────────────
+export function getIssTrajectory(satrec, minutesAhead, stepSeconds = 20) {
+  const segments = []; // 완성된 선분들 [[ [lat,lng,altKm], ... ], ...]
+  let current = []; // 현재 이어 그리는 중인 선분
 
   // ── 현재 선분을 닫고 새 선분 준비 (점 2개 미만이면 선이 안 되므로 버린다) ──
   function closeCurrentSegment() {
@@ -37,8 +65,14 @@ export function getIssTrajectory(satrec, minutesAhead = 90, stepSeconds = 20) {
   try {
     if (!satrec) return [];
 
+    // minutesAhead 를 명시하지 않으면 실제 공전주기(한 바퀴)를 사용
+    const period =
+      typeof minutesAhead === "number" && minutesAhead > 0
+        ? minutesAhead
+        : getOrbitPeriodMinutes(satrec);
+
     const nowMs = Date.now();
-    const totalSeconds = minutesAhead * 60;
+    const totalSeconds = period * 60;
 
     // 현재시각(s=0) ~ +minutesAhead 를 stepSeconds(기본 20초) 간격으로 계산
     for (let s = 0; s <= totalSeconds; s += stepSeconds) {

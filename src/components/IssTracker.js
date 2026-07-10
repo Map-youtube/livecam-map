@@ -280,7 +280,7 @@ export default function IssTracker({
 
         // ── 이동방향 화살표: 궤적선을 따라 일정 간격으로 여러 개 표시 ──
         // leaflet-polylinedecorator 의 arrowHead 심볼을 repeat 간격으로 반복.
-        // repeat/pixelSize 는 눈으로 보고 조정 가능(간격 80px, 화살표 9px 로 시작).
+        // repeat/pixelSize 는 눈으로 보고 조정 가능(간격 120px, 화살표 9px).
         if (
           lineLayersRef.current.length > 0 &&
           typeof L.polylineDecorator === "function"
@@ -289,7 +289,7 @@ export default function IssTracker({
             patterns: [
               {
                 offset: "5%",
-                repeat: "80px",
+                repeat: "120px",
                 symbol: L.Symbol.arrowHead({
                   pixelSize: 9,
                   polygon: false,

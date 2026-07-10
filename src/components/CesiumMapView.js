@@ -110,48 +110,6 @@ function makeEmojiCanvas(emoji, size = 44) {
   }
 }
 
-// 궤적 화살표를 몇 점마다 하나씩 찍을지 (20초 간격 좌표 기준 10점 = 약 200초 간격)
-const ARROW_POINT_STEP = 10;
-
-// ─── 삼각형 화살표(위 방향) → data URL (외부 이미지 없이 인라인) ──
-function makeArrowCanvas(color, size = 22) {
-  try {
-    if (typeof document === "undefined") return null;
-    const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(size / 2, 2); // 꼭짓점(위=북쪽)
-    ctx.lineTo(size - 3, size - 3); // 오른쪽 아래
-    ctx.lineTo(3, size - 3); // 왼쪽 아래
-    ctx.closePath();
-    ctx.fill();
-    return canvas.toDataURL("image/png");
-  } catch (error) {
-    console.error("[CesiumMapView] 화살표 캔버스 생성 실패:", error); // TODO: 배포 전 제거
-    return null;
-  }
-}
-
-// ─── 두 좌표 사이 방위각(라디안, 0=북, 시계방향 동쪽+) ─────────
-function bearingRad(lat1, lng1, lat2, lng2) {
-  try {
-    const toRad = Math.PI / 180;
-    const p1 = lat1 * toRad;
-    const p2 = lat2 * toRad;
-    const dLng = (lng2 - lng1) * toRad;
-    const y = Math.sin(dLng) * Math.cos(p2);
-    const x =
-      Math.cos(p1) * Math.sin(p2) -
-      Math.sin(p1) * Math.cos(p2) * Math.cos(dLng);
-    return Math.atan2(y, x);
-  } catch (error) {
-    return 0;
-  }
-}
-
 // ⚠️ next/dynamic 은 ref 를 자동 전달하지 않으므로, 공통 인터페이스는 forwardRef 대신
 //    apiRef 프롭(콜백/ref 객체)으로 받아 useImperativeHandle 로 연결한다.
 export default function CesiumMapView({
@@ -434,8 +392,6 @@ export default function CesiumMapView({
     if (!viewer || !Cesium) return undefined;
 
     let issMarker = null;
-    // 방향 화살표 아이콘(궤적 색) — 이 effect 동안 한 번만 생성해 재사용
-    const arrowUrl = makeArrowCanvas(TRACK_COLOR, 22);
 
     async function pollPosition() {
       try {
@@ -487,10 +443,10 @@ export default function CesiumMapView({
       try {
         if (cancelled || !viewer || viewer.isDestroyed()) return;
         if (!satrecRef.current) return;
-        // 이전 궤적 폴리라인 + 방향 화살표 제거 (ISS 마커는 유지)
+        // 이전 궤적 폴리라인 제거 (ISS 마커는 유지)
         const keep = [];
         for (const e of issEntsRef.current) {
-          if (e && (e.polyline || e.__issArrow)) {
+          if (e && e.polyline) {
             try {
               viewer.entities.remove(e);
             } catch (inner) {}
@@ -517,36 +473,9 @@ export default function CesiumMapView({
             },
           });
           issEntsRef.current.push(line);
-
-          // ── 이동방향 화살표: 이 선분을 따라 일정 간격으로 배치 ──
-          // ⚠️ 반복마다 그 지점의 고유 좌표로 heading 을 새로 계산한다(클로저 고정값 아님).
-          if (arrowUrl) {
-            for (let i = 0; i + 1 < seg.length; i += ARROW_POINT_STEP) {
-              try {
-                const lat1 = seg[i][0];
-                const lng1 = seg[i][1];
-                const alt1 = Number(seg[i][2]) || 0;
-                const lat2 = seg[i + 1][0];
-                const lng2 = seg[i + 1][1];
-                const heading = bearingRad(lat1, lng1, lat2, lng2);
-                const arrow = viewer.entities.add({
-                  position: toCesiumCoordRaw(Cesium, lat1, lng1, alt1),
-                  billboard: {
-                    image: arrowUrl,
-                    scale: 0.7,
-                    // 화살표(위=북) 이미지를 진행 방위각으로 회전(반시계 기준이라 -heading).
-                    // (혹시 거꾸로 보이면 부호만 반전하면 됨)
-                    rotation: -heading,
-                  },
-                });
-                arrow.__issArrow = true; // 재계산 시 제거 대상 표시
-                issEntsRef.current.push(arrow);
-              } catch (inner) {
-                continue;
-              }
-            }
-          }
         }
+        // 참고: 3D 방향 표시는 billboard 회전 방식이 특정 각도에서 찌그러져(스크린 회전과
+        //   지구 곡면 방향 불일치) 자연스럽지 않아 생략한다. 방향 화살표는 2D 궤적선에만 표시한다.
         requestRender();
       } catch (error) {
         console.error("[CesiumMapView] 궤적 그리기 실패:", error); // TODO: 배포 전 제거
