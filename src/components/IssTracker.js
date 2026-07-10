@@ -25,7 +25,7 @@ import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet-polylinedecorator"; // L.polylineDecorator / L.Symbol.arrowHead 를 L 에 추가
 import * as satellite from "satellite.js";
-import { getIssTrajectory, prependCurrentPosition } from "@/lib/issUtils";
+import { getIssTrajectory, startTrajectoryAtMarker } from "@/lib/issUtils";
 
 // ─── 동작 상수 ────────────────────────────────────────────────
 const POSITION_POLL_MS = 2000; // 위치 갱신 간격 (정상 모드)
@@ -322,7 +322,7 @@ export default function IssTracker({
         if (cancelled) return;
         const d = lastDataRef.current;
         const withStart = d
-          ? prependCurrentPosition(segments, d.lat, d.lng, d.altKm)
+          ? startTrajectoryAtMarker(segments, d.lat, d.lng, d.altKm)
           : segments;
         drawLines(withStart);
       } catch (error) {

@@ -27,7 +27,7 @@
 import { useEffect, useImperativeHandle, useRef, useState } from "react";
 import * as satellite from "satellite.js";
 
-import { getIssTrajectory, prependCurrentPosition } from "@/lib/issUtils";
+import { getIssTrajectory, startTrajectoryAtMarker } from "@/lib/issUtils";
 import { getMagnitudeColor, getMagnitudeRadiusKm } from "@/lib/earthquakeUtils";
 import { renderAuroraToCanvas } from "@/lib/auroraUtils";
 import { getEventIcon, formatEventLabel } from "@/lib/naturalEventsUtils";
@@ -466,9 +466,9 @@ export default function CesiumMapView({
         issEntsRef.current = keep;
 
         let segments = getIssTrajectory(satrecRef.current);
-        // 궤적 시작점을 현재 ISS 실측 위치(마커)에 맞춘다(안전 가드 포함)
+        // 궤적 시작점을 현재 ISS 실측 위치(마커)에 맞춘다(첫 점 교체, 안전 가드 포함)
         if (lastPos) {
-          segments = prependCurrentPosition(
+          segments = startTrajectoryAtMarker(
             segments,
             lastPos.lat,
             lastPos.lng,

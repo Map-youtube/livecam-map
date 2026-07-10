@@ -134,31 +134,26 @@ export function getIssTrajectory(satrec, minutesAhead, stepSeconds = 20) {
 
 // ─── 궤적 시작점을 현재 ISS 실측 위치(마커)에 맞추기 ──────────
 // getIssTrajectory 는 TLE 로 예측한 "현재 위치"에서 시작하는데, 마커는 WTIA 실측 위치라
-// 아주 약간 어긋날 수 있다. 실측 위치를 첫 선분 맨 앞에 붙여 선이 마커에서 시작하게 한다.
-// ⚠️ 과거 V자 스파이크 버그 예방: 실측점이 궤적 진행방향의 "뒤쪽"에 있을 때만 붙인다
-//    (실측→첫점 방향과 첫점→둘째점 방향의 내적이 음수면 역주행(V자)이므로 붙이지 않음).
-//    또 날짜변경선 근처(경도차 20도 초과)에서도 붙이지 않는다.
+// 아주 약간 어긋날 수 있다. → 첫 선분의 "첫 점을 마커 위치로 교체"해 선이 항상 마커에서
+// 시작하게 한다.
+// ⚠️ 점을 "추가(prepend)"하지 않고 "교체(replace)"하는 이유:
+//    추가하면 실측점과 첫 계산점 사이에 짧은 역주행 선분(V자)이 생길 수 있다.
+//    첫 점만 마커로 바꾸면(그다음 점은 20초 뒤 위치라 항상 진행방향 앞) V자 없이 마커에서 시작한다.
+//    단, 날짜변경선 근처(경도차 20도 초과)면 지도를 가로지를 위험이 있어 건드리지 않는다.
 // 고도(altKm)가 없으면(open-notify 폴백) 첫 계산점의 고도를 써서 3D 수직 스파이크를 막는다.
-export function prependCurrentPosition(segments, lat, lng, altKm) {
+export function startTrajectoryAtMarker(segments, lat, lng, altKm) {
   try {
     if (!Array.isArray(segments) || segments.length === 0) return segments;
     if (typeof lat !== "number" || typeof lng !== "number") return segments;
     if (Number.isNaN(lat) || Number.isNaN(lng)) return segments;
 
     const seg0 = segments[0];
-    if (!Array.isArray(seg0) || seg0.length < 2) return segments;
+    if (!Array.isArray(seg0) || seg0.length < 1) return segments;
 
-    const p0 = seg0[0]; // [lat, lng, altKm]
-    const p1 = seg0[1];
+    const p0 = seg0[0]; // [lat, lng, altKm] (TLE 로 계산한 현재 위치)
 
-    // 날짜변경선 근처면 붙이지 않음(선이 지도를 가로지를 수 있어 위험)
+    // 날짜변경선 근처면 건드리지 않음(선이 지도를 가로지를 수 있어 위험)
     if (Math.abs(lng - p0[1]) > 20) return segments;
-
-    // 역주행(V자) 방지: (p0→p1) 과 (실측→p0) 의 내적이 음수면 붙이지 않음
-    const pathV = [p1[0] - p0[0], p1[1] - p0[1]];
-    const preV = [p0[0] - lat, p0[1] - lng];
-    const dot = pathV[0] * preV[0] + pathV[1] * preV[1];
-    if (dot < 0) return segments;
 
     // 고도: 유효하면 사용, 아니면 첫 계산점 고도(궤도 높이) 사용
     const alt =
@@ -168,10 +163,11 @@ export function prependCurrentPosition(segments, lat, lng, altKm) {
         ? p0[2]
         : 0;
 
-    seg0.unshift([lat, lng, alt]);
+    // 첫 점을 마커 위치로 교체 → 선이 항상 ISS 아이콘에서 시작한다.
+    seg0[0] = [lat, lng, alt];
     return segments;
   } catch (error) {
-    console.error("[issUtils] prependCurrentPosition 실패:", error); // TODO: 배포 전 제거
+    console.error("[issUtils] startTrajectoryAtMarker 실패:", error); // TODO: 배포 전 제거
     return segments;
   }
 }
