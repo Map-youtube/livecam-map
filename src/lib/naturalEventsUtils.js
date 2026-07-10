@@ -34,7 +34,8 @@ export function getEventIcon(categoryId) {
 //   - wildfires   + 규모값: "🔥 {title} · {value(천단위)}{unit}"
 //   - seaLakeIce           : "🧊 {title}" (규모 데이터 보통 없음)
 //   - 그 외 / 규모값 없음   : "{이모지} {title}"  (빈 규모 노출 금지)
-export function formatEventLabel(event) {
+// t: 현재 언어 번역 함수(선택). 없으면 "최대풍속"(한국어) 기본값.
+export function formatEventLabel(event, t) {
   try {
     if (!event) return "";
     const emoji = getEventIcon(event.category);
@@ -42,9 +43,11 @@ export function formatEventLabel(event) {
     const value = event.magnitudeValue;
     const unit = event.magnitudeUnit ? String(event.magnitudeUnit) : "";
     const hasMag = typeof value === "number" && !Number.isNaN(value);
+    const maxWindLabel =
+      typeof t === "function" ? t("maxWindSpeed") : "최대풍속";
 
     if (event.category === "severeStorms" && hasMag) {
-      return `${emoji} ${title} · 최대풍속 ${value}${unit}`;
+      return `${emoji} ${title} · ${maxWindLabel} ${value}${unit}`;
     }
     if (event.category === "wildfires" && hasMag) {
       return `${emoji} ${title} · ${value.toLocaleString()}${unit}`;

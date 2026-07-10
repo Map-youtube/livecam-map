@@ -683,3 +683,27 @@ const mapMessages = {
 for (const code of Object.keys(mapMessages)) {
   messages[code] = { ...messages[code], ...mapMessages[code] };
 }
+
+// ─── 자연재해 상시 라벨용 (최대풍속) ──────────────────────────
+const stormMessages = {
+  en: { maxWindSpeed: "Max wind" },
+  ko: { maxWindSpeed: "최대풍속" },
+  ja: { maxWindSpeed: "最大風速" },
+  zh: { maxWindSpeed: "最大风速" },
+  es: { maxWindSpeed: "Viento máx." },
+  fr: { maxWindSpeed: "Vent max" },
+  de: { maxWindSpeed: "Max. Wind" },
+  it: { maxWindSpeed: "Vento max" },
+  pt: { maxWindSpeed: "Vento máx." },
+  ru: { maxWindSpeed: "Макс. ветер" },
+  hi: { maxWindSpeed: "अधिकतम हवा" },
+  bn: { maxWindSpeed: "সর্বোচ্চ বাতাস" },
+  th: { maxWindSpeed: "ลมสูงสุด" },
+  vi: { maxWindSpeed: "Gió tối đa" },
+  id: { maxWindSpeed: "Angin maks" },
+  ar: { maxWindSpeed: "أقصى رياح" },
+  fa: { maxWindSpeed: "بیشینه باد" },
+};
+for (const code of Object.keys(stormMessages)) {
+  messages[code] = { ...messages[code], ...stormMessages[code] };
+}

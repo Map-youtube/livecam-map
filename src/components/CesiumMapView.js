@@ -577,7 +577,7 @@ export default function CesiumMapView({
               },
               // 규모 상시 라벨 (클릭 없이도 보임, 원과 겹치지 않게 위로 띄움)
               label: {
-                text: `🌍 지진규모 M${magText}`,
+                text: `🌍 ${t("magnitude")} M${magText}`,
                 font: "bold 12px sans-serif",
                 fillColor: Cesium.Color.WHITE,
                 outlineColor: Cesium.Color.BLACK,
@@ -606,7 +606,9 @@ export default function CesiumMapView({
       if (timer) clearInterval(timer);
       removeEntities(eqEntsRef);
     };
-  }, [ready, eqEnabled]);
+    // locale 포함 → 언어 변경 시 규모 라벨을 새 언어로 다시 그린다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, eqEnabled, locale]);
 
   // ─── 5) 오로라 레이어 (캔버스 히트맵 이미지 오버레이) ────────
   // leaflet.heat 와 동일한 느낌: 격자 데이터를 부드러운 색 구름 이미지로 만들어
@@ -703,7 +705,7 @@ export default function CesiumMapView({
               billboard: { image: icon || undefined, scale: 1 },
               // 이름 + (태풍 풍속/산불 면적 등) 상시 라벨
               label: {
-                text: formatEventLabel(ev),
+                text: formatEventLabel(ev, t),
                 font: "bold 12px sans-serif",
                 fillColor: Cesium.Color.WHITE,
                 outlineColor: Cesium.Color.BLACK,
@@ -737,7 +739,9 @@ export default function CesiumMapView({
       if (timer) clearInterval(timer);
       removeEntities(disasterEntsRef);
     };
-  }, [ready, disasterEnabled]);
+    // locale 포함 → 언어 변경 시 자연재해 라벨을 새 언어로 다시 그린다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, disasterEnabled, locale]);
 
   return (
     <div className="relative h-full w-full bg-black">

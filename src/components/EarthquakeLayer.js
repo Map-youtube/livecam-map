@@ -23,31 +23,32 @@ import {
   getMagnitudeColor,
   getMagnitudeRadiusKm,
 } from "@/lib/earthquakeUtils";
-import { ts, activeLocale } from "@/lib/i18n/static";
+import { useI18n } from "@/components/i18n/LanguageProvider";
 
 const REFRESH_MS = 5 * 60 * 1000; // 5분
 
 // ─── 팝업 HTML (규모/깊이/시각/장소) ─────────────────────────
-function buildPopupHtml(eq) {
+// t(현재 언어 번역 함수), locale(날짜 표기용)을 인자로 받아 현재 언어로 그린다.
+function buildPopupHtml(eq, t, locale) {
   const rows = [];
   const mag = typeof eq.magnitude === "number" ? eq.magnitude.toFixed(1) : "-";
   rows.push(
-    `<div style="font-weight:700;margin-bottom:4px;">🌍 ${ts(
+    `<div style="font-weight:700;margin-bottom:4px;">🌍 ${t(
       "magnitude"
     )} M${mag}</div>`
   );
   if (eq.depthKm != null) {
-    rows.push(`<div>${ts("depth")}: ${Math.round(eq.depthKm)} km</div>`);
+    rows.push(`<div>${t("depth")}: ${Math.round(eq.depthKm)} km</div>`);
   }
   if (eq.time != null) {
     // 발생시각을 보는 사람의 현지 표기로
     let timeText = "-";
     try {
-      timeText = new Date(eq.time).toLocaleString(activeLocale());
+      timeText = new Date(eq.time).toLocaleString(locale);
     } catch (e) {
       timeText = "-";
     }
-    rows.push(`<div>${ts("dateOccurred")}: ${timeText}</div>`);
+    rows.push(`<div>${t("dateOccurred")}: ${timeText}</div>`);
   }
   if (eq.place) {
     rows.push(`<div>${eq.place}</div>`);
@@ -58,6 +59,8 @@ function buildPopupHtml(eq) {
 export default function EarthquakeLayer({ map, enabled = false }) {
   // 그려진 원 레이어들 보관 (재조회 시 전부 제거용)
   const circlesRef = useRef([]);
+  // 현재 언어(t) — 언어가 바뀌면 아래 effect 가 재실행되어 팝업/라벨을 새 언어로 다시 그린다.
+  const { t, locale } = useI18n();
 
   useEffect(() => {
     // 지도 없거나 꺼져 있으면 아무 동작 안 함(호출도 안 함)
@@ -110,9 +113,9 @@ export default function EarthquakeLayer({ map, enabled = false }) {
               fillColor: color,
               fillOpacity: 0.35,
             });
-            circle.bindPopup(buildPopupHtml(eq));
+            circle.bindPopup(buildPopupHtml(eq, t, locale));
             // 규모 상시 라벨 (클릭 없이도 항상 표시)
-            circle.bindTooltip(`🌍 ${ts("magnitude")} M${magText}`, {
+            circle.bindTooltip(`🌍 ${t("magnitude")} M${magText}`, {
               permanent: true,
               direction: "top",
               className: "eq-label",
@@ -139,7 +142,9 @@ export default function EarthquakeLayer({ map, enabled = false }) {
       if (timer) clearInterval(timer);
       removeAll();
     };
-  }, [map, enabled]);
+    // locale 을 deps 에 포함 → 언어 변경 시 팝업/라벨을 새 언어로 다시 그린다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, enabled, locale]);
 
   return null;
 }

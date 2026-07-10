@@ -21,7 +21,7 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import { getEventIcon, formatEventLabel } from "@/lib/naturalEventsUtils";
-import { ts, activeLocale } from "@/lib/i18n/static";
+import { useI18n } from "@/components/i18n/LanguageProvider";
 
 const REFRESH_MS = 15 * 60 * 1000; // 15분
 
@@ -54,7 +54,8 @@ function esc(str) {
 }
 
 // ─── 팝업 HTML (이벤트명/카테고리/발생일/출처/안내문구) ───────
-function buildPopupHtml(ev) {
+// t(현재 언어 번역 함수), locale(날짜 표기)을 인자로 받아 현재 언어로 그린다.
+function buildPopupHtml(ev, t, locale) {
   const rows = [];
   const emoji = getEventIcon(ev.category);
   rows.push(
@@ -63,22 +64,22 @@ function buildPopupHtml(ev) {
     )}</div>`
   );
   if (ev.categoryTitle) {
-    rows.push(`<div>${esc(ts("category"))}: ${esc(ev.categoryTitle)}</div>`);
+    rows.push(`<div>${esc(t("category"))}: ${esc(ev.categoryTitle)}</div>`);
   }
   if (ev.date) {
     let dateText = ev.date;
     try {
-      dateText = new Date(ev.date).toLocaleString(activeLocale());
+      dateText = new Date(ev.date).toLocaleString(locale);
     } catch (e) {
       dateText = ev.date;
     }
-    rows.push(`<div>${esc(ts("dateOccurred"))}: ${esc(dateText)}</div>`);
+    rows.push(`<div>${esc(t("dateOccurred"))}: ${esc(dateText)}</div>`);
   }
   if (ev.sourceUrl) {
     rows.push(
       `<div><a href="${esc(ev.sourceUrl)}" target="_blank" rel="noopener noreferrer" ` +
-        `style="color:#1A73E8;text-decoration:underline;">${esc(ts("source"))}: ${esc(
-          ev.sourceName || ts("link")
+        `style="color:#1A73E8;text-decoration:underline;">${esc(t("source"))}: ${esc(
+          ev.sourceName || t("link")
         )} ↗</a></div>`
     );
   }
@@ -86,7 +87,7 @@ function buildPopupHtml(ev) {
   rows.push(
     '<div style="margin-top:6px;color:#b45309;font-size:11px;">' +
       "⚠️ " +
-      esc(ts("disasterDisclaimer")) +
+      esc(t("disasterDisclaimer")) +
       "</div>"
   );
   return `<div style="font-size:12px;line-height:1.5;max-width:240px;">${rows.join(
@@ -97,6 +98,8 @@ function buildPopupHtml(ev) {
 export default function NaturalEventsLayer({ map, enabled = false }) {
   // 그려진 마커들 보관 (재조회 시 전부 제거용)
   const markersRef = useRef([]);
+  // 현재 언어 — 언어가 바뀌면 effect 가 재실행되어 팝업을 새 언어로 다시 그린다.
+  const { t, locale } = useI18n();
 
   useEffect(() => {
     if (!map || !enabled) return undefined;
@@ -138,9 +141,9 @@ export default function NaturalEventsLayer({ map, enabled = false }) {
               icon: makeEventIcon(getEventIcon(ev.category)),
               zIndexOffset: 500, // 라이브캠 마커보다 약간 위(ISS 3000보다는 아래)
             });
-            marker.bindPopup(buildPopupHtml(ev));
+            marker.bindPopup(buildPopupHtml(ev, t, locale));
             // 이름 + (태풍 풍속/산불 면적 등) 상시 라벨 (클릭 없이도 표시)
-            marker.bindTooltip(formatEventLabel(ev), {
+            marker.bindTooltip(formatEventLabel(ev, t), {
               permanent: true,
               direction: "right",
               className: "event-label",
@@ -166,7 +169,9 @@ export default function NaturalEventsLayer({ map, enabled = false }) {
       if (timer) clearInterval(timer);
       removeAll();
     };
-  }, [map, enabled]);
+    // locale 을 deps 에 포함 → 언어 변경 시 팝업을 새 언어로 다시 그린다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, enabled, locale]);
 
   return null;
 }

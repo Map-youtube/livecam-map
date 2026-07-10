@@ -19,8 +19,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 // locale 별 localStorage 키
+// v2: 과거 버전이 "번역 실패→원문" 값을 캐시에 굳혀버린 경우가 있어, 키 버전을 올려
+//     오래된(잘못 굳은) 캐시를 무시하고 새로 받도록 한다.
 function cacheKey(locale) {
-  return `livecam_tr_${locale}`;
+  return `livecam_tr_v2_${locale}`;
 }
 
 // localStorage 에서 locale 캐시 객체 로드 (실패 시 빈 객체)
