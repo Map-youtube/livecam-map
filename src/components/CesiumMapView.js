@@ -442,6 +442,8 @@ export default function CesiumMapView({
           issMarker.position = pos;
           payloadRef.current.set(issMarker, { kind: "iss", data: d });
         }
+        // ★ 궤적도 위치 갱신(2초)마다 다시 그려 항상 현재 ISS 위치에서 시작하게 한다.
+        if (satrecRef.current) drawTrajectory();
         requestRender();
       } catch (error) {
         console.error("[CesiumMapView] ISS 위치 갱신 실패:", error); // TODO: 배포 전 제거
@@ -516,7 +518,8 @@ export default function CesiumMapView({
     pollPosition();
     posTimer = setInterval(pollPosition, ISS_POLL_MS);
     loadTle();
-    trajTimer = setInterval(drawTrajectory, ISS_TRAJ_MS);
+    // 궤적은 이제 위치 갱신(pollPosition, 2초)마다 다시 그리므로 별도 1분 타이머는 두지 않는다.
+    // (trajTimer 는 정리 로직 호환을 위해 null 로 유지)
 
     return () => {
       cancelled = true;

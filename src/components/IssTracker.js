@@ -240,6 +240,9 @@ export default function IssTracker({
         failCount = 0;
 
         updateMarker(d);
+        // ★ 궤적을 매 위치 갱신(2초)마다 다시 그린다 → 궤적이 항상 현재 ISS 위치에서 시작.
+        //   (1분에 한 번만 그리면 그 사이 마커가 앞서가 궤적이 마커 뒤에서 시작하는 것처럼 보임)
+        if (satrecRef.current) recomputeTrajectory();
       } catch (error) {
         if (cancelled) return;
         failCount += 1;
@@ -361,7 +364,8 @@ export default function IssTracker({
     poll(); // 즉시 1회
     posTimer = setInterval(poll, POSITION_POLL_MS);
     loadTle();
-    trajTimer = setInterval(recomputeTrajectory, TRAJ_RECOMPUTE_MS);
+    // 궤적은 이제 위치 갱신(poll, 2초)마다 다시 그리므로 별도 1분 타이머는 두지 않는다.
+    // (trajTimer 는 정리 로직 호환을 위해 null 로 유지)
 
     // ── 정리 (언마운트/비활성화 시) ──
     return () => {

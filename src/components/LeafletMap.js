@@ -426,7 +426,7 @@ export default function LeafletMap({
           // 좌우 표시 영역을 기존(±232)보다 30% 더 넓힘(±302) → 날짜변경선 부근이 잘리지 않고
           // 태평양/뉴질랜드 등 ±180 근처도 화면 중앙에 놓고 볼 수 있다.
           // (정확히 -180~180 으로 막으면 minZoom 이 과하게 제한되므로 넉넉히 여유를 둔다.
-          //  ±180 바깥은 noWrap 때문에 빈(회색) 영역이지만, 무한반복은 하지 않는다.)
+          //  타일은 wrap 되어 넓힌 좌우에도 지도가 이어져 보이고, 이 maxBounds 로 무한 스크롤은 막는다.)
           //  ※ 여전히 잘리면 이 값(302)만 더 키우면 된다.
           maxBounds={[
             [-90, -302],
@@ -439,13 +439,14 @@ export default function LeafletMap({
         >
           {/* 베이스 타일 레이어. key 를 스타일 키로 주어 스타일이 바뀌면
               이전 타일 레이어를 제거하고 새로 그린다(그 위의 마커/오버레이는 유지됨).
-              noWrap: 타일이 옆으로 반복되지 않도록 막는다(월드 랩 제거의 핵심). */}
+              ※ noWrap 을 켜면 ±180 바깥이 빈(회색) 영역이 되어 넓힌 좌우가 비어 보인다.
+                그래서 타일은 옆으로 이어지게(wrap) 두고, "무한 스크롤"은 위의 maxBounds(±302)로 막는다
+                → 넓힌 좌우에도 실제 지도가 이어져 보이고, 특정 지점 이상은 못 가게 제한된다. */}
           <TileLayer
             key={currentStyle.key}
             url={currentStyle.url}
             attribution={currentStyle.attribution}
             maxZoom={currentStyle.maxZoom}
-            noWrap={true}
           />
 
           {/* center/zoom 변경 시 지도 이동 */}
