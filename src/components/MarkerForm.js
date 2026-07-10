@@ -28,7 +28,8 @@ import { COUNTRIES, COUNTRY_GEO } from "@/lib/countryList";
 const CONTINENT_LABELS = {
   asia: "아시아",
   europe: "유럽",
-  americas: "아메리카",
+  north_america: "🌎 북아메리카",
+  south_america: "🌎 남아메리카",
   africa: "아프리카",
   oceania: "오세아니아",
   middleeast: "중동",
@@ -38,7 +39,8 @@ const CONTINENT_LABELS = {
 const CONTINENT_ORDER = [
   "asia",
   "europe",
-  "americas",
+  "north_america",
+  "south_america",
   "africa",
   "oceania",
   "middleeast",

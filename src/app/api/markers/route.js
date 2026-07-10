@@ -227,7 +227,8 @@ export async function POST(request) {
     const VALID_CONTINENTS = [
       "asia",
       "europe",
-      "americas",
+      "north_america",
+      "south_america",
       "africa",
       "oceania",
       "middleeast",

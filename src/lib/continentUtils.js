@@ -3,11 +3,11 @@
 //
 // getContinentByCountry(countryCode):
 //   ISO 3166-1 alpha-2 국가코드(예: "JP", "FR", "US")를 받아
-//   대륙 문자열(asia | europe | americas | africa | oceania | middleeast)을 반환한다.
+//   대륙 문자열(asia | europe | north_america | south_america | africa | oceania | middleeast)을 반환한다.
 //   매핑에 없는 코드는 null 반환.
 //
 // ⚠️ 대륙 값은 프로젝트 전역 규칙(Firestore continent 필드)과 정확히 일치해야 한다:
-//    asia | europe | americas | africa | oceania | middleeast
+//    asia | europe | north_america | south_america | africa | oceania | middleeast
 //    (중동은 지리적으로 아시아에 속하지만, 본 서비스는 별도 대륙으로 분류한다.)
 // ─────────────────────────────────────────────────────────────
 
@@ -93,35 +93,37 @@ const COUNTRY_TO_CONTINENT = {
   AM: "europe", // 아르메니아
   AZ: "europe", // 아제르바이잔
 
-  // ─── 아메리카 (americas) ─────────────────────────────────────
-  US: "americas", // 미국
-  CA: "americas", // 캐나다
-  MX: "americas", // 멕시코
-  GT: "americas", // 과테말라
-  BZ: "americas", // 벨리즈
-  SV: "americas", // 엘살바도르
-  HN: "americas", // 온두라스
-  NI: "americas", // 니카라과
-  CR: "americas", // 코스타리카
-  PA: "americas", // 파나마
-  CU: "americas", // 쿠바
-  DO: "americas", // 도미니카공화국
-  HT: "americas", // 아이티
-  JM: "americas", // 자메이카
-  BS: "americas", // 바하마
-  PR: "americas", // 푸에르토리코
-  BR: "americas", // 브라질
-  AR: "americas", // 아르헨티나
-  CL: "americas", // 칠레
-  CO: "americas", // 콜롬비아
-  PE: "americas", // 페루
-  VE: "americas", // 베네수엘라
-  EC: "americas", // 에콰도르
-  BO: "americas", // 볼리비아
-  PY: "americas", // 파라과이
-  UY: "americas", // 우루과이
-  GY: "americas", // 가이아나
-  SR: "americas", // 수리남
+  // ─── 북아메리카 (north_america) — 북미 + 중미 + 카리브해 ──────
+  US: "north_america", // 미국
+  CA: "north_america", // 캐나다
+  MX: "north_america", // 멕시코
+  GT: "north_america", // 과테말라
+  BZ: "north_america", // 벨리즈
+  SV: "north_america", // 엘살바도르
+  HN: "north_america", // 온두라스
+  NI: "north_america", // 니카라과
+  CR: "north_america", // 코스타리카
+  PA: "north_america", // 파나마
+  CU: "north_america", // 쿠바
+  DO: "north_america", // 도미니카공화국
+  HT: "north_america", // 아이티
+  JM: "north_america", // 자메이카
+  BS: "north_america", // 바하마
+  PR: "north_america", // 푸에르토리코
+
+  // ─── 남아메리카 (south_america) ──────────────────────────────
+  BR: "south_america", // 브라질
+  AR: "south_america", // 아르헨티나
+  CL: "south_america", // 칠레
+  CO: "south_america", // 콜롬비아
+  PE: "south_america", // 페루
+  VE: "south_america", // 베네수엘라
+  EC: "south_america", // 에콰도르
+  BO: "south_america", // 볼리비아
+  PY: "south_america", // 파라과이
+  UY: "south_america", // 우루과이
+  GY: "south_america", // 가이아나
+  SR: "south_america", // 수리남
 
   // ─── 아프리카 (africa) ───────────────────────────────────────
   EG: "africa", // 이집트

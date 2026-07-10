@@ -167,7 +167,8 @@ export async function PATCH(request, context) {
       const VALID_CONTINENTS = [
         "asia",
         "europe",
-        "americas",
+        "north_america",
+        "south_america",
         "africa",
         "oceania",
         "middleeast",

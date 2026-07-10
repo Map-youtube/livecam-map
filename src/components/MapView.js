@@ -111,21 +111,27 @@ function MapView(
           return;
         }
 
-        // 2D: Leaflet
+        // 2D: Leaflet — 대륙/국가/도시 모두 동일한 부드러운 애니메이션(duration 통일)
         if (!leafletMap) return;
+        const FLY_DURATION = 1.2; // 초 (도시/국가/대륙 이동 느낌 일관화)
         if (hasBounds) {
-          // 대륙/국가: 경계 사각형이 화면에 꽉 차도록 (2D/3D 동일 데이터 공유)
-          leafletMap.fitBounds([
-            [target.south, target.west],
-            [target.north, target.east],
-          ]);
+          // 대륙/국가: 경계 사각형이 화면에 꽉 차도록 부드럽게 이동(flyToBounds)
+          leafletMap.flyToBounds(
+            [
+              [target.south, target.west],
+              [target.north, target.east],
+            ],
+            { duration: FLY_DURATION }
+          );
         } else {
-          // 도시/마커: 좌표 + 줌
+          // 도시/마커: 좌표 + 줌 (동일 duration 으로 부드럽게)
           const lat = Number(target.lat);
           const lng = Number(target.lng);
           if (Number.isNaN(lat) || Number.isNaN(lng)) return;
           const zoom = typeof target.zoom === "number" ? target.zoom : 6;
-          leafletMap.flyTo(toLeafletCoordRaw(lat, lng), zoom);
+          leafletMap.flyTo(toLeafletCoordRaw(lat, lng), zoom, {
+            duration: FLY_DURATION,
+          });
         }
       } catch (error) {
         console.error("[MapView] flyToLocation 실패:", error); // TODO: 배포 전 제거
