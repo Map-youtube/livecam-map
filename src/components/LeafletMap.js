@@ -422,14 +422,26 @@ export default function LeafletMap({
           maxZoom={19}
           scrollWheelZoom={true}
           style={{ height: "100%", width: "100%" }}
+          // ─── 월드 랩(무한 가로 반복) 제거 ───
+          // 세계지도 한 바퀴 범위로 이동 제한 → 옆으로 끝없이 스크롤 방지
+          maxBounds={[
+            [-90, -180],
+            [90, 180],
+          ]}
+          // 경계에서 튕기지 않고 딱 멈추도록(1.0). 값이 낮으면 경계를 살짝 넘었다 되돌아옴
+          maxBoundsViscosity={1.0}
+          // 마커 클릭 시 반대편 사본으로 점프하지 않도록 명시적 false (기본값이지만 확인)
+          worldCopyJump={false}
         >
           {/* 베이스 타일 레이어. key 를 스타일 키로 주어 스타일이 바뀌면
-              이전 타일 레이어를 제거하고 새로 그린다(그 위의 마커/오버레이는 유지됨). */}
+              이전 타일 레이어를 제거하고 새로 그린다(그 위의 마커/오버레이는 유지됨).
+              noWrap: 타일이 옆으로 반복되지 않도록 막는다(월드 랩 제거의 핵심). */}
           <TileLayer
             key={currentStyle.key}
             url={currentStyle.url}
             attribution={currentStyle.attribution}
             maxZoom={currentStyle.maxZoom}
+            noWrap={true}
           />
 
           {/* center/zoom 변경 시 지도 이동 */}
