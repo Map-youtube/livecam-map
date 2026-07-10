@@ -7,125 +7,135 @@
 // 동작:
 //   1) target 이 한국어("ko")거나 키 없음 → 원문 그대로 반환(번역 불필요).
 //   2) Firestore `translations` 캐시에서 (target, 원문) 조회 → 있으면 재사용(0비용).
-//   3) 캐시에 없는 것만 OpenAI(gpt-4.1-mini)로 한 번에 번역 → 캐시에 저장.
+//   3) 캐시에 없는 것만 Google Cloud Translation API v2 로 번역 → 캐시에 저장.
+//
+// ★ 번역 엔진: Google Cloud Translation API v2 (무료 한도 월 50만 자).
+//   - 기존 gpt-4.1-mini(유료)에서 교체. 단순 번역(도시/장소명/태그)만 해당.
+//   - AI 장소 설명(aiUtils.generatePlaceDescription, 창작 문장)은 gpt-4.1-mini 유지.
+//   - 기존에 이미 캐시된 번역은 (엔진과 무관하게 원문 해시 기반) 그대로 재사용된다.
 //
 // ⚠️ 비용 방어: 같은 (문자열, 언어) 조합은 최초 1회만 번역되고 이후 영구 캐시.
 //    한 요청당 최대 MAX_TEXTS 개, 각 문자열 MAX_LEN 자로 제한.
-// ⚠️ AI_API_KEY 는 서버 전용. 키 없거나 실패 시 원문을 그대로 반환(화면은 안 깨짐).
+// ⚠️ GOOGLE_CLOUD_TRANSLATION_KEY 는 서버 전용. 키 없거나 실패 시 원문을 그대로 반환(화면은 안 깨짐).
 // ─────────────────────────────────────────────────────────────
 
 import crypto from "crypto";
+import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { SUPPORTED_CODES } from "@/lib/i18n/languages";
 
-const AI_MODEL = "gpt-4.1-mini";
-const OPENAI_ENDPOINT = "https://api.openai.com/v1/chat/completions";
+// Google Cloud Translation API v2 REST 엔드포인트
+const GOOGLE_ENDPOINT =
+  "https://translation.googleapis.com/language/translate/v2";
 const MAX_TEXTS = 120; // 한 요청 최대 문자열 수
 const MAX_LEN = 200; // 문자열당 최대 길이(자)
-const CHUNK_SIZE = 20; // OpenAI 1회 호출당 번역 문자열 수 (작게 나눠 신뢰도↑)
+// Google 번역 1회 호출당 문자열 수. Google v2 는 q 배열을 최대 128개까지 허용하지만,
+// 작게 나눠(각 청크 실패는 그 청크에만 영향) 신뢰도를 높인다. (기존 구조 유지)
+const CHUNK_SIZE = 20;
 const COLLECTION = "translations";
 
-// locale 코드 → OpenAI 프롬프트에 넣을 영어 언어명
-const LANGUAGE_NAME = {
-  en: "English",
-  ja: "Japanese",
-  zh: "Simplified Chinese",
-  es: "Spanish",
-  fr: "French",
-  de: "German",
-  it: "Italian",
-  pt: "Portuguese",
-  ru: "Russian",
-  hi: "Hindi",
-  bn: "Bengali",
-  th: "Thai",
-  vi: "Vietnamese",
-  id: "Indonesian",
-  ar: "Arabic",
-  fa: "Persian",
+// 프로젝트 17개 언어 코드 → Google Translate 언어 코드 매핑
+// (대부분 ISO 코드와 동일. 중국어는 간체 zh-CN 으로 명시. ko 는 소스이므로 여기 불필요.)
+const GOOGLE_LANG = {
+  en: "en",
+  ja: "ja",
+  zh: "zh-CN", // 중국어 간체
+  es: "es",
+  fr: "fr",
+  de: "de",
+  it: "it",
+  pt: "pt",
+  ru: "ru",
+  hi: "hi",
+  bn: "bn",
+  th: "th",
+  vi: "vi",
+  id: "id",
+  ar: "ar",
+  fa: "fa", // 페르시아어
 };
 
 // (target, 원문) → Firestore 문서 id (해시로 안전한 id 생성)
+// ⚠️ 원문 해시 기반이라 엔진(OpenAI→Google)이 바뀌어도 기존 캐시가 그대로 재사용된다.
 function cacheDocId(target, text) {
   const hash = crypto.createHash("sha1").update(text).digest("hex");
   return `${target}_${hash}`;
 }
 
-// ─── OpenAI 1회 호출 (원문 배열 → { 원문: 번역 } 맵) ───────────
-// ⚠️ 배열 인덱스 정렬에 의존하지 않고 "원문을 키로 한 객체"로 응답받아,
-//    모델이 순서를 바꾸거나 개수가 어긋나도 정확히 매칭되게 한다(정렬 오차 방지).
-//    (배열 형식으로 오면 인덱스 매칭으로 보조 처리)
-async function callOpenAiTranslate(apiKey, texts, target) {
-  const langName = LANGUAGE_NAME[target] || target;
-  const systemPrompt =
-    `You are a translator for a travel/livecam map website. Translate each string in the ` +
-    `input array (place names, city names, or short tags, mostly Korean) into ${langName}. ` +
-    `ALWAYS translate — never leave a value in the original language; use the conventional ` +
-    `local exonym/transliteration when one exists. Return ONLY a JSON object of the form ` +
-    `{"result": {"<original>": "<translation>"}} that contains EVERY input string as a key ` +
-    `with its ${langName} translation as the value. No extra text.`;
-  const userPrompt = JSON.stringify({ input: texts });
+// ─── HTML 엔티티 디코드 ────────────────────────────────────────
+// Google v2 는 format:"text" 라도 일부 문자(작은따옴표 등)를 &#39; 형태로 돌려줄 때가 있어
+// 화면에 이상하게 보이지 않도록 흔한 엔티티를 원래 문자로 되돌린다.
+function decodeHtmlEntities(str) {
+  try {
+    return String(str)
+      .replace(/&#39;/g, "'")
+      .replace(/&quot;/g, '"')
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">");
+  } catch (error) {
+    return String(str || "");
+  }
+}
 
-  const res = await fetch(OPENAI_ENDPOINT, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: AI_MODEL,
-      response_format: { type: "json_object" },
-      temperature: 0.2,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-    }),
-  });
+// ─── Google 번역 1회 호출 (원문 배열 → { 원문: 번역 } 맵) ──────
+// Google v2 는 translations 배열을 q 와 "같은 순서"로 돌려주므로 인덱스로 매칭한다.
+// source 는 지정하지 않아 자동 감지한다(도시명이 영문 "Tokyo" 처럼 한글이 아닌 경우도 정확히 처리).
+async function callGoogleTranslate(apiKey, texts, target) {
+  const googleTarget = GOOGLE_LANG[target] || target;
+
+  const res = await fetch(
+    `${GOOGLE_ENDPOINT}?key=${encodeURIComponent(apiKey)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        q: texts, // 여러 문자열을 한 번에 (기존 청크 구조 그대로 배열로 전달)
+        target: googleTarget,
+        format: "text",
+        // source 미지정 → 자동 감지 (한글/영문 혼재 입력 대응)
+      }),
+    }
+  );
 
   if (!res.ok) {
     const bodyText = await res.text().catch(() => "");
     throw new Error(
-      `OpenAI 번역 실패 (status ${res.status}): ${bodyText.slice(0, 200)}`
+      `Google 번역 실패 (status ${res.status}): ${bodyText.slice(0, 200)}`
     );
   }
 
   const data = await res.json();
-  const content =
-    data && data.choices && data.choices[0] && data.choices[0].message
-      ? data.choices[0].message.content
+  const translations =
+    data && data.data && Array.isArray(data.data.translations)
+      ? data.data.translations
       : null;
-  if (!content) throw new Error("OpenAI 응답에 content 없음");
+  if (!translations) throw new Error("Google 응답에 translations 배열 없음");
 
-  const parsed = JSON.parse(content);
   const out = {};
-  const result = parsed && parsed.result;
-  if (result && typeof result === "object" && !Array.isArray(result)) {
-    // 객체 형식({원문: 번역}) — 원문 키로 정확히 매칭
-    for (const src of texts) {
-      const v = result[src];
-      if (typeof v === "string" && v.trim()) out[src] = v.trim();
-    }
-  } else if (Array.isArray(result)) {
-    // 배열 형식 — 인덱스 매칭으로 보조 처리
-    result.forEach((v, i) => {
-      if (typeof v === "string" && v.trim() && texts[i] != null) {
-        out[texts[i]] = v.trim();
-      }
-    });
-  } else {
-    throw new Error("번역 결과(result) 형식 오류");
-  }
+  translations.forEach((tr, i) => {
+    const src = texts[i];
+    const val =
+      tr && typeof tr.translatedText === "string"
+        ? decodeHtmlEntities(tr.translatedText).trim()
+        : "";
+    if (src != null && val) out[src] = val;
+  });
   return out;
 }
 
 // ─── 청크 1개 번역 (실패/누락 시 1회 재시도) ──────────────────
 // 반환: { 원문: 번역 } (번역된 것만 포함). 두 번 시도해도 전부 실패하면 빈 객체.
-async function translateChunk(apiKey, texts, target) {
+// usage: { calls, characters } 누적 객체 — 성공한 호출의 글자 수/호출 수를 집계한다.
+async function translateChunk(apiKey, texts, target, usage) {
   let best = {};
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const out = await callOpenAiTranslate(apiKey, texts, target);
+      const out = await callGoogleTranslate(apiKey, texts, target);
+      // 성공한 호출만 사용량 집계 (실패 호출은 대개 과금되지 않음)
+      // 글자 수는 소스 문자열 기준(Google 과금 기준). 코드포인트로 세어 한글도 1자로 계산.
+      usage.calls += 1;
+      usage.characters += texts.reduce((n, s) => n + [...String(s)].length, 0);
       // 더 많이 번역된 결과를 채택
       if (Object.keys(out).length > Object.keys(best).length) best = out;
       // 전부 번역됐으면 재시도 불필요
@@ -138,6 +148,37 @@ async function translateChunk(apiKey, texts, target) {
     }
   }
   return best;
+}
+
+// ─── 사용량 집계 저장 (api_usage/월별 문서에 누적) ─────────────
+// CLAUDE.md 4장 api_usage 컬렉션에 translate 필드를 추가한다.
+// 문서 id 는 "YYYY-MM"(월별)로, 이번 달 누적 번역 글자 수/호출 수를 원자적으로 증가시킨다.
+// (관리자 대시보드에 추후 표시할 수 있도록 데이터만 우선 축적)
+async function recordTranslateUsage(usage) {
+  try {
+    if (!usage || usage.calls <= 0) return;
+    const now = new Date();
+    const monthId = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}`;
+    const ref = adminDb.collection("api_usage").doc(monthId);
+    // merge:true + FieldValue.increment 로 기존 값에 누적 (문서 없으면 생성)
+    await ref.set(
+      {
+        month: monthId,
+        translate: {
+          characters_used: FieldValue.increment(usage.characters),
+          calls: FieldValue.increment(usage.calls),
+        },
+        updated_at: new Date(),
+      },
+      { merge: true }
+    );
+  } catch (error) {
+    // 사용량 기록 실패는 번역 응답에 영향을 주지 않는다(부가 기능).
+    console.error("[translate] 사용량 기록 실패:", error); // TODO: 배포 전 제거
+  }
 }
 
 export async function POST(request) {
@@ -191,14 +232,16 @@ export async function POST(request) {
       missing = uniqueTexts.slice();
     }
 
-    // ── 2) 캐시에 없는 것만 OpenAI 번역 + 캐시 저장 ──────────────
+    // ── 2) 캐시에 없는 것만 Google 번역 + 캐시 저장 ──────────────
     // ⚠️ 한 번에 다 보내면 한 번의 실패/누락으로 그 언어 전체가 미번역이 되므로,
     //    작은 청크로 나눠(각 청크 실패는 그 청크에만 영향) 번역한다.
     if (missing.length > 0) {
-      const apiKey = process.env.AI_API_KEY;
+      const apiKey = process.env.GOOGLE_CLOUD_TRANSLATION_KEY;
       if (!apiKey) {
         // 키 없으면 원문 그대로(화면 유지). 캐시 저장 안 함.
-        console.error("[translate] AI_API_KEY 미설정 — 원문 반환"); // TODO: 배포 전 제거
+        console.error(
+          "[translate] GOOGLE_CLOUD_TRANSLATION_KEY 미설정 — 원문 반환"
+        ); // TODO: 배포 전 제거
         for (const s of missing) map[s] = s;
       } else {
         // 청크로 분할 (한 청크가 실패해도 나머지 청크는 정상 번역되도록)
@@ -209,10 +252,12 @@ export async function POST(request) {
 
         const batch = adminDb.batch();
         let writeCount = 0;
+        // 이번 요청에서 실제 Google 에 보낸 사용량 집계
+        const usage = { calls: 0, characters: 0 };
 
         // 청크들을 병렬 번역 (각 청크는 내부적으로 1회 재시도)
         const results = await Promise.all(
-          chunks.map((chunk) => translateChunk(apiKey, chunk, target))
+          chunks.map((chunk) => translateChunk(apiKey, chunk, target, usage))
         );
 
         chunks.forEach((chunk, ci) => {
@@ -246,6 +291,9 @@ export async function POST(request) {
             console.error("[translate] 캐시 저장 실패(응답은 정상):", commitError); // TODO: 배포 전 제거
           }
         }
+
+        // 이번 요청의 번역 사용량(글자 수/호출 수)을 api_usage 에 누적
+        await recordTranslateUsage(usage);
       }
     }
 
