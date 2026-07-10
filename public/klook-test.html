@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Klook 위젯 단독 테스트</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, "Noto Sans KR", sans-serif;
+        padding: 24px;
+        line-height: 1.6;
+        color: #222;
+      }
+      .box {
+        border: 1px dashed #bbb;
+        padding: 16px;
+        margin-top: 16px;
+        width: 160px;
+      }
+      code {
+        background: #f2f2f2;
+        padding: 1px 4px;
+        border-radius: 4px;
+      }
+      .note {
+        background: #fff8e1;
+        border: 1px solid #ffe082;
+        padding: 12px;
+        border-radius: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Klook 위젯 단독 테스트 (React/사이트 코드 없음)</h1>
+    <div class="note">
+      <p><strong>이 페이지는 형이 준 Klook 코드를 "원본 그대로" 넣은 순수 HTML 입니다.</strong></p>
+      <ul>
+        <li>
+          여기서 <b>배너가 뜨고 클릭이 정상 상품페이지로 가면</b> → Klook 코드/계정은
+          정상. (그렇다면 메인 사이트 통합 쪽을 더 고치면 됨)
+        </li>
+        <li>
+          여기서도 <b>배너가 안 뜨거나 클릭이 "Where did that page go?" → 홈으로 가면</b>
+          → 이건 사이트 코드가 아니라 <b>Klook 위젯/계정 설정 문제</b>입니다.
+          (Klook 제휴 대시보드에서 위젯 재발급 또는 고객지원 문의 필요)
+        </li>
+      </ul>
+      <p>
+        확인 방법: 배포 후 <code>https://(사이트주소)/klook-test.html</code> 로 접속.
+        <b>애드블록은 반드시 끄고</b> 확인하세요.
+      </p>
+    </div>
+
+    <p>아래가 실제 위젯입니다 (120 × 600):</p>
+    <div class="box">
+      <!-- ▼▼▼ 형이 준 Klook 스니펫 원본 그대로 ▼▼▼ -->
+      <ins
+        class="klk-aff-widget"
+        data-wid="125414"
+        data-bgtype="Hotel"
+        data-adid="1334464"
+        data-lang="en-BS"
+        data-prod="banner"
+        data-width="120"
+        data-height="600"
+        ><a href="//www.klook.com/?aid=">Klook.com</a></ins
+      >
+      <script type="text/javascript">
+        (function (d, sc, u) {
+          var s = d.createElement(sc),
+            p = d.getElementsByTagName(sc)[0];
+          s.type = "text/javascript";
+          s.async = true;
+          s.src = u;
+          p.parentNode.insertBefore(s, p);
+        })(
+          document,
+          "script",
+          "https://affiliate.klook.com/widget/fetch-iframe-init.js"
+        );
+      </script>
+      <!-- ▲▲▲ 여기까지 원본 ▲▲▲ -->
+    </div>
+
+    <p style="margin-top: 24px; color: #888; font-size: 13px">
+      * 진단이 끝나면 이 파일(<code>public/klook-test.html</code>)은 삭제해도 됩니다.
+    </p>
+  </body>
+</html>
