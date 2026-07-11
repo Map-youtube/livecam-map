@@ -22,6 +22,11 @@ import { LanguageProvider } from "@/components/i18n/LanguageProvider";
 // GA4 측정 ID (미설정 시 GA 스크립트 자체를 렌더하지 않음)
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
+// 애드센스 게시자 ID(예: "pub-1234567890123456"). 서버 전용 환경변수를 그대로 사용한다.
+//   설정돼 있을 때만 애드센스 로더 스크립트를 <head> 에 삽입한다(사이트 확인·심사·광고 게재용).
+//   미설정이면 스크립트 자체를 렌더하지 않는다. (layout 은 서버 컴포넌트라 서버 전용 변수 접근 가능)
+const ADSENSE_PUBLISHER_ID = process.env.ADSENSE_PUBLISHER_ID;
+
 // 제목/강조용
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -64,6 +69,18 @@ export default function RootLayout({ children }) {
       className={`${spaceGrotesk.variable} ${inter.variable} ${notoSansKr.variable} ${ibmPlexMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-bg font-body text-ink">
+        {/* 구글 애드센스 로더 — 게시자 ID가 설정된 경우에만 로드(사이트 확인·심사·광고 게재).
+            src 의 client 파라미터는 "ca-" 접두사가 필요하므로 pub-XXX 앞에 ca- 를 붙인다. */}
+        {ADSENSE_PUBLISHER_ID && (
+          <Script
+            id="adsense-loader"
+            async
+            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-${ADSENSE_PUBLISHER_ID}`}
+            crossOrigin="anonymous"
+            strategy="afterInteractive"
+          />
+        )}
+
         {/* GA4 — 측정 ID가 설정된 경우에만 로드 */}
         {GA_MEASUREMENT_ID && (
           <>
