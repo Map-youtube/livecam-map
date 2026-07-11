@@ -333,7 +333,8 @@ export default function VideoListPanel({
             {t("noVideos")}
           </p>
         ) : (
-          <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-3 gap-2">
+            {/* 한 줄에 3개씩 그리드로 배치 (카드 작게). 펼쳐진 카드는 전체 폭 차지. */}
             {visibleList.map((marker) => {
               // 각 카드는 이 marker 의 고유 데이터만 참조한다.
               const thumb = getThumb(marker);
@@ -360,7 +361,11 @@ export default function VideoListPanel({
               return (
                 <div
                   key={marker.id}
-                  className="overflow-hidden rounded-lg border border-border bg-surface shadow-card transition duration-150 hover:-translate-y-0.5 hover:shadow-card"
+                  className={
+                    "overflow-hidden rounded-lg border border-border bg-surface shadow-card transition duration-150 hover:-translate-y-0.5 hover:shadow-card " +
+                    // 펼쳐진(재생 중인) 카드는 그리드 한 줄을 통째로 차지 → 영상이 크게 보임
+                    (isExpanded ? "col-span-full" : "")
+                  }
                 >
                   {/* 클릭 영역(헤더): 썸네일 + 정보 */}
                   <button
@@ -376,28 +381,28 @@ export default function VideoListPanel({
                         alt={marker.location ? trFn(marker.location) : t("noName")}
                         className="h-full w-full object-cover"
                       />
-                      <div className="absolute left-2 top-2">
+                      <div className="absolute left-1 top-1">
                         <StatusBadge kind={badgeKind} label={badgeLabel[badgeKind]} />
                       </div>
                     </div>
 
-                    {/* 본문 */}
-                    <div className="p-3">
-                      {/* 장소명 (제목, 2줄까지) */}
-                      <h3 className="line-clamp-2 font-display text-sm font-semibold leading-snug text-ink">
+                    {/* 본문 (카드가 작아 여백/글자 축소, 제목은 2줄까지 자동 줄바꿈) */}
+                    <div className="p-2">
+                      {/* 장소명 (제목, 2줄까지 자동 줄바꿈) */}
+                      <h3 className="line-clamp-2 font-display text-xs font-semibold leading-snug text-ink">
                         {marker.location ? trFn(marker.location) : t("noName")}
                       </h3>
 
                       {/* 지역 정보 (위치 핀 + 도시/국가) */}
                       {regionText && (
-                        <p className="mt-1 flex items-center gap-1 text-xs text-ink-muted">
+                        <p className="mt-1 flex items-center gap-1 text-[11px] text-ink-muted">
                           <PinIcon />
                           <span className="truncate">{regionText}</span>
                         </p>
                       )}
 
-                      {/* 특성 태그 (알약 배지) */}
-                      {tags.length > 0 && (
+                      {/* 특성 태그 — 카드가 펼쳐졌을 때(전체 폭)만 표시해 작은 카드를 깔끔하게 유지 */}
+                      {isExpanded && tags.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1">
                           {tags.map((tag) => (
                             <span

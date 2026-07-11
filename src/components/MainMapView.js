@@ -386,7 +386,7 @@ export default function MainMapView({ markers, tags }) {
 
         {/* 중간: 패널 (ISS 선택 시 NASA 라이브, 그 외 라이브캠 목록) */}
         {isPanelOpen && (
-          <section className="h-full w-[30%] min-w-[260px] overflow-hidden border-r border-border bg-bg">
+          <section className="h-full w-[36%] min-w-[420px] overflow-hidden border-r border-border bg-bg">
             {issSelected ? (
               <IssVideoPanel
                 videos={issVideos}
