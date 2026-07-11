@@ -369,7 +369,7 @@ export default function MainMapView({ markers, tags }) {
       {/* 콘텐츠 영역 */}
       <div className="flex min-h-0 flex-1 overflow-x-auto">
         {/* 왼쪽: 카테고리 트리 */}
-        <aside className="h-full w-[10%] min-w-[200px] overflow-auto border-r border-border bg-surface">
+        <aside className="h-full w-[12%] min-w-[240px] overflow-auto border-r border-border bg-surface">
           <MainCategoryTree
             markers={markerList}
             tags={tagList}
