@@ -3,20 +3,28 @@
 //
 // verifyAdminRequest(request):
 //   - 요청 Authorization 헤더에서 "Bearer {토큰}" 을 파싱
-//   - firebaseAdmin(getAuth().verifyIdToken)으로 토큰 검증
+//   - Firebase ID 토큰을 jose 로 직접 검증(서명/발급자/대상/만료)
 //   - 성공: { valid: true, uid, email }
 //   - 실패: { valid: false, error: "..." }  (구체적 에러 코드는 노출하지 않음)
 //
-// ⚠️ 서버 전용. firebase-admin 을 사용하므로 클라이언트에서 import 금지.
-// ⚠️ 토큰 값 자체는 절대 로그에 남기지 않는다.
+// ★ firebase-admin/auth 를 쓰지 않는 이유:
+//   firebase-admin/auth 는 내부적으로 ESM 전용 패키지 jose 를 require() 하는데,
+//   Vercel 서버리스(외부 모듈 require) 환경에서 ERR_REQUIRE_ESM 으로 로딩이 실패한다.
+//   → 그 결과 관리자 API 가 500(모듈 로드) 또는 401(토큰 검증 불가)로 깨졌다.
+//   그래서 firebase-admin/auth 대신, Firebase 공개키(JWK)로 ID 토큰을 직접 검증한다.
+//   jose 는 ESM 전용이므로 "동적 import" 로 불러온다(정적/require 로는 실패).
 //
-// ★ firebase-admin/auth 는 "함수 안에서 동적 import" 한다(모듈 최상단 import 아님).
-//   이 파일을 import 하기만 하는 인증 불필요 GET 라우트(예: /api/markers, /api/tags 의 GET)가
-//   firebase-admin/auth 서브패키지 로딩 문제로 통째로 크래시(500)되던 문제를 막기 위함.
-//   (해당 서브패키지는 실제로 토큰을 검증하는 POST 요청 시점에만 로드된다.)
+// ⚠️ 서버 전용. 클라이언트에서 import 금지. 토큰 값 자체는 절대 로그에 남기지 않는다.
 // ─────────────────────────────────────────────────────────────
 
-import { adminApp } from "@/lib/firebaseAdmin";
+import { adminProjectId } from "@/lib/firebaseAdmin";
+
+// Firebase ID 토큰 공개키(JWK) 엔드포인트 (securetoken 서명자)
+const FIREBASE_JWK_URL =
+  "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
+
+// createRemoteJWKSet 결과 캐시 (내부적으로 공개키를 캐싱/자동 갱신한다)
+let jwksCache = null;
 
 export async function verifyAdminRequest(request) {
   try {
@@ -35,13 +43,33 @@ export async function verifyAdminRequest(request) {
       return { valid: false, error: "인증 토큰이 없습니다" };
     }
 
-    // firebase-admin/auth 를 여기서 동적 import (모듈 로드 시점에 끌어오지 않기 위함)
-    const { getAuth } = await import("firebase-admin/auth");
+    // 프로젝트 ID 가 없으면 issuer/audience 를 검증할 수 없다.
+    if (!adminProjectId) {
+      console.error(
+        "[authUtils] project_id 를 확인할 수 없어 토큰 검증을 진행할 수 없습니다."
+      ); // TODO: 배포 전 제거
+      return { valid: false, error: "인증에 실패했습니다" };
+    }
 
-    // ID 토큰 검증 (만료/위조 등은 예외로 던져진다)
-    let decoded;
+    // jose 는 ESM 전용 → 동적 import 로 불러온다.
+    const { jwtVerify, createRemoteJWKSet } = await import("jose");
+    if (!jwksCache) {
+      jwksCache = createRemoteJWKSet(new URL(FIREBASE_JWK_URL));
+    }
+
+    // Firebase ID 토큰 검증:
+    //   - 서명: securetoken 공개키(JWK), 알고리즘 RS256
+    //   - issuer: https://securetoken.google.com/{projectId}
+    //   - audience: {projectId}
+    //   - 만료(exp)/발효(nbf) 는 jose 가 자동 검증
+    let payload;
     try {
-      decoded = await getAuth(adminApp).verifyIdToken(token);
+      const result = await jwtVerify(token, jwksCache, {
+        issuer: `https://securetoken.google.com/${adminProjectId}`,
+        audience: adminProjectId,
+        algorithms: ["RS256"],
+      });
+      payload = result.payload;
     } catch (verifyError) {
       // 구체적 에러 코드는 노출하지 않는다. 토큰 값도 로그하지 않는다.
       console.error(
@@ -51,11 +79,16 @@ export async function verifyAdminRequest(request) {
       return { valid: false, error: "인증에 실패했습니다" };
     }
 
+    // sub(uid) 가 있어야 유효한 사용자 토큰
+    if (!payload || !payload.sub) {
+      return { valid: false, error: "인증에 실패했습니다" };
+    }
+
     // 검증 성공
     return {
       valid: true,
-      uid: decoded.uid,
-      email: decoded.email || "",
+      uid: payload.sub,
+      email: typeof payload.email === "string" ? payload.email : "",
     };
   } catch (error) {
     // 예기치 못한 오류도 인증 실패로 처리 (토큰 값은 로그하지 않음)

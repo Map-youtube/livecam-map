@@ -71,6 +71,23 @@ const adminApp =
 // adminDb: 서버 사이드에서 보안 규칙을 우회하여 Firestore에 접근하는 관리자 권한 인스턴스.
 const adminDb = getFirestore(adminApp);
 
+// ─── 프로젝트 ID (토큰 검증용) ─────────────────────────────────
+// Firebase ID 토큰의 issuer/audience 가 이 project_id 와 일치해야 한다(authUtils 에서 사용).
+// 서비스 계정 JSON 의 project_id 를 우선 사용하고, 없으면 공개 환경변수로 폴백한다.
+let adminProjectId = null;
+try {
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  if (raw) {
+    const parsed = JSON.parse(raw);
+    adminProjectId = parsed && parsed.project_id ? parsed.project_id : null;
+  }
+} catch (error) {
+  // 파싱 실패는 아래 폴백으로 처리
+}
+if (!adminProjectId) {
+  adminProjectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || null;
+}
+
 // ─── export ────────────────────────────────────────────────────
 // 서버(API Route)에서 { adminDb } 형태로 가져다 사용한다.
-export { adminApp, adminDb };
+export { adminApp, adminDb, adminProjectId };
