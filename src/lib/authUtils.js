@@ -9,9 +9,13 @@
 //
 // ⚠️ 서버 전용. firebase-admin 을 사용하므로 클라이언트에서 import 금지.
 // ⚠️ 토큰 값 자체는 절대 로그에 남기지 않는다.
+//
+// ★ firebase-admin/auth 는 "함수 안에서 동적 import" 한다(모듈 최상단 import 아님).
+//   이 파일을 import 하기만 하는 인증 불필요 GET 라우트(예: /api/markers, /api/tags 의 GET)가
+//   firebase-admin/auth 서브패키지 로딩 문제로 통째로 크래시(500)되던 문제를 막기 위함.
+//   (해당 서브패키지는 실제로 토큰을 검증하는 POST 요청 시점에만 로드된다.)
 // ─────────────────────────────────────────────────────────────
 
-import { getAuth } from "firebase-admin/auth";
 import { adminApp } from "@/lib/firebaseAdmin";
 
 export async function verifyAdminRequest(request) {
@@ -30,6 +34,9 @@ export async function verifyAdminRequest(request) {
     if (!token) {
       return { valid: false, error: "인증 토큰이 없습니다" };
     }
+
+    // firebase-admin/auth 를 여기서 동적 import (모듈 로드 시점에 끌어오지 않기 위함)
+    const { getAuth } = await import("firebase-admin/auth");
 
     // ID 토큰 검증 (만료/위조 등은 예외로 던져진다)
     let decoded;
