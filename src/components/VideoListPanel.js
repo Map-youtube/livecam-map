@@ -15,12 +15,22 @@
 //   - 에러 발생 시 코드에 맞는 reason 으로 POST /api/markers/{id}/report-error 신고.
 //   - 신고 성공 시 안내를 표시하고 잠시 후 그 카드를 목록에서 제거(새로고침 없이).
 //   - 유튜브 API(videos.list) 를 호출하지 않는다(플레이어 에러 신호만 서버에 기록) → 무료.
+//
+// 카드 선택 UX:
+//   - 카드 자체는 선택해도 크기가 커지지 않는다(3열 그리드 크기 고정).
+//   - 선택된 카드는 빨간 테두리 + 은은한 발광(card-playing, globals.css)으로 표시.
+//   - 영상은 카드 안이 아니라, 그 카드가 속한 "한 줄(최대 3개)" 바로 아래에
+//     별도 영역으로 펼쳐진다 → 아래에 있던 다음 줄들이 자연스럽게 밀려 내려간다.
+//     (grid-template-rows 를 0fr↔1fr 로 트랜지션해 사이가 벌어지듯 부드럽게 열고 닫는다)
 // ─────────────────────────────────────────────────────────────
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import LiveDot from "@/components/LiveDot";
 import Thumbnail from "@/components/DefaultThumbnail";
 import { useI18n } from "@/components/i18n/LanguageProvider";
+
+// 한 줄에 표시할 카드 수 (그리드 열 수와 반드시 일치)
+const COLUMNS = 3;
 
 // ─── 유튜브 IFrame API 로더 (전역, 한 번만 로드) ──────────────
 let ytApiPromise = null;
@@ -228,24 +238,11 @@ export default function VideoListPanel({
   // 지연 제거 타이머 정리용
   const timersRef = useRef([]);
 
-  // 재생 영역에 표시할 마커를 "닫히는 애니메이션 중"에도 유지하기 위한 상태.
-  // (선택 해제 즉시 내용이 사라지면 접히는 애니메이션 도중 빈 패널이 보이므로,
-  //  선택이 풀려도 마지막으로 재생하던 마커 정보를 붙잡아 두고 높이만 0으로 접는다)
-  // ⚠️ useEffect 대신 렌더 중 갱신 패턴을 사용한다(React 권장: "이전 렌더 정보 저장").
-  //    값이 실제로 바뀔 때만 setState 하므로 무한 렌더 없이 안전하다.
-  const [lastExpandedMarker, setLastExpandedMarker] = useState(null);
-  if (expandedMarkerId != null) {
-    const m = list.find((x) => x && x.id === expandedMarkerId);
-    if (m && m !== lastExpandedMarker) {
-      setLastExpandedMarker(m);
-    }
-  }
-
   // 언마운트 시 타이머 정리
   useEffect(() => {
     return () => {
       try {
-        timersRef.current.forEach((t) => clearTimeout(t));
+        timersRef.current.forEach((timer) => clearTimeout(timer));
       } catch (e) {
         // 무시
       }
@@ -275,14 +272,14 @@ export default function VideoListPanel({
           [marker.id]: t("unplayable"),
         }));
         // 잠시 후 목록에서 제거 (새로고침 없이 사라지게)
-        const t = setTimeout(() => {
+        const timer = setTimeout(() => {
           setRemovedIds((prev) => {
             const next = new Set(prev);
             next.add(marker.id);
             return next;
           });
         }, 2500);
-        timersRef.current.push(t);
+        timersRef.current.push(timer);
       }
     } catch (error) {
       console.error("[VideoListPanel] 재생불가 신고 실패:", error); // TODO: 배포 전 제거
@@ -322,14 +319,12 @@ export default function VideoListPanel({
   // 화면에 실제로 보일 목록 (신고로 제거된 것 제외)
   const visibleList = list.filter((m) => m && !removedIds.has(m.id));
 
-  // 재생 영역 열림 여부 + 표시할 마커(닫히는 중에는 마지막 마커를 유지)
-  const isPlayerOpen = expandedMarkerId != null;
-  const playingMarker =
-    (expandedMarkerId != null &&
-      visibleList.find((m) => m && m.id === expandedMarkerId)) ||
-    lastExpandedMarker;
-  const playingVideoId = playingMarker ? playingMarker.youtube_video_id || "" : "";
-  const playingNotice = playingMarker ? noticeIds[playingMarker.id] : null;
+  // 카드를 COLUMNS 개씩 "줄" 단위로 묶는다 — 선택된 카드가 속한 줄 바로 아래에만
+  // 영상 영역을 넣기 위함(그 줄의 다음 줄들은 자연스럽게 아래로 밀려난다).
+  const rows = [];
+  for (let i = 0; i < visibleList.length; i += COLUMNS) {
+    rows.push(visibleList.slice(i, i + COLUMNS));
+  }
 
   return (
     <div className="flex h-full flex-col bg-bg">
@@ -355,113 +350,125 @@ export default function VideoListPanel({
             {t("noVideos")}
           </p>
         ) : (
-          <>
-            <div className="grid grid-cols-3 gap-2">
-              {/* 한 줄에 3개씩 고정 크기 그리드 — 선택해도 카드 크기는 그대로 유지한다. */}
-              {visibleList.map((marker) => {
-                // 각 카드는 이 marker 의 고유 데이터만 참조한다.
-                const thumb = getThumb(marker);
-                const badgeKind = getStatusKind(marker);
-                const countryLabel = marker.country
-                  ? countryName(marker.country)
-                  : "";
-                const regionText = [
-                  marker.city ? trFn(marker.city) : "",
-                  countryLabel,
-                ]
-                  .filter((v) => v)
-                  .join(", ");
+          <div className="flex flex-col gap-2">
+            {rows.map((row, rowIndex) => {
+              // 이 줄 안에 현재 선택된 카드가 있는지
+              const selectedInRow = row.find(
+                (m) => m && expandedMarkerId != null && m.id === expandedMarkerId
+              );
 
-                // 이 카드가 현재 선택되어(재생 중) 있는지 — 반드시 자기 id 로 비교
-                const isSelected =
-                  expandedMarkerId != null && marker.id === expandedMarkerId;
+              return (
+                <Fragment key={row[0] ? row[0].id : rowIndex}>
+                  {/* 한 줄 — 최대 COLUMNS 개, 선택해도 카드 크기는 고정 */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {row.map((marker) => {
+                      // 각 카드는 이 marker 의 고유 데이터만 참조한다.
+                      const thumb = getThumb(marker);
+                      const badgeKind = getStatusKind(marker);
+                      const countryLabel = marker.country
+                        ? countryName(marker.country)
+                        : "";
+                      const regionText = [
+                        marker.city ? trFn(marker.city) : "",
+                        countryLabel,
+                      ]
+                        .filter((v) => v)
+                        .join(", ");
 
-                return (
-                  <button
-                    key={marker.id}
-                    type="button"
-                    onClick={() => handleCardClick(marker)}
-                    className={
-                      "block overflow-hidden rounded-lg border border-border bg-surface text-left shadow-card transition duration-150 hover:-translate-y-0.5 hover:shadow-card " +
-                      // 선택된 카드: 빨간 테두리 + 은은하게 켜졌다 꺼지는 발광(box-shadow 애니메이션)
-                      (isSelected ? "card-playing" : "")
-                    }
+                      // 이 카드가 현재 선택되어(재생 중) 있는지 — 반드시 자기 id 로 비교
+                      const isSelected =
+                        expandedMarkerId != null && marker.id === expandedMarkerId;
+
+                      return (
+                        <button
+                          key={marker.id}
+                          type="button"
+                          onClick={() => handleCardClick(marker)}
+                          className={
+                            "block overflow-hidden rounded-lg border border-border bg-surface text-left shadow-card transition duration-150 hover:-translate-y-0.5 hover:shadow-card " +
+                            // 선택된 카드: 빨간 테두리 + 은은하게 켜졌다 꺼지는 발광(box-shadow 애니메이션)
+                            (isSelected ? "card-playing" : "")
+                          }
+                        >
+                          {/* 썸네일 (16:9) + 좌상단 상태 배지 */}
+                          <div className="relative aspect-video w-full overflow-hidden rounded-md bg-ink/5">
+                            {/* 없거나 로딩 실패 시 기본 이미지로 대체 */}
+                            <Thumbnail
+                              src={thumb}
+                              alt={marker.location ? trFn(marker.location) : t("noName")}
+                              className="h-full w-full object-cover"
+                            />
+                            <div className="absolute left-1 top-1">
+                              <StatusBadge kind={badgeKind} label={badgeLabel[badgeKind]} />
+                            </div>
+                          </div>
+
+                          {/* 본문 (카드가 작아 여백/글자 축소, 제목은 2줄까지 자동 줄바꿈) */}
+                          <div className="p-2">
+                            {/* 장소명 (제목, 2줄까지 자동 줄바꿈) */}
+                            <h3 className="line-clamp-2 font-display text-xs font-semibold leading-snug text-ink">
+                              {marker.location ? trFn(marker.location) : t("noName")}
+                            </h3>
+
+                            {/* 지역 정보 (위치 핀 + 도시/국가) */}
+                            {regionText && (
+                              <p className="mt-1 flex items-center gap-1 text-[11px] text-ink-muted">
+                                <PinIcon />
+                                <span className="truncate">{regionText}</span>
+                              </p>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* 이 줄에 선택된 카드가 있을 때만 그 바로 아래에 영상 영역을 편다.
+                      grid-template-rows 0fr↔1fr 트랜지션으로 사이가 벌어지듯 부드럽게
+                      열리고, 그 아래 다음 줄들은 자연스럽게 밀려 내려간다. */}
+                  <div
+                    className="grid transition-[grid-template-rows] duration-300 ease-out"
+                    style={{ gridTemplateRows: selectedInRow ? "1fr" : "0fr" }}
                   >
-                    {/* 썸네일 (16:9) + 좌상단 상태 배지 */}
-                    <div className="relative aspect-video w-full overflow-hidden rounded-md bg-ink/5">
-                      {/* 없거나 로딩 실패 시 기본 이미지로 대체 */}
-                      <Thumbnail
-                        src={thumb}
-                        alt={marker.location ? trFn(marker.location) : t("noName")}
-                        className="h-full w-full object-cover"
-                      />
-                      <div className="absolute left-1 top-1">
-                        <StatusBadge kind={badgeKind} label={badgeLabel[badgeKind]} />
-                      </div>
-                    </div>
+                    <div className="overflow-hidden">
+                      {selectedInRow && (
+                        <div className="relative mt-2 overflow-hidden rounded-md">
+                          {/* 접기(X) 버튼 — 영상만 접고 지도 위치는 유지 */}
+                          <button
+                            type="button"
+                            onClick={handleCollapse}
+                            aria-label={t("collapseVideo")}
+                            className="absolute right-1 top-1 z-10 rounded-md bg-ink/70 px-1.5 py-0.5 text-xs text-white transition hover:bg-ink"
+                          >
+                            ✕
+                          </button>
 
-                    {/* 본문 (카드가 작아 여백/글자 축소, 제목은 2줄까지 자동 줄바꿈) */}
-                    <div className="p-2">
-                      {/* 장소명 (제목, 2줄까지 자동 줄바꿈) */}
-                      <h3 className="line-clamp-2 font-display text-xs font-semibold leading-snug text-ink">
-                        {marker.location ? trFn(marker.location) : t("noName")}
-                      </h3>
-
-                      {/* 지역 정보 (위치 핀 + 도시/국가) */}
-                      {regionText && (
-                        <p className="mt-1 flex items-center gap-1 text-[11px] text-ink-muted">
-                          <PinIcon />
-                          <span className="truncate">{regionText}</span>
-                        </p>
+                          {noticeIds[selectedInRow.id] ? (
+                            // 재생불가 신고 안내 (영상 대신 표시)
+                            <div className="flex min-h-24 w-full items-center justify-center rounded-md bg-live-light px-3 py-4 text-center text-xs text-live">
+                              {noticeIds[selectedInRow.id]}
+                            </div>
+                          ) : selectedInRow.youtube_video_id ? (
+                            // 유튜브 IFrame Player API 기반 인라인 플레이어 (에러 감지)
+                            <InlinePlayer
+                              key={selectedInRow.id}
+                              videoId={selectedInRow.youtube_video_id}
+                              title={selectedInRow.location || "youtube video"}
+                              onError={(reason) => handleUnplayable(selectedInRow, reason)}
+                            />
+                          ) : (
+                            <div className="flex h-24 w-full items-center justify-center rounded-md bg-ink/5 text-xs text-ink-muted">
+                              {t("noVideoInfo")}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* 재생 영역 — 카드는 그대로 두고, 목록 아래에 사이가 벌어지듯 부드럽게 펼쳐진다.
-                (grid-template-rows 를 0fr↔1fr 로 트랜지션하는 방식 — 높이를 몰라도 애니메이션 가능) */}
-            <div
-              className="grid transition-[grid-template-rows] duration-300 ease-out"
-              style={{ gridTemplateRows: isPlayerOpen ? "1fr" : "0fr" }}
-            >
-              <div className="overflow-hidden">
-                {playingMarker && (
-                  <div className="relative mt-3 overflow-hidden rounded-md">
-                    {/* 접기(X) 버튼 — 영상만 접고 지도 위치는 유지 */}
-                    <button
-                      type="button"
-                      onClick={handleCollapse}
-                      aria-label={t("collapseVideo")}
-                      className="absolute right-1 top-1 z-10 rounded-md bg-ink/70 px-1.5 py-0.5 text-xs text-white transition hover:bg-ink"
-                    >
-                      ✕
-                    </button>
-
-                    {playingNotice ? (
-                      // 재생불가 신고 안내 (영상 대신 표시)
-                      <div className="flex min-h-24 w-full items-center justify-center rounded-md bg-live-light px-3 py-4 text-center text-xs text-live">
-                        {playingNotice}
-                      </div>
-                    ) : playingVideoId ? (
-                      // 유튜브 IFrame Player API 기반 인라인 플레이어 (에러 감지)
-                      <InlinePlayer
-                        key={playingMarker.id}
-                        videoId={playingVideoId}
-                        title={playingMarker.location || "youtube video"}
-                        onError={(reason) => handleUnplayable(playingMarker, reason)}
-                      />
-                    ) : (
-                      <div className="flex h-24 w-full items-center justify-center rounded-md bg-ink/5 text-xs text-ink-muted">
-                        {t("noVideoInfo")}
-                      </div>
-                    )}
                   </div>
-                )}
-              </div>
-            </div>
-          </>
+                </Fragment>
+              );
+            })}
+          </div>
         )}
       </div>
     </div>

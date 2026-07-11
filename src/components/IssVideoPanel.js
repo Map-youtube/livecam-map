@@ -11,17 +11,23 @@
 //   - issInfo : 현재 ISS 위치 정보 { lat, lng, altKm, speedKmh, visibility } | null (상단 표시)
 //   - onClose : 패널 닫기 콜백
 //
-// 동작:
-//   - 카드 클릭 → 카드 아래 인라인 YouTube iframe 재생(아코디언, 한 번에 하나).
-//   - 라이브 0개 → "현재 진행 중인 NASA 라이브가 없습니다" 빈 상태 표시.
+// 카드 선택 UX (VideoListPanel 과 동일한 패턴):
+//   - 카드 자체는 선택해도 크기가 커지지 않는다(3열 그리드 크기 고정).
+//   - 선택된 카드는 빨간 테두리 + 은은한 발광(card-playing, globals.css)으로 표시.
+//   - 영상은 카드 안이 아니라, 그 카드가 속한 "한 줄(최대 3개)" 바로 아래에
+//     별도 영역으로 펼쳐진다 → 아래 줄들이 자연스럽게 밀려 내려간다.
+//     (grid-template-rows 를 0fr↔1fr 로 트랜지션해 사이가 벌어지듯 부드럽게 열고 닫는다)
 //
 // ⚠️ NASA 라이브는 관리자 등록 마커가 아니므로 재생불가 신고(report-error)는 하지 않는다.
 // ─────────────────────────────────────────────────────────────
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import LiveDot from "@/components/LiveDot";
 import Thumbnail from "@/components/DefaultThumbnail";
 import { useI18n } from "@/components/i18n/LanguageProvider";
+
+// 한 줄에 표시할 카드 수 (그리드 열 수와 반드시 일치)
+const COLUMNS = 3;
 
 // ─── ISS 위치 정보 한 줄 요약 (null 값은 생략) ────────────────
 // 좌표/고도/속도 라벨은 언어 중립 약어(Lat/Lng/Alt)와 이모지(☀️/🌙)로 표기해
@@ -60,16 +66,6 @@ export default function IssVideoPanel({ videos, issInfo, onClose }) {
   const loading = videos == null;
   const list = Array.isArray(videos) ? videos : [];
 
-  // 재생 영역에 표시할 영상을 "닫히는 애니메이션 중"에도 유지하기 위한 상태
-  // (VideoListPanel 과 동일한 패턴 — 렌더 중 갱신, 값이 실제로 바뀔 때만 setState)
-  const [lastExpandedVideo, setLastExpandedVideo] = useState(null);
-  if (expandedId != null) {
-    const v = list.find((x) => x && x.videoId === expandedId);
-    if (v && v !== lastExpandedVideo) {
-      setLastExpandedVideo(v);
-    }
-  }
-
   // ─── 카드 클릭 → 재생 토글 (같은 카드 다시 클릭하면 접기) ───
   function toggleExpand(videoId) {
     try {
@@ -85,6 +81,13 @@ export default function IssVideoPanel({ videos, issInfo, onClose }) {
     } catch (error) {
       console.error("[IssVideoPanel] 닫기 처리 실패:", error); // TODO: 배포 전 제거
     }
+  }
+
+  // 카드를 COLUMNS 개씩 "줄" 단위로 묶는다 — 선택된 카드가 속한 줄 바로 아래에만
+  // 영상 영역을 넣기 위함(그 줄의 다음 줄들은 자연스럽게 아래로 밀려난다).
+  const rows = [];
+  for (let i = 0; i < list.length; i += COLUMNS) {
+    rows.push(list.slice(i, i + COLUMNS));
   }
 
   return (
@@ -122,97 +125,102 @@ export default function IssVideoPanel({ videos, issInfo, onClose }) {
             <p className="text-xs text-ink-muted">{t("nasaWillAppear")}</p>
           </div>
         ) : (
-          <>
-            <div className="grid grid-cols-3 gap-2">
-              {/* 한 줄에 3개씩 고정 크기 그리드 — 선택해도 카드 크기는 그대로 유지한다. */}
-              {list.map((v) => {
-                // 각 카드는 이 영상의 고유 videoId 만 참조한다.
-                const isSelected = expandedId === v.videoId;
-                return (
-                  <button
-                    key={v.videoId}
-                    type="button"
-                    onClick={() => toggleExpand(v.videoId)}
-                    className={
-                      "block overflow-hidden rounded-lg border border-border bg-surface text-left shadow-card transition duration-150 hover:-translate-y-0.5 " +
-                      // 선택된 카드: 빨간 테두리 + 은은하게 켜졌다 꺼지는 발광(box-shadow 애니메이션)
-                      (isSelected ? "card-playing" : "")
-                    }
+          <div className="flex flex-col gap-2">
+            {rows.map((row, rowIndex) => {
+              // 이 줄 안에 현재 선택된 카드가 있는지
+              const selectedInRow = row.find(
+                (v) => v && expandedId != null && v.videoId === expandedId
+              );
+
+              return (
+                <Fragment key={row[0] ? row[0].videoId : rowIndex}>
+                  {/* 한 줄 — 최대 COLUMNS 개, 선택해도 카드 크기는 고정 */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {row.map((v) => {
+                      // 각 카드는 이 영상의 고유 videoId 만 참조한다.
+                      const isSelected = expandedId === v.videoId;
+                      return (
+                        <button
+                          key={v.videoId}
+                          type="button"
+                          onClick={() => toggleExpand(v.videoId)}
+                          className={
+                            "block overflow-hidden rounded-lg border border-border bg-surface text-left shadow-card transition duration-150 hover:-translate-y-0.5 " +
+                            // 선택된 카드: 빨간 테두리 + 은은하게 켜졌다 꺼지는 발광(box-shadow 애니메이션)
+                            (isSelected ? "card-playing" : "")
+                          }
+                        >
+                          {/* 썸네일 (16:9) + 좌상단 LIVE 배지 */}
+                          <div className="relative aspect-video w-full overflow-hidden rounded-md bg-ink/5">
+                            {/* 없거나 로딩 실패 시 기본 이미지로 대체 */}
+                            <Thumbnail
+                              src={v.thumbnailUrl}
+                              alt={v.title || t("nasaLive")}
+                              className="h-full w-full object-cover"
+                            />
+                            <div className="absolute left-1 top-1">
+                              <span className="inline-flex items-center gap-1 rounded-full bg-live-light px-2 py-0.5 text-xs font-semibold text-live shadow-card">
+                                <LiveDot size="sm" />
+                                LIVE
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* 본문 (카드가 작아 여백/글자 축소, 제목은 2줄까지 자동 줄바꿈) */}
+                          <div className="p-2">
+                            <h3 className="line-clamp-2 font-display text-xs font-semibold leading-snug text-ink">
+                              {v.title || t("noTitle")}
+                            </h3>
+                            <p className="mt-1 truncate text-[11px] text-ink-muted">
+                              {v.channelName || "NASA"}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* 이 줄에 선택된 카드가 있을 때만 그 바로 아래에 영상 영역을 편다.
+                      grid-template-rows 0fr↔1fr 트랜지션으로 사이가 벌어지듯 부드럽게
+                      열리고, 그 아래 다음 줄들은 자연스럽게 밀려 내려간다. */}
+                  <div
+                    className="grid transition-[grid-template-rows] duration-300 ease-out"
+                    style={{ gridTemplateRows: selectedInRow ? "1fr" : "0fr" }}
                   >
-                    {/* 썸네일 (16:9) + 좌상단 LIVE 배지 */}
-                    <div className="relative aspect-video w-full overflow-hidden rounded-md bg-ink/5">
-                      {/* 없거나 로딩 실패 시 기본 이미지로 대체 */}
-                      <Thumbnail
-                        src={v.thumbnailUrl}
-                        alt={v.title || t("nasaLive")}
-                        className="h-full w-full object-cover"
-                      />
-                      <div className="absolute left-1 top-1">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-live-light px-2 py-0.5 text-xs font-semibold text-live shadow-card">
-                          <LiveDot size="sm" />
-                          LIVE
-                        </span>
-                      </div>
+                    <div className="overflow-hidden">
+                      {selectedInRow && (
+                        <div className="relative mt-2 overflow-hidden rounded-md">
+                          {/* 접기(X) 버튼 */}
+                          <button
+                            type="button"
+                            onClick={() => setExpandedId(null)}
+                            aria-label={t("closePanel")}
+                            className="absolute right-1 top-1 z-10 rounded-md bg-ink/70 px-1.5 py-0.5 text-xs text-white transition hover:bg-ink"
+                          >
+                            ✕
+                          </button>
+                          <div
+                            style={{ aspectRatio: "16 / 9" }}
+                            className="w-full overflow-hidden rounded bg-black"
+                          >
+                            <iframe
+                              key={selectedInRow.videoId}
+                              src={`https://www.youtube.com/embed/${selectedInRow.videoId}?autoplay=1`}
+                              title={selectedInRow.title || "NASA live"}
+                              className="h-full w-full"
+                              style={{ border: 0 }}
+                              allow="autoplay; encrypted-media; picture-in-picture"
+                              allowFullScreen
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
-
-                    {/* 본문 (카드가 작아 여백/글자 축소, 제목은 2줄까지 자동 줄바꿈) */}
-                    <div className="p-2">
-                      <h3 className="line-clamp-2 font-display text-xs font-semibold leading-snug text-ink">
-                        {v.title || t("noTitle")}
-                      </h3>
-                      <p className="mt-1 truncate text-[11px] text-ink-muted">
-                        {v.channelName || "NASA"}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* 재생 영역 — 카드는 그대로 두고, 목록 아래에 사이가 벌어지듯 부드럽게 펼쳐진다.
-                (grid-template-rows 를 0fr↔1fr 로 트랜지션하는 방식 — 높이를 몰라도 애니메이션 가능) */}
-            <div
-              className="grid transition-[grid-template-rows] duration-300 ease-out"
-              style={{ gridTemplateRows: expandedId != null ? "1fr" : "0fr" }}
-            >
-              <div className="overflow-hidden">
-                {(() => {
-                  const playingVideo =
-                    (expandedId != null &&
-                      list.find((v) => v && v.videoId === expandedId)) ||
-                    lastExpandedVideo;
-                  if (!playingVideo) return null;
-                  return (
-                    <div className="relative mt-3 overflow-hidden rounded-md">
-                      {/* 접기(X) 버튼 */}
-                      <button
-                        type="button"
-                        onClick={() => setExpandedId(null)}
-                        aria-label={t("closePanel")}
-                        className="absolute right-1 top-1 z-10 rounded-md bg-ink/70 px-1.5 py-0.5 text-xs text-white transition hover:bg-ink"
-                      >
-                        ✕
-                      </button>
-                      <div
-                        style={{ aspectRatio: "16 / 9" }}
-                        className="w-full overflow-hidden rounded bg-black"
-                      >
-                        <iframe
-                          key={playingVideo.videoId}
-                          src={`https://www.youtube.com/embed/${playingVideo.videoId}?autoplay=1`}
-                          title={playingVideo.title || "NASA live"}
-                          className="h-full w-full"
-                          style={{ border: 0 }}
-                          allow="autoplay; encrypted-media; picture-in-picture"
-                          allowFullScreen
-                        />
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
-          </>
+                  </div>
+                </Fragment>
+              );
+            })}
+          </div>
         )}
       </div>
     </div>
