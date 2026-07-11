@@ -144,7 +144,7 @@ export default function PrivacyPage() {
           있습니다. 아래 문의처로 요청하시면 관련 법령에 따라 지체 없이 처리합니다.
         </p>
         <ul className={UL}>
-          <li>문의: [운영자 이메일 입력]</li>
+          <li>문의: TripByClip@gmail.com</li>
         </ul>
       </section>
 
@@ -167,8 +167,8 @@ export default function PrivacyPage() {
           지정하고 있습니다.
         </p>
         <ul className={UL}>
-          <li>개인정보 보호책임자: [운영자 이름 입력]</li>
-          <li>연락처(이메일): [운영자 이메일 입력]</li>
+          <li>개인정보 보호책임자: TripByClip 운영자</li>
+          <li>연락처(이메일): TripByClip@gmail.com</li>
         </ul>
       </section>
 

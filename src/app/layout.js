@@ -17,7 +17,6 @@ import {
 } from "next/font/google";
 import "./globals.css";
 import { LanguageProvider } from "@/components/i18n/LanguageProvider";
-import Footer from "@/components/Footer";
 
 // 제목/강조용
 const spaceGrotesk = Space_Grotesk({
@@ -62,11 +61,9 @@ export default function RootLayout({ children }) {
     >
       <body className="flex min-h-full flex-col bg-bg font-body text-ink">
         {/* 전역 언어 상태 제공 (브라우저 언어 기본값 + 선택 저장 + RTL 처리) */}
-        {/* 모든 페이지 하단에 공통 푸터(법적 페이지 링크·저작권·지도 출처) 표시 */}
-        <LanguageProvider>
-          {children}
-          <Footer />
-        </LanguageProvider>
+        {/* 공통 푸터는 각 페이지가 렌더한다(메인=지도 영역 안, 법적 페이지=LegalPageLayout).
+            → 메인 화면에서 스크롤 없이 푸터가 보이도록 하기 위함. */}
+        <LanguageProvider>{children}</LanguageProvider>
       </body>
     </html>
   );

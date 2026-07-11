@@ -23,6 +23,7 @@ import IssVideoPanel from "@/components/IssVideoPanel";
 import LiveDot from "@/components/LiveDot";
 import AdSlot from "@/components/AdSlot";
 import KlookWidget from "@/components/KlookWidget";
+import Footer from "@/components/Footer";
 import LanguageSelector from "@/components/i18n/LanguageSelector";
 import { useI18n } from "@/components/i18n/LanguageProvider";
 import { useAutoTranslate } from "@/components/i18n/useAutoTranslate";
@@ -479,8 +480,8 @@ export default function MainMapView({ markers, tags }) {
         </aside>
       </div>
 
-      {/* 하단: 가로 배너형 광고 (728×90, 전체 폭) */}
-      <div className="flex h-[98px] flex-shrink-0 items-stretch border-t border-border bg-surface">
+      {/* 하단: 가로 배너형 광고 (728×90, 전체 폭). 배너 주위 회색 외곽선(테두리) 제거 + 높이 타이트. */}
+      <div className="flex h-[90px] flex-shrink-0 items-stretch bg-surface">
         <AdSlot orientation="horizontal" label={t("sponsoredLabel")}>
           <a
             href="https://www.anrdoezrs.net/click-101809732-17272970"
@@ -499,6 +500,9 @@ export default function MainMapView({ markers, tags }) {
           </a>
         </AdSlot>
       </div>
+
+      {/* 공통 푸터 (h-screen 안에 포함 → 메인에서 스크롤 없이 보이고 지도 영역이 그만큼 줄어듦) */}
+      <Footer />
     </div>
   );
 }

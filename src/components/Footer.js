@@ -17,13 +17,19 @@ export default function Footer() {
   const { t } = useI18n();
 
   return (
-    <footer className="flex-shrink-0 border-t border-border bg-surface px-4 py-4 text-ink-muted">
-      <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-2 text-center text-xs sm:flex-row sm:justify-between sm:text-left">
-        {/* 저작권 */}
-        <span>© 2026 TripByClip. All rights reserved.</span>
+    <footer className="flex-shrink-0 border-t border-border bg-surface px-4 py-1.5 text-ink-muted">
+      <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-x-2 gap-y-0.5 text-center text-[11px] leading-tight sm:flex-row sm:justify-between sm:text-left">
+        {/* 저작권 + 지도 데이터 출처 (한 줄로 합침) */}
+        <span>
+          © 2026 TripByClip. All rights reserved.
+          <span className="mx-1.5 text-border" aria-hidden="true">
+            ·
+          </span>
+          지도 데이터 © OpenStreetMap contributors
+        </span>
 
         {/* 법적 페이지 링크 */}
-        <nav className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+        <nav className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-0.5">
           <Link href="/terms" className="hover:text-brand hover:underline">
             {t("footerTerms")}
           </Link>
@@ -43,11 +49,6 @@ export default function Footer() {
             {t("footerAffiliate")}
           </Link>
         </nav>
-      </div>
-
-      {/* 지도 데이터 출처 */}
-      <div className="mx-auto mt-2 w-full max-w-5xl text-center text-[11px] text-ink-muted/70 sm:text-left">
-        지도 데이터 © OpenStreetMap contributors
       </div>
     </footer>
   );

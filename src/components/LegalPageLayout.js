@@ -9,6 +9,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import Link from "next/link";
+import Footer from "@/components/Footer";
 
 export default function LegalPageLayout({
   title,
@@ -17,7 +18,8 @@ export default function LegalPageLayout({
   children,
 }) {
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-10 sm:px-8">
+    <>
+      <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-10 sm:px-8">
       {/* 홈으로 돌아가기 */}
       <Link
         href="/"
@@ -49,6 +51,10 @@ export default function LegalPageLayout({
           기관(개인정보보호위원회, 법률구조공단 등)의 안내를 참고하시기 바랍니다.
         </p>
       </div>
-    </main>
+      </main>
+
+      {/* 공통 푸터 */}
+      <Footer />
+    </>
   );
 }
