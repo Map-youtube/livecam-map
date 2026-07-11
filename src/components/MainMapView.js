@@ -243,13 +243,25 @@ export default function MainMapView({ markers, tags }) {
   const handleIssPosition = useCallback((d) => {
     try {
       issPositionRef.current = d;
-      if (issSelectedRef.current) setIssInfo(d);
+      if (issSelectedRef.current) {
+        setIssInfo(d);
+        // ISS 목록이 열려 있는 동안에는 카메라가 ISS 를 실시간으로 따라간다.
+        // (2초마다 도착하는 새 위치로 부드럽게 이동 — 2D/3D 공통 flyToLocation)
+        if (
+          mapRef.current &&
+          d &&
+          typeof d.lat === "number" &&
+          typeof d.lng === "number"
+        ) {
+          mapRef.current.flyToLocation({ lat: d.lat, lng: d.lng, zoom: 4 });
+        }
+      }
     } catch (error) {
       console.error("[MainMapView] ISS 위치 갱신 실패:", error); // TODO: 배포 전 제거
     }
   }, []);
 
-  // ─── ISS(Space) 선택 → NASA 라이브 패널 + 지도 이동 (2D/3D 공통) ─
+  // ─── ISS(Space) 선택 → NASA 라이브 패널 + ISS 추적 켜기 + 위치 따라가기 (2D/3D 공통) ─
   const handleSelectIss = useCallback(() => {
     try {
       setSelectedCity(null);
@@ -257,7 +269,13 @@ export default function MainMapView({ markers, tags }) {
       setExpandedMarkerId(null);
       setIssSelected(true);
       issSelectedRef.current = true;
+      // 목록을 열면 ISS 추적을 자동으로 켠다. (꺼져 있으면 위치 갱신이 오지 않아
+      //  카메라가 ISS 를 따라갈 수 없으므로 반드시 켜 준다)
+      setIssEnabled(true);
 
+      // 이미 위치를 알고 있으면(추적이 이미 켜져 있던 경우) 즉시 그 위치로 이동한다.
+      // 방금 추적을 켠 경우엔 위치가 아직 없을 수 있는데, 곧 도착하는 첫 위치 갱신에서
+      // handleIssPosition 이 카메라를 ISS 로 이동시킨다.
       const pos = issPositionRef.current;
       if (pos && typeof pos.lat === "number" && typeof pos.lng === "number") {
         setIssInfo(pos);

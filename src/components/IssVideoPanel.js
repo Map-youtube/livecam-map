@@ -231,7 +231,8 @@ export default function IssVideoPanel({ videos, issInfo, onClose }) {
                           >
                             <iframe
                               key={rowVideo.videoId}
-                              src={`https://www.youtube.com/embed/${rowVideo.videoId}?autoplay=1`}
+                              // mute=1: 기본 음소거 — 사용자가 플레이어에서 소리를 켤 수 있음
+                              src={`https://www.youtube.com/embed/${rowVideo.videoId}?autoplay=1&mute=1`}
                               title={rowVideo.title || "NASA live"}
                               className="h-full w-full"
                               style={{ border: 0 }}

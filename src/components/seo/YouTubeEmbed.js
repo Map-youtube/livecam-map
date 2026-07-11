@@ -19,7 +19,8 @@ export default function YouTubeEmbed({ videoId, title }) {
       className="w-full overflow-hidden rounded-lg bg-black"
     >
       <iframe
-        src={`https://www.youtube.com/embed/${videoId}`}
+        // mute=1: 기본 음소거 — 사용자가 플레이어에서 소리를 켤 수 있음
+        src={`https://www.youtube.com/embed/${videoId}?mute=1`}
         title={title || "YouTube video"}
         className="h-full w-full"
         style={{ border: 0 }}

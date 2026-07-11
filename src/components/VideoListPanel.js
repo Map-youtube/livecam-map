@@ -202,7 +202,8 @@ function InlinePlayer({ videoId, title, onError }) {
       <iframe
         id={iframeId}
         // enablejsapi=1 로 IFrame API 제어/이벤트 구독 가능
-        src={`https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1`}
+        // mute=1: 기본 음소거(회사/학교 등에서 소리 없이 재생) — 사용자가 플레이어에서 켤 수 있음
+        src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&enablejsapi=1`}
         title={title || "youtube video"}
         className="h-full w-full"
         style={{ border: 0 }}
