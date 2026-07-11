@@ -707,3 +707,29 @@ const stormMessages = {
 for (const code of Object.keys(stormMessages)) {
   messages[code] = { ...messages[code], ...stormMessages[code] };
 }
+
+// ─── 푸터 링크 라벨 + 광고(제휴 링크) 라벨 ────────────────────
+// footerTerms/footerPrivacy/footerAffiliate: 공통 푸터의 법적 페이지 링크명
+// sponsoredLabel: 제휴 배너 위에 표기하는 "제휴 링크" 라벨(공정위 표시지침 이행)
+const legalMessages = {
+  en: { footerTerms: "Terms of Service", footerPrivacy: "Privacy Policy", footerAffiliate: "Affiliate Disclosure", sponsoredLabel: "Sponsored link" },
+  ko: { footerTerms: "이용약관", footerPrivacy: "개인정보처리방침", footerAffiliate: "제휴 링크 고지", sponsoredLabel: "제휴 링크" },
+  ja: { footerTerms: "利用規約", footerPrivacy: "プライバシーポリシー", footerAffiliate: "アフィリエイト表示", sponsoredLabel: "提携リンク" },
+  zh: { footerTerms: "服务条款", footerPrivacy: "隐私政策", footerAffiliate: "联盟披露", sponsoredLabel: "赞助链接" },
+  es: { footerTerms: "Términos de servicio", footerPrivacy: "Política de privacidad", footerAffiliate: "Divulgación de afiliados", sponsoredLabel: "Enlace patrocinado" },
+  fr: { footerTerms: "Conditions d'utilisation", footerPrivacy: "Politique de confidentialité", footerAffiliate: "Divulgation d'affiliation", sponsoredLabel: "Lien sponsorisé" },
+  de: { footerTerms: "Nutzungsbedingungen", footerPrivacy: "Datenschutzerklärung", footerAffiliate: "Affiliate-Hinweis", sponsoredLabel: "Gesponserter Link" },
+  it: { footerTerms: "Termini di servizio", footerPrivacy: "Informativa sulla privacy", footerAffiliate: "Informativa affiliazione", sponsoredLabel: "Link sponsorizzato" },
+  pt: { footerTerms: "Termos de serviço", footerPrivacy: "Política de privacidade", footerAffiliate: "Divulgação de afiliados", sponsoredLabel: "Link patrocinado" },
+  ru: { footerTerms: "Условия использования", footerPrivacy: "Политика конфиденциальности", footerAffiliate: "Партнёрское раскрытие", sponsoredLabel: "Спонсорская ссылка" },
+  hi: { footerTerms: "सेवा की शर्तें", footerPrivacy: "गोपनीयता नीति", footerAffiliate: "सहबद्ध प्रकटीकरण", sponsoredLabel: "प्रायोजित लिंक" },
+  bn: { footerTerms: "পরিষেবার শর্তাবলী", footerPrivacy: "গোপনীয়তা নীতি", footerAffiliate: "অ্যাফিলিয়েট প্রকাশ", sponsoredLabel: "স্পনসর করা লিঙ্ক" },
+  th: { footerTerms: "ข้อกำหนดในการให้บริการ", footerPrivacy: "นโยบายความเป็นส่วนตัว", footerAffiliate: "การเปิดเผยพันธมิตร", sponsoredLabel: "ลิงก์ผู้สนับสนุน" },
+  vi: { footerTerms: "Điều khoản dịch vụ", footerPrivacy: "Chính sách bảo mật", footerAffiliate: "Tiết lộ liên kết", sponsoredLabel: "Liên kết tài trợ" },
+  id: { footerTerms: "Ketentuan Layanan", footerPrivacy: "Kebijakan Privasi", footerAffiliate: "Pengungkapan Afiliasi", sponsoredLabel: "Tautan bersponsor" },
+  ar: { footerTerms: "شروط الخدمة", footerPrivacy: "سياسة الخصوصية", footerAffiliate: "الإفصاح عن الشراكة", sponsoredLabel: "رابط برعاية" },
+  fa: { footerTerms: "شرایط خدمات", footerPrivacy: "سیاست حفظ حریم خصوصی", footerAffiliate: "افشای همکاری", sponsoredLabel: "پیوند حمایت‌شده" },
+};
+for (const code of Object.keys(legalMessages)) {
+  messages[code] = { ...messages[code], ...legalMessages[code] };
+}
