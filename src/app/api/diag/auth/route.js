@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────
-// GET /api/_diag/auth — (임시 진단) firebase-admin/auth 로딩·검증 파이프라인 점검
+// GET /api/diag/auth — (임시 진단) firebase-admin/auth 로딩·검증 파이프라인 점검
 //
 // Vercel 운영에서 관리자 인증(verifyIdToken)이 왜 실패하는지 원인 격리용.
 //   - firebase-admin/auth 동적 import 성공 여부
