@@ -45,6 +45,19 @@ const VIDEOS_LIST_MAX = 50;
 const BROWSER_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36";
 
+// ─── NASA 상시 라이브(ISS) 후보 videoId (폴백) ────────────────
+// ISS "24/7 상시 라이브"는 오래전에 시작돼 RSS(최근 15개 업로드)에 안 들어오고,
+// /streams 탭 스크래핑도 데이터센터 IP(예: Vercel)에서는 유튜브의 consent/봇 페이지가
+// 떠서 실패할 수 있다. 그래서 알려진 NASA ISS 라이브 videoId 를 후보에 항상 포함시킨다.
+// (실제 "live" 여부는 아래 videos.list 가 판정하므로, 지난 ID 가 섞여도 무해하다.)
+const NASA_FALLBACK_IDS = [
+  "awQzjn72bI0", // Live High-Definition Views from the ISS (Official NASA Stream)
+  "uwXgcTc8oY8", // Live Video from the International Space Station (Official NASA Stream)
+  "DIgkvm2nmHc", // (구) ISS HD Earth Viewing 계열
+  "P9C25Un7xaM", // (구) NASA Live 계열
+  "21X5lGlDOfg", // (구) NASA Live 계열
+];
+
 // ─── (a) RSS 피드에서 최신 videoId 추출 (정규식 파싱) ─────────
 async function fetchRssVideoIds() {
   try {
@@ -75,9 +88,15 @@ async function fetchRssVideoIds() {
 // 라이브/예정/지난 스트림이 섞여 나오지만, 이후 videos.list 로 "live" 만 걸러낸다.
 async function fetchStreamVideoIds() {
   try {
-    const res = await fetch(STREAMS_URL, {
+    // hl/gl 로 영어·미국 지역을 강제하고, CONSENT 쿠키로 EU 동의 인터스티셜을 우회한다.
+    // (데이터센터 IP 에서 유튜브가 동의/봇 페이지를 주면 ytInitialData 가 없어 스크래핑 실패)
+    const res = await fetch(STREAMS_URL + "?hl=en&gl=US", {
       cache: "no-store",
-      headers: { "User-Agent": BROWSER_UA },
+      headers: {
+        "User-Agent": BROWSER_UA,
+        "Accept-Language": "en-US,en;q=0.9",
+        Cookie: "CONSENT=YES+cb.20210328-17-p0.en+FX+000; SOCS=CAI",
+      },
     });
     if (!res.ok) {
       console.error(`[api/iss/videos] streams 실패 (status ${res.status})`); // TODO: 배포 전 제거
@@ -103,32 +122,52 @@ async function fetchStreamVideoIds() {
   }
 }
 
-// ─── 라이브 영상 목록 계산 (5분 캐시) ────────────────────────
+// ─── 후보 수집 → 라이브 판정 (진단정보 포함, 캐시 안 함) ──────
+async function computeLiveVideos() {
+  // 두 소스에서 후보 videoId 수집 (한쪽이 실패해도 다른 쪽으로 진행)
+  const [streamIds, rssIds] = await Promise.all([
+    fetchStreamVideoIds(),
+    fetchRssVideoIds(),
+  ]);
+
+  // 병합 순서: 폴백(상시 ISS) 먼저 → streams → RSS. 중복 제거.
+  // ★ 폴백을 맨 앞에 두어 50개 제한(slice)에서 절대 잘려나가지 않게 한다(ISS 항상 확인).
+  const merged = [];
+  const seen = new Set();
+  for (const id of [...NASA_FALLBACK_IDS, ...streamIds, ...rssIds]) {
+    if (id && !seen.has(id)) {
+      seen.add(id);
+      merged.push(id);
+    }
+  }
+  // videos.list 는 배치당 50개까지(1유닛) → 앞에서 50개만 사용
+  const ids = merged.slice(0, VIDEOS_LIST_MAX);
+
+  const live = ids.length ? await getLiveVideos(ids) : [];
+  // 표시용 채널명을 "NASA" 로 고정
+  const videos = live.map((v) => ({ ...v, channelName: "NASA" }));
+
+  return {
+    videos,
+    // 운영 진단용(비밀값 없음). ?debug=1 로만 노출.
+    debug: {
+      keyPresent: !!process.env.YOUTUBE_API_KEY,
+      rssCount: rssIds.length,
+      streamsCount: streamIds.length,
+      fallbackCount: NASA_FALLBACK_IDS.length,
+      candidateCount: ids.length,
+      liveCount: videos.length,
+      liveTitles: videos.map((v) => v.title),
+    },
+  };
+}
+
+// ─── 라이브 영상 목록 (5분 캐시) ─────────────────────────────
 const getNasaLiveVideos = unstable_cache(
   async () => {
     try {
-      // 두 소스에서 후보 videoId 수집 (한쪽이 실패해도 다른 쪽으로 진행)
-      const [streamIds, rssIds] = await Promise.all([
-        fetchStreamVideoIds(),
-        fetchRssVideoIds(),
-      ]);
-
-      // 병합: streams(라이브 가능성 높음) 우선 + RSS, 중복 제거
-      const merged = [];
-      const seen = new Set();
-      for (const id of [...streamIds, ...rssIds]) {
-        if (id && !seen.has(id)) {
-          seen.add(id);
-          merged.push(id);
-        }
-      }
-      // videos.list 는 배치당 50개까지(1유닛) → 앞에서 50개만 사용
-      const ids = merged.slice(0, VIDEOS_LIST_MAX);
-      if (ids.length === 0) return [];
-
-      const live = await getLiveVideos(ids);
-      // 표시용 채널명을 "NASA" 로 고정
-      return live.map((v) => ({ ...v, channelName: "NASA" }));
+      const { videos } = await computeLiveVideos();
+      return videos;
     } catch (error) {
       console.error("[api/iss/videos] 라이브 목록 계산 실패:", error); // TODO: 배포 전 제거
       return [];
@@ -141,8 +180,20 @@ const getNasaLiveVideos = unstable_cache(
   }
 );
 
-export async function GET() {
+export async function GET(request) {
   try {
+    // ?debug=1 : 캐시 우회 실시간 진단(비밀값 없음). 원인 파악 후 제거 예정.
+    let wantDebug = false;
+    try {
+      wantDebug = new URL(request.url).searchParams.get("debug") === "1";
+    } catch (e) {
+      wantDebug = false;
+    }
+    if (wantDebug) {
+      const { videos, debug } = await computeLiveVideos();
+      return Response.json({ ok: true, videos, debug }, { status: 200 });
+    }
+
     const videos = await getNasaLiveVideos();
     return Response.json(
       { ok: true, videos: Array.isArray(videos) ? videos : [] },
