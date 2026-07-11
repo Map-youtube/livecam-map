@@ -15,8 +15,12 @@ import {
   Noto_Sans_KR,
   IBM_Plex_Mono,
 } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import { LanguageProvider } from "@/components/i18n/LanguageProvider";
+
+// GA4 측정 ID (미설정 시 GA 스크립트 자체를 렌더하지 않음)
+const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
 // 제목/강조용
 const spaceGrotesk = Space_Grotesk({
@@ -60,6 +64,23 @@ export default function RootLayout({ children }) {
       className={`${spaceGrotesk.variable} ${inter.variable} ${notoSansKr.variable} ${ibmPlexMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-bg font-body text-ink">
+        {/* GA4 — 측정 ID가 설정된 경우에만 로드 */}
+        {GA_MEASUREMENT_ID && (
+          <>
+            <Script
+              src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
+              strategy="afterInteractive"
+            />
+            <Script id="ga4-init" strategy="afterInteractive">
+              {`
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', '${GA_MEASUREMENT_ID}');
+              `}
+            </Script>
+          </>
+        )}
         {/* 전역 언어 상태 제공 (브라우저 언어 기본값 + 선택 저장 + RTL 처리) */}
         {/* 공통 푸터는 각 페이지가 렌더한다(메인=지도 영역 안, 법적 페이지=LegalPageLayout).
             → 메인 화면에서 스크롤 없이 푸터가 보이도록 하기 위함. */}
