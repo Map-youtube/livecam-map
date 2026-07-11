@@ -18,6 +18,7 @@ import { auth } from "@/lib/firebase";
 import AdminGuard from "@/components/AdminGuard";
 import MarkerForm from "@/components/MarkerForm";
 import MarkerList from "@/components/MarkerList";
+import LiveChannelSection from "@/components/LiveChannelSection";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -88,6 +89,19 @@ export default function AdminPage() {
             등록된 마커 목록
           </h2>
           <MarkerList refreshSignal={refreshSignal} />
+
+          {/* 구분선 */}
+          <hr className="my-10 border-border" />
+
+          {/* 자동 라이브 채널 관리 (방송국 등 24/7 채널 — 대분류/소분류로 묶음) */}
+          <h2 className="mb-2 font-display text-xl font-bold text-ink">
+            자동 라이브 채널 관리
+          </h2>
+          <p className="mb-6 text-sm text-ink-muted">
+            NASA처럼 24/7 라이브만 하는 유튜브 채널을 대분류/소분류로 묶어 등록합니다.
+            영상은 자동으로 수집되며, 채널과 지도 위치만 지정하면 됩니다.
+          </p>
+          <LiveChannelSection />
         </div>
 
         {/* 오른쪽 절반: 측정 지표 영역 (추후 구현 예정) */}
