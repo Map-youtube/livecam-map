@@ -8,6 +8,7 @@
 // firebase-admin은 Node.js 런타임에서만 동작하므로 runtime을 nodejs로 명시한다.
 // ─────────────────────────────────────────────────────────────
 
+import { revalidateTag } from "next/cache";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { FieldValue } from "firebase-admin/firestore";
 import { extractVideoId, getYoutubeInfo } from "@/lib/youtubeUtils";
@@ -326,6 +327,13 @@ export async function POST(request) {
 
     // ─── 5) 저장 및 문서 id 반환 ───────────────────────────────
     const docRef = await adminDb.collection(COLLECTION).add(markerData);
+
+    // 공개 마커 캐시 무효화 → 메인 페이지/목록에 즉시 반영 (5분 대기 없이)
+    try {
+      revalidateTag("public-markers");
+    } catch (revalError) {
+      console.error("[api/markers][POST] 재검증 실패:", revalError); // TODO: 배포 전 제거
+    }
 
     return Response.json(
       {

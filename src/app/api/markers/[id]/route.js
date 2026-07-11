@@ -12,6 +12,7 @@
 // firebase-admin(Node 전용) 사용 → Node.js 런타임 명시.
 // ─────────────────────────────────────────────────────────────
 
+import { revalidateTag } from "next/cache";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { FieldValue } from "firebase-admin/firestore";
 import { extractVideoId, getYoutubeInfo } from "@/lib/youtubeUtils";
@@ -233,6 +234,13 @@ export async function PATCH(request, context) {
     // 실제 수정 반영
     await docRef.update(updates);
 
+    // 공개 마커 캐시 무효화 → 손님 화면에 즉시 반영
+    try {
+      revalidateTag("public-markers");
+    } catch (revalError) {
+      console.error("[api/markers/[id]][PATCH] 재검증 실패:", revalError); // TODO: 배포 전 제거
+    }
+
     // 수정된 최신 문서 반환 (문서 id 포함)
     const updatedSnap = await docRef.get();
     return Response.json(
@@ -294,6 +302,13 @@ export async function DELETE(request, context) {
 
     // 완전 삭제
     await docRef.delete();
+
+    // 공개 마커 캐시 무효화 → 손님 화면에 즉시 반영
+    try {
+      revalidateTag("public-markers");
+    } catch (revalError) {
+      console.error("[api/markers/[id]][DELETE] 재검증 실패:", revalError); // TODO: 배포 전 제거
+    }
 
     return Response.json(
       {
