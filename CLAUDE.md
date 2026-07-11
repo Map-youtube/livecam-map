@@ -111,6 +111,7 @@ REVALIDATE_SECRET=                   ← ISR 재검증 시크릿
 NEXT_PUBLIC_SITE_URL=                ← 정규 도메인 (https://www.tripbyclip.com)
 NEXT_PUBLIC_GA_MEASUREMENT_ID=       ← 클라이언트 (GA4 측정 ID, 미설정 시 GA 스크립트 자체를 로드하지 않음)
 ADSENSE_PUBLISHER_ID=                ← 서버 전용 (예: pub-1234567890123456, /ads.txt 생성용. 미설정 시 /ads.txt 404)
+NEXT_PUBLIC_SHOW_AFFILIATE=          ← 클라이언트 ("true" 일 때만 제휴 광고(Klook/CJ 부킹닷컴) 렌더링. 미설정/false 면 광고 마크업이 HTML 에서 완전 제외 — 애드센스 심사용. 승인 후 true 로 설정+재배포하면 복원)
 ```
 
 ---

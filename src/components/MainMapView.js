@@ -35,6 +35,14 @@ const DEFAULT_ZOOM = 2;
 // 2D/3D 모드 저장 키
 const MODE_STORAGE_KEY = "livecam_map_mode";
 
+// 제휴 광고(Klook/CJ 부킹닷컴 등) 표시 여부 스위치.
+//   NEXT_PUBLIC_SHOW_AFFILIATE === "true" 일 때만 광고를 렌더링한다.
+//   미설정(또는 "true" 가 아님)이면 광고 관련 마크업이 최종 HTML 에서 완전히 제외된다
+//   → 애드센스 심사 봇이 제휴 스크립트/링크를 감지하지 못하도록(display:none 은 소스에
+//     남아 위험하므로 아예 렌더하지 않는 방식). 승인 후 Vercel 환경변수에
+//     NEXT_PUBLIC_SHOW_AFFILIATE=true 를 추가하고 재배포하면 광고가 그대로 복원된다.
+const SHOW_AFFILIATE = process.env.NEXT_PUBLIC_SHOW_AFFILIATE === "true";
+
 // 레이어 토글 버튼 공통 스타일 (켜짐=파랑 강조 / 꺼짐=흰색)
 function toggleBtnClass(on) {
   return (
@@ -492,20 +500,26 @@ export default function MainMapView({ markers, tags }) {
         </main>
 
         {/* 오른쪽 끝: 세로 배너형 광고 (Klook 120×600, 넓은 화면에서만 표시) */}
-        <aside className="hidden w-[132px] flex-shrink-0 border-l border-border bg-surface lg:block">
-          <AdSlot orientation="vertical">
-            <KlookWidget />
-          </AdSlot>
-        </aside>
+        {/* SHOW_AFFILIATE=false 이면 이 블록 자체가 HTML 에서 제외된다(애드센스 심사용). */}
+        {SHOW_AFFILIATE && (
+          <aside className="hidden w-[132px] flex-shrink-0 border-l border-border bg-surface lg:block">
+            <AdSlot orientation="vertical">
+              <KlookWidget />
+            </AdSlot>
+          </aside>
+        )}
       </div>
 
       {/* 하단: 가로 배너형 광고 (728×90, 전체 폭). 배너 주위 회색 외곽선(테두리) 제거 + 높이 타이트. */}
-      <div className="flex h-[90px] flex-shrink-0 items-stretch bg-surface">
-        <AdSlot orientation="horizontal">
-          {/* CJ 제휴 배너 (테두리 크롭 처리) — CjBanner 컴포넌트에서 관리 */}
-          <CjBanner />
-        </AdSlot>
-      </div>
+      {/* SHOW_AFFILIATE=false 이면 이 배너 영역 자체가 HTML 에서 제외된다(애드센스 심사용). */}
+      {SHOW_AFFILIATE && (
+        <div className="flex h-[90px] flex-shrink-0 items-stretch bg-surface">
+          <AdSlot orientation="horizontal">
+            {/* CJ 제휴 배너 (테두리 크롭 처리) — CjBanner 컴포넌트에서 관리 */}
+            <CjBanner />
+          </AdSlot>
+        </div>
+      )}
 
       {/* 공통 푸터 (h-screen 안에 포함 → 메인에서 스크롤 없이 보이고 지도 영역이 그만큼 줄어듦) */}
       <Footer />
