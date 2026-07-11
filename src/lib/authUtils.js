@@ -84,11 +84,29 @@ export async function verifyAdminRequest(request) {
       return { valid: false, error: "인증에 실패했습니다" };
     }
 
+    const email = typeof payload.email === "string" ? payload.email : "";
+
+    // ★ 관리자 화이트리스트 검증
+    //   Firebase 프로젝트의 NEXT_PUBLIC_FIREBASE_API_KEY 는 클라이언트에 공개되므로,
+    //   토큰이 "유효한 Firebase 사용자"임을 증명할 뿐 "관리자"임을 보장하지 않는다
+    //   (Identity Toolkit REST API로 누구나 자체 계정을 만들 수 있음).
+    //   → ADMIN_EMAIL 환경변수와 정확히 일치하는 이메일만 관리자로 인정한다.
+    const adminEmail = process.env.ADMIN_EMAIL;
+    if (!adminEmail) {
+      console.error(
+        "[authUtils] ADMIN_EMAIL 환경변수가 설정되지 않아 관리자 여부를 판별할 수 없습니다."
+      ); // TODO: 배포 전 제거
+      return { valid: false, error: "인증에 실패했습니다" };
+    }
+    if (email.toLowerCase() !== adminEmail.toLowerCase()) {
+      return { valid: false, error: "관리자 계정이 아닙니다" };
+    }
+
     // 검증 성공
     return {
       valid: true,
       uid: payload.sub,
-      email: typeof payload.email === "string" ? payload.email : "",
+      email,
     };
   } catch (error) {
     // 예기치 못한 오류도 인증 실패로 처리 (토큰 값은 로그하지 않음)
