@@ -23,10 +23,10 @@ export default function AdSlot({
     <div
       className={
         "relative flex h-full w-full bg-surface " +
-        // 세로 배너(120×600)는 화면이 짧아도 위부터 보이도록 상단 정렬 + 세로 스크롤.
-        // 가로 배너는 중앙 정렬.
+        // 세로 배너(120×600)는 영역 세로 기준 가운데 정렬(+ 화면이 짧을 때를 대비해 세로 스크롤).
+        // 가로 배너도 중앙 정렬.
         (isVertical
-          ? "items-start justify-center overflow-y-auto py-2"
+          ? "items-center justify-center overflow-y-auto py-2"
           : "items-center justify-center overflow-hidden") +
         (className ? " " + className : "")
       }
