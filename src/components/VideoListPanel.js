@@ -228,6 +228,19 @@ export default function VideoListPanel({
   // 지연 제거 타이머 정리용
   const timersRef = useRef([]);
 
+  // 재생 영역에 표시할 마커를 "닫히는 애니메이션 중"에도 유지하기 위한 상태.
+  // (선택 해제 즉시 내용이 사라지면 접히는 애니메이션 도중 빈 패널이 보이므로,
+  //  선택이 풀려도 마지막으로 재생하던 마커 정보를 붙잡아 두고 높이만 0으로 접는다)
+  // ⚠️ useEffect 대신 렌더 중 갱신 패턴을 사용한다(React 권장: "이전 렌더 정보 저장").
+  //    값이 실제로 바뀔 때만 setState 하므로 무한 렌더 없이 안전하다.
+  const [lastExpandedMarker, setLastExpandedMarker] = useState(null);
+  if (expandedMarkerId != null) {
+    const m = list.find((x) => x && x.id === expandedMarkerId);
+    if (m && m !== lastExpandedMarker) {
+      setLastExpandedMarker(m);
+    }
+  }
+
   // 언마운트 시 타이머 정리
   useEffect(() => {
     return () => {
@@ -309,6 +322,15 @@ export default function VideoListPanel({
   // 화면에 실제로 보일 목록 (신고로 제거된 것 제외)
   const visibleList = list.filter((m) => m && !removedIds.has(m.id));
 
+  // 재생 영역 열림 여부 + 표시할 마커(닫히는 중에는 마지막 마커를 유지)
+  const isPlayerOpen = expandedMarkerId != null;
+  const playingMarker =
+    (expandedMarkerId != null &&
+      visibleList.find((m) => m && m.id === expandedMarkerId)) ||
+    lastExpandedMarker;
+  const playingVideoId = playingMarker ? playingMarker.youtube_video_id || "" : "";
+  const playingNotice = playingMarker ? noticeIds[playingMarker.id] : null;
+
   return (
     <div className="flex h-full flex-col bg-bg">
       {/* 상단: 제목 + 닫기 버튼 */}
@@ -333,45 +355,37 @@ export default function VideoListPanel({
             {t("noVideos")}
           </p>
         ) : (
-          <div className="grid grid-cols-3 gap-2">
-            {/* 한 줄에 3개씩 그리드로 배치 (카드 작게). 펼쳐진 카드는 전체 폭 차지. */}
-            {visibleList.map((marker) => {
-              // 각 카드는 이 marker 의 고유 데이터만 참조한다.
-              const thumb = getThumb(marker);
-              const badgeKind = getStatusKind(marker);
-              const countryLabel = marker.country
-                ? countryName(marker.country)
-                : "";
-              const regionText = [
-                marker.city ? trFn(marker.city) : "",
-                countryLabel,
-              ]
-                .filter((v) => v)
-                .join(", ");
-              const tags = Array.isArray(marker.tags) ? marker.tags : [];
+          <>
+            <div className="grid grid-cols-3 gap-2">
+              {/* 한 줄에 3개씩 고정 크기 그리드 — 선택해도 카드 크기는 그대로 유지한다. */}
+              {visibleList.map((marker) => {
+                // 각 카드는 이 marker 의 고유 데이터만 참조한다.
+                const thumb = getThumb(marker);
+                const badgeKind = getStatusKind(marker);
+                const countryLabel = marker.country
+                  ? countryName(marker.country)
+                  : "";
+                const regionText = [
+                  marker.city ? trFn(marker.city) : "",
+                  countryLabel,
+                ]
+                  .filter((v) => v)
+                  .join(", ");
 
-              // 이 카드가 현재 펼쳐진(재생 중인) 카드인지 — 반드시 자기 id 로 비교
-              const isExpanded =
-                expandedMarkerId != null && marker.id === expandedMarkerId;
-              // 이미 저장된 video_id 를 그대로 사용 (유튜브 API 재호출 없음)
-              const videoId = marker.youtube_video_id || "";
-              // 재생불가 신고 안내 메시지 (있으면 표시)
-              const notice = noticeIds[marker.id];
+                // 이 카드가 현재 선택되어(재생 중) 있는지 — 반드시 자기 id 로 비교
+                const isSelected =
+                  expandedMarkerId != null && marker.id === expandedMarkerId;
 
-              return (
-                <div
-                  key={marker.id}
-                  className={
-                    "overflow-hidden rounded-lg border border-border bg-surface shadow-card transition duration-150 hover:-translate-y-0.5 hover:shadow-card " +
-                    // 펼쳐진(재생 중인) 카드는 그리드 한 줄을 통째로 차지 → 영상이 크게 보임
-                    (isExpanded ? "col-span-full" : "")
-                  }
-                >
-                  {/* 클릭 영역(헤더): 썸네일 + 정보 */}
+                return (
                   <button
+                    key={marker.id}
                     type="button"
                     onClick={() => handleCardClick(marker)}
-                    className="block w-full text-left"
+                    className={
+                      "block overflow-hidden rounded-lg border border-border bg-surface text-left shadow-card transition duration-150 hover:-translate-y-0.5 hover:shadow-card " +
+                      // 선택된 카드: 빨간 테두리 + 은은하게 켜졌다 꺼지는 발광(box-shadow 애니메이션)
+                      (isSelected ? "card-playing" : "")
+                    }
                   >
                     {/* 썸네일 (16:9) + 좌상단 상태 배지 */}
                     <div className="relative aspect-video w-full overflow-hidden rounded-md bg-ink/5">
@@ -400,61 +414,54 @@ export default function VideoListPanel({
                           <span className="truncate">{regionText}</span>
                         </p>
                       )}
-
-                      {/* 특성 태그 — 카드가 펼쳐졌을 때(전체 폭)만 표시해 작은 카드를 깔끔하게 유지 */}
-                      {isExpanded && tags.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          {tags.map((tag) => (
-                            <span
-                              key={tag}
-                              className="rounded-full bg-brand-light px-2 py-0.5 text-xs font-medium text-brand"
-                            >
-                              #{trFn(tag)}
-                            </span>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   </button>
+                );
+              })}
+            </div>
 
-                  {/* 펼쳐진 경우: 카드 바로 아래 인라인 영상 (아코디언) */}
-                  {isExpanded && (
-                    <div className="border-t border-border p-3">
-                      <div className="relative overflow-hidden rounded-md">
-                        {/* 접기(X) 버튼 — 영상만 접고 지도 위치는 유지 */}
-                        <button
-                          type="button"
-                          onClick={handleCollapse}
-                          aria-label={t("collapseVideo")}
-                          className="absolute right-1 top-1 z-10 rounded-md bg-ink/70 px-1.5 py-0.5 text-xs text-white transition hover:bg-ink"
-                        >
-                          ✕
-                        </button>
+            {/* 재생 영역 — 카드는 그대로 두고, 목록 아래에 사이가 벌어지듯 부드럽게 펼쳐진다.
+                (grid-template-rows 를 0fr↔1fr 로 트랜지션하는 방식 — 높이를 몰라도 애니메이션 가능) */}
+            <div
+              className="grid transition-[grid-template-rows] duration-300 ease-out"
+              style={{ gridTemplateRows: isPlayerOpen ? "1fr" : "0fr" }}
+            >
+              <div className="overflow-hidden">
+                {playingMarker && (
+                  <div className="relative mt-3 overflow-hidden rounded-md">
+                    {/* 접기(X) 버튼 — 영상만 접고 지도 위치는 유지 */}
+                    <button
+                      type="button"
+                      onClick={handleCollapse}
+                      aria-label={t("collapseVideo")}
+                      className="absolute right-1 top-1 z-10 rounded-md bg-ink/70 px-1.5 py-0.5 text-xs text-white transition hover:bg-ink"
+                    >
+                      ✕
+                    </button>
 
-                        {notice ? (
-                          // 재생불가 신고 안내 (영상 대신 표시)
-                          <div className="flex min-h-24 w-full items-center justify-center rounded-md bg-live-light px-3 py-4 text-center text-xs text-live">
-                            {notice}
-                          </div>
-                        ) : videoId ? (
-                          // 유튜브 IFrame Player API 기반 인라인 플레이어 (에러 감지)
-                          <InlinePlayer
-                            videoId={videoId}
-                            title={marker.location || "youtube video"}
-                            onError={(reason) => handleUnplayable(marker, reason)}
-                          />
-                        ) : (
-                          <div className="flex h-24 w-full items-center justify-center rounded-md bg-ink/5 text-xs text-ink-muted">
-                            {t("noVideoInfo")}
-                          </div>
-                        )}
+                    {playingNotice ? (
+                      // 재생불가 신고 안내 (영상 대신 표시)
+                      <div className="flex min-h-24 w-full items-center justify-center rounded-md bg-live-light px-3 py-4 text-center text-xs text-live">
+                        {playingNotice}
                       </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                    ) : playingVideoId ? (
+                      // 유튜브 IFrame Player API 기반 인라인 플레이어 (에러 감지)
+                      <InlinePlayer
+                        key={playingMarker.id}
+                        videoId={playingVideoId}
+                        title={playingMarker.location || "youtube video"}
+                        onError={(reason) => handleUnplayable(playingMarker, reason)}
+                      />
+                    ) : (
+                      <div className="flex h-24 w-full items-center justify-center rounded-md bg-ink/5 text-xs text-ink-muted">
+                        {t("noVideoInfo")}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>

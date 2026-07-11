@@ -53,12 +53,22 @@ function IssInfoBar({ issInfo }) {
 export default function IssVideoPanel({ videos, issInfo, onClose }) {
   // 다국어 정적 문자열
   const { t } = useI18n();
-  // 현재 펼쳐진(재생 중인) 영상 videoId (없으면 null)
+  // 현재 선택된(재생 중인) 영상 videoId (없으면 null)
   const [expandedId, setExpandedId] = useState(null);
 
   // videos 가 아직 안 온 상태(null/undefined)면 로딩으로 취급
   const loading = videos == null;
   const list = Array.isArray(videos) ? videos : [];
+
+  // 재생 영역에 표시할 영상을 "닫히는 애니메이션 중"에도 유지하기 위한 상태
+  // (VideoListPanel 과 동일한 패턴 — 렌더 중 갱신, 값이 실제로 바뀔 때만 setState)
+  const [lastExpandedVideo, setLastExpandedVideo] = useState(null);
+  if (expandedId != null) {
+    const v = list.find((x) => x && x.videoId === expandedId);
+    if (v && v !== lastExpandedVideo) {
+      setLastExpandedVideo(v);
+    }
+  }
 
   // ─── 카드 클릭 → 재생 토글 (같은 카드 다시 클릭하면 접기) ───
   function toggleExpand(videoId) {
@@ -112,20 +122,22 @@ export default function IssVideoPanel({ videos, issInfo, onClose }) {
             <p className="text-xs text-ink-muted">{t("nasaWillAppear")}</p>
           </div>
         ) : (
-          <div className="flex flex-col gap-4">
-            {list.map((v) => {
-              // 각 카드는 이 영상의 고유 videoId 만 참조한다.
-              const isExpanded = expandedId === v.videoId;
-              return (
-                <div
-                  key={v.videoId}
-                  className="overflow-hidden rounded-lg border border-border bg-surface shadow-card transition duration-150 hover:-translate-y-0.5"
-                >
-                  {/* 클릭 영역: 썸네일 + 정보 */}
+          <>
+            <div className="grid grid-cols-3 gap-2">
+              {/* 한 줄에 3개씩 고정 크기 그리드 — 선택해도 카드 크기는 그대로 유지한다. */}
+              {list.map((v) => {
+                // 각 카드는 이 영상의 고유 videoId 만 참조한다.
+                const isSelected = expandedId === v.videoId;
+                return (
                   <button
+                    key={v.videoId}
                     type="button"
                     onClick={() => toggleExpand(v.videoId)}
-                    className="block w-full text-left"
+                    className={
+                      "block overflow-hidden rounded-lg border border-border bg-surface text-left shadow-card transition duration-150 hover:-translate-y-0.5 " +
+                      // 선택된 카드: 빨간 테두리 + 은은하게 켜졌다 꺼지는 발광(box-shadow 애니메이션)
+                      (isSelected ? "card-playing" : "")
+                    }
                   >
                     {/* 썸네일 (16:9) + 좌상단 LIVE 배지 */}
                     <div className="relative aspect-video w-full overflow-hidden rounded-md bg-ink/5">
@@ -135,7 +147,7 @@ export default function IssVideoPanel({ videos, issInfo, onClose }) {
                         alt={v.title || t("nasaLive")}
                         className="h-full w-full object-cover"
                       />
-                      <div className="absolute left-2 top-2">
+                      <div className="absolute left-1 top-1">
                         <span className="inline-flex items-center gap-1 rounded-full bg-live-light px-2 py-0.5 text-xs font-semibold text-live shadow-card">
                           <LiveDot size="sm" />
                           LIVE
@@ -143,27 +155,52 @@ export default function IssVideoPanel({ videos, issInfo, onClose }) {
                       </div>
                     </div>
 
-                    {/* 본문: 제목 + 채널명 */}
-                    <div className="p-3">
-                      <h3 className="line-clamp-2 font-display text-sm font-semibold leading-snug text-ink">
+                    {/* 본문 (카드가 작아 여백/글자 축소, 제목은 2줄까지 자동 줄바꿈) */}
+                    <div className="p-2">
+                      <h3 className="line-clamp-2 font-display text-xs font-semibold leading-snug text-ink">
                         {v.title || t("noTitle")}
                       </h3>
-                      <p className="mt-1 text-xs text-ink-muted">
+                      <p className="mt-1 truncate text-[11px] text-ink-muted">
                         {v.channelName || "NASA"}
                       </p>
                     </div>
                   </button>
+                );
+              })}
+            </div>
 
-                  {/* 펼쳐진 경우: 카드 아래 인라인 iframe (아코디언) */}
-                  {isExpanded && (
-                    <div className="border-t border-border p-3">
+            {/* 재생 영역 — 카드는 그대로 두고, 목록 아래에 사이가 벌어지듯 부드럽게 펼쳐진다.
+                (grid-template-rows 를 0fr↔1fr 로 트랜지션하는 방식 — 높이를 몰라도 애니메이션 가능) */}
+            <div
+              className="grid transition-[grid-template-rows] duration-300 ease-out"
+              style={{ gridTemplateRows: expandedId != null ? "1fr" : "0fr" }}
+            >
+              <div className="overflow-hidden">
+                {(() => {
+                  const playingVideo =
+                    (expandedId != null &&
+                      list.find((v) => v && v.videoId === expandedId)) ||
+                    lastExpandedVideo;
+                  if (!playingVideo) return null;
+                  return (
+                    <div className="relative mt-3 overflow-hidden rounded-md">
+                      {/* 접기(X) 버튼 */}
+                      <button
+                        type="button"
+                        onClick={() => setExpandedId(null)}
+                        aria-label={t("closePanel")}
+                        className="absolute right-1 top-1 z-10 rounded-md bg-ink/70 px-1.5 py-0.5 text-xs text-white transition hover:bg-ink"
+                      >
+                        ✕
+                      </button>
                       <div
                         style={{ aspectRatio: "16 / 9" }}
                         className="w-full overflow-hidden rounded bg-black"
                       >
                         <iframe
-                          src={`https://www.youtube.com/embed/${v.videoId}?autoplay=1`}
-                          title={v.title || "NASA live"}
+                          key={playingVideo.videoId}
+                          src={`https://www.youtube.com/embed/${playingVideo.videoId}?autoplay=1`}
+                          title={playingVideo.title || "NASA live"}
                           className="h-full w-full"
                           style={{ border: 0 }}
                           allow="autoplay; encrypted-media; picture-in-picture"
@@ -171,11 +208,11 @@ export default function IssVideoPanel({ videos, issInfo, onClose }) {
                         />
                       </div>
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                  );
+                })()}
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>
