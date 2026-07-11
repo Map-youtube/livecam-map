@@ -185,6 +185,41 @@ function ChangeView({ center, zoom }) {
   return null;
 }
 
+// ─── 초기 "전 세계" 뷰 (메인 지도 최초 1회) ───────────────────
+// 전 대륙이 가로로 꽉 차고, 왼쪽 끝엔 알래스카·오른쪽 끝엔 러시아 동단이 오도록
+// 경도 -180~180 + (남/북 대륙을 담는) 위도 범위를 지도 영역에 맞춰 최초 1회 fitBounds.
+// 이후 사용자의 이동/줌은 건드리지 않는다(doneRef 로 1회만 실행 보장).
+// enabled=false(관리자 폼 등)면 아무 동작도 하지 않는다.
+function InitialWorldFit({ enabled }) {
+  const map = useMap();
+  const doneRef = useRef(false);
+
+  useEffect(() => {
+    if (!enabled || doneRef.current || !map) return;
+    doneRef.current = true;
+    try {
+      // 컨테이너 크기가 확정된 뒤 실행되도록 whenReady 사용
+      map.whenReady(() => {
+        try {
+          map.fitBounds(
+            [
+              [-56, -180], // 남서: 남미 남단 부근 ~ 태평양 서쪽 끝(±180)
+              [74, 180], // 북동: 알래스카/러시아 북단 위 ~ 태평양 동쪽 끝(±180)
+            ],
+            { animate: false }
+          );
+        } catch (innerError) {
+          console.error("[LeafletMap] 초기 월드뷰 fitBounds 실패:", innerError); // TODO: 배포 전 제거
+        }
+      });
+    } catch (error) {
+      console.error("[LeafletMap] 초기 월드뷰 설정 실패:", error); // TODO: 배포 전 제거
+    }
+  }, [map, enabled]);
+
+  return null;
+}
+
 // ─── 지도 인스턴스 준비 알림 (내부 헬퍼 컴포넌트) ─────────────
 // react-leaflet 의 useMap() 으로 실제 L.Map 인스턴스를 얻어 상위로 전달한다.
 // (ISS 추적 등 지도에 직접 레이어를 얹는 기능이 map 인스턴스를 imperative 하게 쓰도록)
@@ -397,6 +432,8 @@ export default function LeafletMap({
   onMapClick,
   selectedMarkerId,
   onMapReady,
+  // true 면 최초 1회 "전 세계가 가로로 꽉 차는" 뷰로 맞춘다(메인 지도 전용).
+  initialWorldFit = false,
 }) {
   // ─── 지도 타일 스타일 (일반/지형도) — localStorage 로 유지 ───
   const [mapStyle, setMapStyle] = useState(readSavedMapStyle);
@@ -439,6 +476,9 @@ export default function LeafletMap({
           maxBoundsViscosity={1.0}
           // 마커 클릭 시 반대편 사본으로 점프하지 않도록 명시적 false (기본값이지만 확인)
           worldCopyJump={false}
+          // 초기 월드뷰가 지도 폭에 "정확히" 맞도록 소수 줌 허용(zoomSnap=0).
+          // (일반 모드는 정수 줌으로 스냅)
+          zoomSnap={initialWorldFit ? 0 : 1}
         >
           {/* 베이스 타일 레이어. key 를 스타일 키로 주어 스타일이 바뀌면
               이전 타일 레이어를 제거하고 새로 그린다(그 위의 마커/오버레이는 유지됨).
@@ -454,6 +494,9 @@ export default function LeafletMap({
 
           {/* center/zoom 변경 시 지도 이동 */}
           <ChangeView center={center} zoom={zoom} />
+
+          {/* 최초 1회 전 세계 뷰로 맞춤 (메인 지도 전용, initialWorldFit=true 일 때만) */}
+          <InitialWorldFit enabled={initialWorldFit} />
 
           {/* 지도 인스턴스 준비되면 상위로 전달 (ISS 추적 레이어용) */}
           {onMapReady ? <MapReadyHandler onMapReady={onMapReady} /> : null}

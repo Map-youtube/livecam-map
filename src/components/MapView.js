@@ -225,6 +225,8 @@ function MapView(
         onMarkerClick={onMarkerClick}
         selectedMarkerId={selectedMarkerId}
         onMapReady={handleLeafletReady}
+        // 최초 진입 시 전 대륙이 가로로 꽉 차는 세계 뷰(알래스카~러시아)로 시작
+        initialWorldFit={true}
       />
 
       {/* 오버레이 레이어 (leaflet 인스턴스 준비 후 동작, enabled=false 면 정지) */}
