@@ -483,14 +483,14 @@ export default function MainMapView({ markers, tags }) {
       <div className="flex h-[98px] flex-shrink-0 items-stretch border-t border-border bg-surface">
         <AdSlot orientation="horizontal" label={t("sponsoredLabel")}>
           <a
-            href="https://www.kqzyfj.com/click-101809732-17272968"
+            href="https://www.anrdoezrs.net/click-101809732-17272970"
             target="_blank"
             rel="sponsored noopener"
           >
             {/* 제휴 배너 이미지 (728×90) — 외부 광고 이미지라 next/image 대신 img 사용 */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="https://www.awltovhc.com/image-101809732-17272968"
+              src="https://www.ftjcfx.com/image-101809732-17272970"
               width={728}
               height={90}
               alt=""
