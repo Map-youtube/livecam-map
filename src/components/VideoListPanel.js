@@ -319,6 +319,33 @@ export default function VideoListPanel({
   // 화면에 실제로 보일 목록 (신고로 제거된 것 제외)
   const visibleList = list.filter((m) => m && !removedIds.has(m.id));
 
+  // 닫히는 애니메이션 동안에도 영상을 유지하기 위한 상태.
+  // (선택 해제 시 expandedMarkerId 가 즉시 null 이 되면 영상이 애니메이션 전에 사라져
+  //  높이만 0으로 툭 줄어든다 → 마지막 마커를 붙잡아 두고 높이만 접어 부드럽게 닫는다)
+  // ⚠️ 렌더 중 갱신 패턴: id 가 실제로 바뀔 때만 setState → 무한 렌더 없음.
+  const [lastExpandedMarker, setLastExpandedMarker] = useState(null);
+  if (expandedMarkerId != null) {
+    const m = visibleList.find((x) => x && x.id === expandedMarkerId);
+    if (m && (!lastExpandedMarker || lastExpandedMarker.id !== m.id)) {
+      setLastExpandedMarker(m);
+    }
+  }
+  // 영상 영역에 실제로 그릴 마커: 열려 있으면 현재 선택, 닫히는 중이면 마지막 선택.
+  const displayMarker =
+    (expandedMarkerId != null &&
+      visibleList.find((m) => m && m.id === expandedMarkerId)) ||
+    lastExpandedMarker;
+
+  // 닫힘: 선택이 풀리면 닫힘 애니메이션(300ms) 동안 영상을 유지했다가 언마운트한다.
+  // (grid-template-rows 의 fr 전환은 transitionend 를 발생시키지 않으므로 타이머로 처리)
+  // 재선택/전환되면 expandedMarkerId 가 다시 채워져 이 타이머는 취소된다(재생 유지).
+  useEffect(() => {
+    if (expandedMarkerId != null) return;
+    if (lastExpandedMarker == null) return;
+    const timer = setTimeout(() => setLastExpandedMarker(null), 350);
+    return () => clearTimeout(timer);
+  }, [expandedMarkerId, lastExpandedMarker]);
+
   // 카드를 COLUMNS 개씩 "줄" 단위로 묶는다 — 선택된 카드가 속한 줄 바로 아래에만
   // 영상 영역을 넣기 위함(그 줄의 다음 줄들은 자연스럽게 아래로 밀려난다).
   const rows = [];
@@ -352,10 +379,15 @@ export default function VideoListPanel({
         ) : (
           <div className="flex flex-col gap-2">
             {rows.map((row, rowIndex) => {
-              // 이 줄 안에 현재 선택된 카드가 있는지
-              const selectedInRow = row.find(
-                (m) => m && expandedMarkerId != null && m.id === expandedMarkerId
-              );
+              // 이 줄이 "지금 열려 있어야 하는지"(현재 선택된 카드가 이 줄에 있는지)
+              const rowOpen =
+                expandedMarkerId != null &&
+                row.some((m) => m && m.id === expandedMarkerId);
+              // 이 줄이 영상 내용을 그려야 하는지(열림 + 닫히는 중 모두 = displayMarker 소속 줄)
+              const rowMarker =
+                displayMarker && row.some((m) => m && m.id === displayMarker.id)
+                  ? displayMarker
+                  : null;
 
               return (
                 <Fragment key={row[0] ? row[0].id : rowIndex}>
@@ -428,10 +460,10 @@ export default function VideoListPanel({
                       열리고, 그 아래 다음 줄들은 자연스럽게 밀려 내려간다. */}
                   <div
                     className="grid transition-[grid-template-rows] duration-300 ease-out"
-                    style={{ gridTemplateRows: selectedInRow ? "1fr" : "0fr" }}
+                    style={{ gridTemplateRows: rowOpen ? "1fr" : "0fr" }}
                   >
                     <div className="overflow-hidden">
-                      {selectedInRow && (
+                      {rowMarker && (
                         <div className="relative mt-2 overflow-hidden rounded-md">
                           {/* 접기(X) 버튼 — 영상만 접고 지도 위치는 유지 */}
                           <button
@@ -443,18 +475,18 @@ export default function VideoListPanel({
                             ✕
                           </button>
 
-                          {noticeIds[selectedInRow.id] ? (
+                          {noticeIds[rowMarker.id] ? (
                             // 재생불가 신고 안내 (영상 대신 표시)
                             <div className="flex min-h-24 w-full items-center justify-center rounded-md bg-live-light px-3 py-4 text-center text-xs text-live">
-                              {noticeIds[selectedInRow.id]}
+                              {noticeIds[rowMarker.id]}
                             </div>
-                          ) : selectedInRow.youtube_video_id ? (
+                          ) : rowMarker.youtube_video_id ? (
                             // 유튜브 IFrame Player API 기반 인라인 플레이어 (에러 감지)
                             <InlinePlayer
-                              key={selectedInRow.id}
-                              videoId={selectedInRow.youtube_video_id}
-                              title={selectedInRow.location || "youtube video"}
-                              onError={(reason) => handleUnplayable(selectedInRow, reason)}
+                              key={rowMarker.id}
+                              videoId={rowMarker.youtube_video_id}
+                              title={rowMarker.location || "youtube video"}
+                              onError={(reason) => handleUnplayable(rowMarker, reason)}
                             />
                           ) : (
                             <div className="flex h-24 w-full items-center justify-center rounded-md bg-ink/5 text-xs text-ink-muted">

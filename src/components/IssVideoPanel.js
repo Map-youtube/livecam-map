@@ -21,7 +21,7 @@
 // ⚠️ NASA 라이브는 관리자 등록 마커가 아니므로 재생불가 신고(report-error)는 하지 않는다.
 // ─────────────────────────────────────────────────────────────
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import LiveDot from "@/components/LiveDot";
 import Thumbnail from "@/components/DefaultThumbnail";
 import { useI18n } from "@/components/i18n/LanguageProvider";
@@ -83,6 +83,26 @@ export default function IssVideoPanel({ videos, issInfo, onClose }) {
     }
   }
 
+  // 닫히는 애니메이션 동안에도 영상을 유지하기 위한 상태(VideoListPanel 과 동일한 패턴).
+  // ⚠️ 렌더 중 갱신: videoId 가 실제로 바뀔 때만 setState → 무한 렌더 없음.
+  const [lastExpandedId, setLastExpandedId] = useState(null);
+  if (expandedId != null && expandedId !== lastExpandedId) {
+    setLastExpandedId(expandedId);
+  }
+  // 영상 영역에 실제로 그릴 영상: 열려 있으면 현재 선택, 닫히는 중이면 마지막 선택.
+  const displayId = expandedId != null ? expandedId : lastExpandedId;
+  const displayVideo =
+    displayId != null ? list.find((v) => v && v.videoId === displayId) : null;
+
+  // 닫힘: 선택이 풀리면 닫힘 애니메이션(300ms) 동안 영상을 유지했다가 언마운트한다.
+  // (grid-template-rows 의 fr 전환은 transitionend 를 발생시키지 않으므로 타이머로 처리)
+  useEffect(() => {
+    if (expandedId != null) return;
+    if (lastExpandedId == null) return;
+    const timer = setTimeout(() => setLastExpandedId(null), 350);
+    return () => clearTimeout(timer);
+  }, [expandedId, lastExpandedId]);
+
   // 카드를 COLUMNS 개씩 "줄" 단위로 묶는다 — 선택된 카드가 속한 줄 바로 아래에만
   // 영상 영역을 넣기 위함(그 줄의 다음 줄들은 자연스럽게 아래로 밀려난다).
   const rows = [];
@@ -127,10 +147,16 @@ export default function IssVideoPanel({ videos, issInfo, onClose }) {
         ) : (
           <div className="flex flex-col gap-2">
             {rows.map((row, rowIndex) => {
-              // 이 줄 안에 현재 선택된 카드가 있는지
-              const selectedInRow = row.find(
-                (v) => v && expandedId != null && v.videoId === expandedId
-              );
+              // 이 줄이 "지금 열려 있어야 하는지"(현재 선택된 카드가 이 줄에 있는지)
+              const rowOpen =
+                expandedId != null &&
+                row.some((v) => v && v.videoId === expandedId);
+              // 이 줄이 영상 내용을 그려야 하는지(열림 + 닫히는 중 모두 = displayVideo 소속 줄)
+              const rowVideo =
+                displayVideo &&
+                row.some((v) => v && v.videoId === displayVideo.videoId)
+                  ? displayVideo
+                  : null;
 
               return (
                 <Fragment key={row[0] ? row[0].videoId : rowIndex}>
@@ -185,10 +211,10 @@ export default function IssVideoPanel({ videos, issInfo, onClose }) {
                       열리고, 그 아래 다음 줄들은 자연스럽게 밀려 내려간다. */}
                   <div
                     className="grid transition-[grid-template-rows] duration-300 ease-out"
-                    style={{ gridTemplateRows: selectedInRow ? "1fr" : "0fr" }}
+                    style={{ gridTemplateRows: rowOpen ? "1fr" : "0fr" }}
                   >
                     <div className="overflow-hidden">
-                      {selectedInRow && (
+                      {rowVideo && (
                         <div className="relative mt-2 overflow-hidden rounded-md">
                           {/* 접기(X) 버튼 */}
                           <button
@@ -204,9 +230,9 @@ export default function IssVideoPanel({ videos, issInfo, onClose }) {
                             className="w-full overflow-hidden rounded bg-black"
                           >
                             <iframe
-                              key={selectedInRow.videoId}
-                              src={`https://www.youtube.com/embed/${selectedInRow.videoId}?autoplay=1`}
-                              title={selectedInRow.title || "NASA live"}
+                              key={rowVideo.videoId}
+                              src={`https://www.youtube.com/embed/${rowVideo.videoId}?autoplay=1`}
+                              title={rowVideo.title || "NASA live"}
                               className="h-full w-full"
                               style={{ border: 0 }}
                               allow="autoplay; encrypted-media; picture-in-picture"
