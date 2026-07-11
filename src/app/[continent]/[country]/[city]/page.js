@@ -56,15 +56,31 @@ export async function generateStaticParams() {
   }
 }
 
+// URL 세그먼트(city 슬러그) 방어적 디코딩.
+//   한글 등 비ASCII 도시명은 슬러그도 비ASCII("도쿄")라 URL 에서 퍼센트 인코딩
+//   (%EB%8F%84%EC%BF%84)되어 들어온다. Next 가 이를 디코딩하지 않고 넘겨주는 경우가 있어
+//   citySlug(m.city)="도쿄" 와 매칭되지 않아 404(빈 페이지)가 났다.
+//   → 매칭 전에 항상 디코딩해 인코딩/디코딩 상태와 무관하게 일치시킨다.
+//   (이미 디코딩된 ASCII/한글이면 decodeURIComponent 는 그대로 반환 → 안전)
+function decodeSlug(slug) {
+  try {
+    return decodeURIComponent(String(slug || ""));
+  } catch (error) {
+    // 잘못된 퍼센트 시퀀스 등은 원본 그대로 사용
+    return String(slug || "");
+  }
+}
+
 // 해당 도시(슬러그)의 공개 마커
 async function getCityMarkers(continent, countryUpper, slug) {
+  const decoded = decodeSlug(slug);
   const all = await getNormalizedPublicMarkers();
   return all.filter(
     (m) =>
       m &&
       m.continent === continent &&
       (m.country || "") === countryUpper &&
-      citySlug(m.city) === slug
+      citySlug(m.city) === decoded
   );
 }
 
