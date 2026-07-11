@@ -475,7 +475,7 @@ export default function MainMapView({ markers, tags }) {
 
         {/* 오른쪽 끝: 세로 배너형 광고 (Klook 120×600, 넓은 화면에서만 표시) */}
         <aside className="hidden w-[132px] flex-shrink-0 border-l border-border bg-surface lg:block">
-          <AdSlot orientation="vertical" label={t("sponsoredLabel")}>
+          <AdSlot orientation="vertical">
             <KlookWidget />
           </AdSlot>
         </aside>
@@ -483,7 +483,7 @@ export default function MainMapView({ markers, tags }) {
 
       {/* 하단: 가로 배너형 광고 (728×90, 전체 폭). 배너 주위 회색 외곽선(테두리) 제거 + 높이 타이트. */}
       <div className="flex h-[90px] flex-shrink-0 items-stretch bg-surface">
-        <AdSlot orientation="horizontal" label={t("sponsoredLabel")}>
+        <AdSlot orientation="horizontal">
           {/* CJ 제휴 배너 (테두리 크롭 처리) — CjBanner 컴포넌트에서 관리 */}
           <CjBanner />
         </AdSlot>
