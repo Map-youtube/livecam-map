@@ -101,14 +101,21 @@ export default function MainCategoryTree({
   tr,
   onSelectLocation,
   onSelectTag,
-  onSelectSpace,
   selectedCity,
   selectedTag,
-  selectedSpace,
-  spaceVideoCount,
+  // 자동 라이브 채널(방송/우주 등) — 지역과 별개로 대분류>소분류>채널 로 표시
+  liveChannels,
+  channelVideoCounts,
+  onSelectChannel,
+  selectedChannelId,
 }) {
   const markerList = Array.isArray(markers) ? markers : [];
   const tagList = Array.isArray(tags) ? tags : [];
+  const channelList = Array.isArray(liveChannels) ? liveChannels : [];
+  const channelCounts =
+    channelVideoCounts && typeof channelVideoCounts === "object"
+      ? channelVideoCounts
+      : {};
 
   // 다국어: 정적 문자열(t) + 대륙 라벨(tContinent) + 국가명(countryName)
   const { t, tContinent, countryName } = useI18n();
@@ -194,6 +201,48 @@ export default function MainCategoryTree({
       return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
     });
   }, [tree]);
+
+  // ─── 자동 라이브 채널: 대분류 > 소분류 > 채널 트리 구성 ────────
+  const channelTree = useMemo(() => {
+    const byMajor = {};
+    try {
+      for (const ch of channelList) {
+        if (!ch || !ch.id) continue;
+        const M = ch.major_category || "(미분류)";
+        const m = ch.minor_category || "(미분류)";
+        if (!byMajor[M]) byMajor[M] = {};
+        if (!byMajor[M][m]) byMajor[M][m] = [];
+        byMajor[M][m].push(ch);
+      }
+    } catch (error) {
+      console.error("[MainCategoryTree] 채널 트리 구성 실패:", error); // TODO: 배포 전 제거
+    }
+    return byMajor;
+  }, [channelList]);
+
+  const channelMajorKeys = useMemo(
+    () => Object.keys(channelTree).sort((a, b) => a.localeCompare(b, "ko")),
+    [channelTree]
+  );
+
+  // 채널 개수 배지 합계 (해당 그룹 하위 채널들의 현재 라이브 영상 수 합).
+  // 아직 개수 정보가 없으면(로딩 전) undefined 반환 → 배지 미표시.
+  function sumChannelCounts(channels) {
+    let sum = 0;
+    let known = false;
+    for (const ch of channels) {
+      const c = channelCounts[ch.id];
+      if (typeof c === "number") {
+        sum += c;
+        known = true;
+      }
+    }
+    return known ? sum : undefined;
+  }
+  // 현재 선택된 채널이 이 채널 배열에 속하는지 (조상 강조/자동펼침용)
+  function hasSelectedChannel(channels) {
+    return channels.some((ch) => ch && ch.id === selectedChannelId);
+  }
 
   return (
     <div className="flex h-full flex-col bg-surface">
@@ -301,40 +350,84 @@ export default function MainCategoryTree({
             })
           )}
 
-          {/* Space (고정 항목 — Firestore 마커 데이터와 무관하게 항상 표시) */}
-          <CollapsibleRow
-            label={`🛰️ ${t("space")}`}
-            // 라이브 개수(로딩 전 null 이면 배지 미표시). NASA 라이브 영상 수.
-            count={spaceVideoCount != null ? spaceVideoCount : undefined}
-            depth={0}
-            defaultOpen={false}
-            // ISS 가 선택되면 자동으로 펼친다 + 조상 강조
-            forceOpen={Boolean(selectedSpace)}
-            ancestorActive={Boolean(selectedSpace)}
-          >
-            {/* 하위: ISS 항목 (말단 — 클릭 시 부모에 ISS 선택 전달) */}
-            <button
-              type="button"
-              onClick={() =>
-                typeof onSelectSpace === "function" && onSelectSpace()
-              }
-              style={{ paddingLeft: "30px" }}
-              className={
-                "flex w-full items-center gap-1 rounded-md py-1 pr-1 text-left text-xs transition hover:bg-brand-light " +
-                // 실제 선택된 ISS 항목은 옅은 파란 배경 + 굵게 강조
-                (selectedSpace
-                  ? "bg-blue-100 font-bold text-blue-800"
-                  : "text-ink")
-              }
-            >
-              <span className="w-3 text-ink-muted">·</span>
-              <span className="truncate">{t("issFull")}</span>
-              {/* ISS 도 Space 하위 유일 항목이라 같은 라이브 개수를 표시 */}
-              <span className="ml-auto font-mono text-[11px] text-ink-muted">
-                {spaceVideoCount != null ? spaceVideoCount : ""}
-              </span>
-            </button>
-          </CollapsibleRow>
+          {/* ── 자동 라이브 채널 (방송/우주 등) ──────────────────
+              지역(대륙/국가/도시)과 별개 데이터. 현재 우주 항목이 있던 자리처럼
+              지역 목록 바로 아래에, 대분류 > 소분류 > 채널 로 표시한다. */}
+          {channelMajorKeys.map((M) => {
+            const minors = channelTree[M];
+            const minorKeys = Object.keys(minors).sort((a, b) =>
+              a.localeCompare(b, "ko")
+            );
+            // 이 대분류 하위 전체 채널
+            const allInMajor = minorKeys.reduce(
+              (acc, mk) => acc.concat(minors[mk]),
+              []
+            );
+            return (
+              <CollapsibleRow
+                key={`ch-major-${M}`}
+                label={trFn(M)}
+                count={sumChannelCounts(allInMajor)}
+                depth={0}
+                defaultOpen={false}
+                forceOpen={hasSelectedChannel(allInMajor)}
+                ancestorActive={hasSelectedChannel(allInMajor)}
+              >
+                {minorKeys.map((mk) => {
+                  const channels = minors[mk];
+                  return (
+                    <CollapsibleRow
+                      key={`ch-minor-${M}-${mk}`}
+                      label={trFn(mk)}
+                      count={sumChannelCounts(channels)}
+                      depth={1}
+                      defaultOpen={false}
+                      forceOpen={hasSelectedChannel(channels)}
+                      ancestorActive={hasSelectedChannel(channels)}
+                    >
+                      {channels
+                        .slice()
+                        .sort((a, b) =>
+                          String(a.channel_name || "").localeCompare(
+                            String(b.channel_name || ""),
+                            "ko"
+                          )
+                        )
+                        .map((ch) => {
+                          const active = selectedChannelId === ch.id;
+                          const cnt = channelCounts[ch.id];
+                          return (
+                            <button
+                              key={ch.id}
+                              type="button"
+                              onClick={() =>
+                                typeof onSelectChannel === "function" &&
+                                onSelectChannel(ch)
+                              }
+                              style={{ paddingLeft: "30px" }}
+                              className={
+                                "flex w-full items-center gap-1 rounded-md py-1 pr-1 text-left text-xs transition hover:bg-brand-light " +
+                                (active
+                                  ? "bg-blue-100 font-bold text-blue-800"
+                                  : "text-ink")
+                              }
+                            >
+                              <span className="w-3 text-ink-muted">·</span>
+                              <span className="truncate">
+                                {trFn(ch.channel_name || ch.channel_id)}
+                              </span>
+                              <span className="ml-auto font-mono text-[11px] text-ink-muted">
+                                {typeof cnt === "number" ? cnt : ""}
+                              </span>
+                            </button>
+                          );
+                        })}
+                    </CollapsibleRow>
+                  );
+                })}
+              </CollapsibleRow>
+            );
+          })}
         </div>
       </div>
 

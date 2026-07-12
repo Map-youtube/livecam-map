@@ -10,6 +10,7 @@
 
 import { adminDb } from "@/lib/firebaseAdmin";
 import { getPublicMarkers } from "@/lib/getPublicMarkers";
+import { getLiveChannels } from "@/lib/getLiveChannels";
 import MainMapView from "@/components/MainMapView";
 
 // 태그 목록 조회 (id, name 만 사용 → 타임스탬프 직렬화 문제 없음)
@@ -30,16 +31,24 @@ async function getPublicTags() {
 }
 
 export default async function Home() {
-  // 마커(캐싱)와 태그를 병렬로 조회
+  // 마커(캐싱)·태그·자동 라이브 채널을 병렬로 조회
   let markers = [];
   let tags = [];
+  let liveChannels = [];
   try {
-    [markers, tags] = await Promise.all([getPublicMarkers(), getPublicTags()]);
+    [markers, tags, liveChannels] = await Promise.all([
+      getPublicMarkers(),
+      getPublicTags(),
+      getLiveChannels(),
+    ]);
   } catch (error) {
     console.error("[page] 데이터 조회 실패:", error); // TODO: 배포 전 제거
     markers = [];
     tags = [];
+    liveChannels = [];
   }
 
-  return <MainMapView markers={markers} tags={tags} />;
+  return (
+    <MainMapView markers={markers} tags={tags} liveChannels={liveChannels} />
+  );
 }

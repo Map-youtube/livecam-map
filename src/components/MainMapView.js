@@ -53,9 +53,15 @@ function toggleBtnClass(on) {
   );
 }
 
-export default function MainMapView({ markers, tags }) {
+export default function MainMapView({ markers, tags, liveChannels }) {
   // 다국어: 정적 문자열(t) + 현재 언어(locale)
   const { t, locale } = useI18n();
+
+  // 자동 라이브 채널(방송/우주 등) — 지역 마커와 별개 데이터
+  const channelList = useMemo(
+    () => (Array.isArray(liveChannels) ? liveChannels : []),
+    [liveChannels]
+  );
 
   // ─── 레거시 'americas' 대륙값 정규화 ─────────────────────────
   // 아메리카를 북/남으로 분리했지만 Firestore 에 아직 continent:"americas" 로 남은
@@ -94,8 +100,15 @@ export default function MainMapView({ markers, tags }) {
     for (const tg of tagList) {
       if (tg && tg.name) set.add(String(tg.name));
     }
+    // 채널 분류(대/소분류)·채널명도 함께 번역 대상에 넣어 트리/패널이 현재 언어로 표시되게 한다.
+    for (const ch of channelList) {
+      if (!ch) continue;
+      if (ch.major_category) set.add(String(ch.major_category));
+      if (ch.minor_category) set.add(String(ch.minor_category));
+      if (ch.channel_name) set.add(String(ch.channel_name));
+    }
     return [...set];
-  }, [markerList, tagList]);
+  }, [markerList, tagList, channelList]);
   const { tr } = useAutoTranslate(dynamicTexts, locale);
 
   // 선택 상태 (도시/태그는 배타적으로 하나만 활성)
@@ -115,16 +128,26 @@ export default function MainMapView({ markers, tags }) {
   const [auroraEnabled, setAuroraEnabled] = useState(false); // 오로라
   const [disasterEnabled, setDisasterEnabled] = useState(false); // 자연재해
 
-  // ─── ISS(Space) 선택 상태 (NASA 라이브 패널) ─────────────────
-  const [issSelected, setIssSelected] = useState(false);
-  const [issInfo, setIssInfo] = useState(null);
-  const [issVideos, setIssVideos] = useState(null);
+  // ─── 자동 라이브 채널 선택 상태 (방송/우주 패널) ────────────
+  // selectedChannel: 현재 선택된 채널 문서(없으면 null). channel_type "iss" 면 ISS 특수.
+  const [selectedChannel, setSelectedChannel] = useState(null);
+  const [issInfo, setIssInfo] = useState(null); // ISS 위치 정보(iss 채널 선택 시만 사용)
+  const [channelVideos, setChannelVideos] = useState({}); // { channelDocId: [videos] }
   const issPositionRef = useRef(null); // 최신 ISS 위치(리렌더 없이 보관)
-  const issSelectedRef = useRef(false); // 콜백에서 즉시 참조
+  const issSelectedRef = useRef(false); // ISS 채널 선택 중 여부(콜백에서 즉시 참조)
+
+  // 채널별 현재 라이브 영상 수 (트리 배지용)
+  const channelVideoCounts = useMemo(() => {
+    const counts = {};
+    for (const [id, vids] of Object.entries(channelVideos || {})) {
+      counts[id] = Array.isArray(vids) ? vids.length : 0;
+    }
+    return counts;
+  }, [channelVideos]);
 
   // 패널 열림 여부
   const isPanelOpen =
-    selectedCity !== null || selectedTag !== null || issSelected;
+    selectedCity !== null || selectedTag !== null || selectedChannel !== null;
 
   // ─── 저장된 지도 모드 로드 (마운트 1회, 클라이언트 전용) ─────
   useEffect(() => {
@@ -162,7 +185,7 @@ export default function MainMapView({ markers, tags }) {
           city: selection.city,
         });
         setSelectedTag(null);
-        setIssSelected(false);
+        setSelectedChannel(null);
         issSelectedRef.current = false;
         setExpandedMarkerId(null);
         if (mapRef.current) {
@@ -194,7 +217,7 @@ export default function MainMapView({ markers, tags }) {
       if (tagName) {
         setSelectedTag(tagName);
         setSelectedCity(null);
-        setIssSelected(false);
+        setSelectedChannel(null);
         issSelectedRef.current = false;
         setExpandedMarkerId(null);
       }
@@ -208,7 +231,7 @@ export default function MainMapView({ markers, tags }) {
     try {
       setSelectedCity(null);
       setSelectedTag(null);
-      setIssSelected(false);
+      setSelectedChannel(null);
       issSelectedRef.current = false;
       setExpandedMarkerId(null);
     } catch (error) {
@@ -269,81 +292,118 @@ export default function MainMapView({ markers, tags }) {
     }
   }, []);
 
-  // ─── ISS(Space) 선택 → NASA 라이브 패널 + ISS 추적 켜기 + 위치 따라가기 (2D/3D 공통) ─
-  const handleSelectIss = useCallback(() => {
+  // ─── 자동 라이브 채널 선택 → 영상 패널 + 지도 이동 (2D/3D 공통) ──
+  //   - channel_type "iss" : ISS 추적을 켜고 실시간 위치를 따라간다(기존 ISS 동작 유지).
+  //   - 그 외(고정 채널)     : 채널 마커 위치로 카메라 이동.
+  const handleSelectChannel = useCallback((channel) => {
     try {
+      if (!channel || !channel.id) return;
       setSelectedCity(null);
       setSelectedTag(null);
       setExpandedMarkerId(null);
-      setIssSelected(true);
-      issSelectedRef.current = true;
-      // 목록을 열면 ISS 추적을 자동으로 켠다. (꺼져 있으면 위치 갱신이 오지 않아
-      //  카메라가 ISS 를 따라갈 수 없으므로 반드시 켜 준다)
-      setIssEnabled(true);
+      setSelectedChannel(channel);
 
-      // 이미 위치를 알고 있으면(추적이 이미 켜져 있던 경우) 즉시 그 위치로 이동한다.
-      // 방금 추적을 켠 경우엔 위치가 아직 없을 수 있는데, 곧 도착하는 첫 위치 갱신에서
-      // handleIssPosition 이 카메라를 ISS 로 이동시킨다.
-      const pos = issPositionRef.current;
-      if (pos && typeof pos.lat === "number" && typeof pos.lng === "number") {
-        setIssInfo(pos);
-        if (mapRef.current) {
-          mapRef.current.flyToLocation({ lat: pos.lat, lng: pos.lng, zoom: 4 });
+      const isIss = channel.channel_type === "iss";
+      issSelectedRef.current = isIss;
+
+      if (isIss) {
+        // ISS: 추적 자동 켜기 + 위치 따라가기(기존 동작 그대로).
+        setIssEnabled(true);
+        const pos = issPositionRef.current;
+        if (pos && typeof pos.lat === "number" && typeof pos.lng === "number") {
+          setIssInfo(pos);
+          if (mapRef.current) {
+            mapRef.current.flyToLocation({ lat: pos.lat, lng: pos.lng, zoom: 4 });
+          }
+        }
+      } else {
+        // 고정 채널: 그 마커 위치로 이동.
+        const lat = Number(channel.lat);
+        const lng = Number(channel.lng);
+        if (mapRef.current && !Number.isNaN(lat) && !Number.isNaN(lng)) {
+          mapRef.current.flyToLocation({ lat, lng, zoom: 11 });
         }
       }
     } catch (error) {
-      console.error("[MainMapView] ISS 선택 처리 실패:", error); // TODO: 배포 전 제거
+      console.error("[MainMapView] 채널 선택 처리 실패:", error); // TODO: 배포 전 제거
     }
   }, []);
+
+  // ISS 채널 문서(데이터에 있으면). 지도 위 ISS 마커 클릭 시 이 채널을 선택한다.
+  const issChannel = useMemo(
+    () => channelList.find((c) => c && c.channel_type === "iss") || null,
+    [channelList]
+  );
+  const handleIssClick = useCallback(() => {
+    if (issChannel) handleSelectChannel(issChannel);
+  }, [issChannel, handleSelectChannel]);
 
   // ─── 지도 마커 직접 클릭 (2D/3D 공통) ────────────────────────
   // 트리 도시 클릭과 동일 결과: 그 도시로 패널 열기 + 클릭 마커 펼침.
   // (이미 마커를 클릭했으므로 지도 추가 이동은 하지 않는다)
-  const handleMarkerClick = useCallback((marker) => {
-    try {
-      if (!marker) return;
-      setSelectedCity({
-        continent: marker.continent || "",
-        country: marker.country || "",
-        city: marker.city || "",
-      });
-      setSelectedTag(null);
-      setIssSelected(false);
-      issSelectedRef.current = false;
-      setExpandedMarkerId(marker.id);
-      // 마커 클릭 시 그 위치로 카메라 이동 (2D는 LeafletMap 내부에서도 이동하지만,
-      // 3D는 이 호출이 있어야 이동한다 → 영상 카드 클릭과 동일한 focusMarker 흐름 재사용)
-      if (mapRef.current) mapRef.current.focusMarker(marker);
-    } catch (error) {
-      console.error("[MainMapView] 지도 마커 클릭 처리 실패:", error); // TODO: 배포 전 제거
-    }
-  }, []);
+  const handleMarkerClick = useCallback(
+    (marker) => {
+      try {
+        if (!marker) return;
+        // 자동 라이브 채널 마커(__channel 플래그)면 채널 선택 흐름으로 분기.
+        if (marker.__channel) {
+          handleSelectChannel(marker.__channel);
+          return;
+        }
+        setSelectedCity({
+          continent: marker.continent || "",
+          country: marker.country || "",
+          city: marker.city || "",
+        });
+        setSelectedTag(null);
+        setSelectedChannel(null);
+        issSelectedRef.current = false;
+        setExpandedMarkerId(marker.id);
+        // 마커 클릭 시 그 위치로 카메라 이동 (2D는 LeafletMap 내부에서도 이동하지만,
+        // 3D는 이 호출이 있어야 이동한다 → 영상 카드 클릭과 동일한 focusMarker 흐름 재사용)
+        if (mapRef.current) mapRef.current.focusMarker(marker);
+      } catch (error) {
+        console.error("[MainMapView] 지도 마커 클릭 처리 실패:", error); // TODO: 배포 전 제거
+      }
+    },
+    [handleSelectChannel]
+  );
 
-  // ─── NASA 라이브 목록 로드 + 5분마다 자동 갱신 ───────────────
+  // ─── 채널별 라이브 영상 목록 로드 + 5분마다 자동 갱신 ─────────
+  // /api/live-channels/videos → { byChannel: { docId: [videos] } } (ISS 포함, 5분 서버 캐시)
   useEffect(() => {
+    // 등록된 채널이 없으면 호출하지 않는다(불필요한 요청 방지).
+    // (초기 channelVideos 는 이미 {} 이므로 별도 초기화 불필요)
+    if (channelList.length === 0) {
+      return;
+    }
     let cancelled = false;
     let timer = null;
 
-    async function loadIssVideos() {
+    async function loadChannelVideos() {
       try {
-        const res = await fetch("/api/iss/videos", { cache: "no-store" });
+        const res = await fetch("/api/live-channels/videos", { cache: "no-store" });
         const data = await res.json();
         if (cancelled) return;
-        setIssVideos(Array.isArray(data.videos) ? data.videos : []);
+        setChannelVideos(
+          data && data.byChannel && typeof data.byChannel === "object"
+            ? data.byChannel
+            : {}
+        );
       } catch (error) {
-        console.error("[MainMapView] NASA 라이브 목록 조회 실패:", error); // TODO: 배포 전 제거
-        if (!cancelled) setIssVideos([]);
+        console.error("[MainMapView] 채널 라이브 목록 조회 실패:", error); // TODO: 배포 전 제거
+        if (!cancelled) setChannelVideos({});
       }
     }
 
-    loadIssVideos();
-    timer = setInterval(loadIssVideos, 5 * 60 * 1000);
+    loadChannelVideos();
+    timer = setInterval(loadChannelVideos, 5 * 60 * 1000);
 
     return () => {
       cancelled = true;
       if (timer) clearInterval(timer);
     };
-  }, []);
+  }, [channelList.length]);
 
   // ─── 현재 선택 기준 필터링된 마커 ────────────────────────────
   const filteredMarkers = useMemo(() => {
@@ -377,6 +437,43 @@ export default function MainMapView({ markers, tags }) {
     return "";
   }, [selectedCity, selectedTag, filteredMarkers, tr]);
 
+  // ─── 지도에 표시할 "고정 채널" 마커 (ISS 등 추적 채널 제외) ───
+  // 지역 마커와 별개 데이터지만, 화면 표시는 같은 지도 위에 얹는다.
+  // __channel 플래그로 클릭 시 채널 선택 흐름과 구분한다.
+  const channelMapMarkers = useMemo(() => {
+    const out = [];
+    for (const ch of channelList) {
+      if (!ch || !ch.id) continue;
+      if (ch.channel_type === "iss") continue; // ISS 는 추적 마커(IssTracker)가 그림
+      const lat = Number(ch.lat);
+      const lng = Number(ch.lng);
+      if (Number.isNaN(lat) || Number.isNaN(lng)) continue;
+      out.push({
+        id: `chan-${ch.id}`,
+        lat,
+        lng,
+        location: ch.channel_name || "",
+        is_live: true,
+        __channel: ch, // 클릭 시 채널 선택으로 분기하기 위한 플래그
+      });
+    }
+    return out;
+  }, [channelList]);
+
+  // 지도에 넘길 전체 마커(지역 + 고정 채널)
+  const allMapMarkers = useMemo(
+    () => [...markerList, ...channelMapMarkers],
+    [markerList, channelMapMarkers]
+  );
+
+  // ─── 선택된 채널의 영상/패널 정보 ────────────────────────────
+  const selectedChannelVideos = selectedChannel
+    ? channelVideos[selectedChannel.id]
+    : null;
+  const channelPanelTitle = selectedChannel
+    ? `📡 ${tr(selectedChannel.channel_name || "")}`
+    : "";
+
   return (
     <div className="flex h-screen flex-col bg-bg">
       {/* 상단 헤더 바 (좌: 로고/태그라인, 우: 언어 선택) */}
@@ -404,21 +501,27 @@ export default function MainMapView({ markers, tags }) {
             tr={tr}
             onSelectLocation={handleSelectLocation}
             onSelectTag={handleSelectTag}
-            onSelectSpace={handleSelectIss}
+            liveChannels={channelList}
+            channelVideoCounts={channelVideoCounts}
+            onSelectChannel={handleSelectChannel}
+            selectedChannelId={selectedChannel ? selectedChannel.id : null}
             selectedCity={selectedCity}
             selectedTag={selectedTag}
-            selectedSpace={issSelected}
-            spaceVideoCount={issVideos ? issVideos.length : null}
           />
         </aside>
 
-        {/* 중간: 패널 (ISS 선택 시 NASA 라이브, 그 외 라이브캠 목록) */}
+        {/* 중간: 패널 (채널 선택 시 채널 라이브 영상, 그 외 라이브캠 목록) */}
         {isPanelOpen && (
           <section className="h-full w-[36%] min-w-[420px] overflow-hidden border-r border-border bg-bg">
-            {issSelected ? (
+            {selectedChannel ? (
               <IssVideoPanel
-                videos={issVideos}
-                issInfo={issInfo}
+                videos={selectedChannelVideos}
+                // ISS 채널일 때만 위치 정보바 표시(고정 채널은 issInfo 없음)
+                issInfo={
+                  selectedChannel.channel_type === "iss" ? issInfo : null
+                }
+                title={channelPanelTitle}
+                emptyText={t("noNasaLive")}
                 onClose={closePanel}
               />
             ) : (
@@ -439,7 +542,7 @@ export default function MainMapView({ markers, tags }) {
           <MapView
             ref={mapRef}
             mode={mode}
-            markers={markerList}
+            markers={allMapMarkers}
             selectedMarkerId={expandedMarkerId}
             issEnabled={issEnabled}
             eqEnabled={eqEnabled}
@@ -447,7 +550,7 @@ export default function MainMapView({ markers, tags }) {
             disasterEnabled={disasterEnabled}
             onMarkerClick={handleMarkerClick}
             onMapClick={handleMapClick}
-            onIssClick={handleSelectIss}
+            onIssClick={handleIssClick}
             onIssPosition={handleIssPosition}
             defaultCenter={DEFAULT_CENTER}
             defaultZoom={DEFAULT_ZOOM}

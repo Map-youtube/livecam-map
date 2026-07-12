@@ -56,7 +56,16 @@ function IssInfoBar({ issInfo }) {
   );
 }
 
-export default function IssVideoPanel({ videos, issInfo, onClose }) {
+// 자동 라이브 채널(방송/우주 등)의 라이브 영상 목록 패널.
+// ISS 전용에서 일반화됨: title(패널 제목)·emptyText(빈 상태 문구)를 받고,
+// issInfo 가 있을 때만 ISS 위치 정보바를 표시한다(고정 채널은 issInfo 없음 → 미표시).
+export default function IssVideoPanel({
+  videos,
+  issInfo,
+  onClose,
+  title,
+  emptyText,
+}) {
   // 다국어 정적 문자열
   const { t } = useI18n();
   // 현재 선택된(재생 중인) 영상 videoId (없으면 null)
@@ -115,7 +124,7 @@ export default function IssVideoPanel({ videos, issInfo, onClose }) {
       {/* 상단: 제목(개수 포함) + 닫기 */}
       <div className="flex flex-shrink-0 items-center justify-between border-b border-border bg-surface px-4 py-3">
         <h2 className="truncate font-display text-sm font-bold text-ink">
-          🛰️ ISS · {t("nasaLive")}
+          {title || `🛰️ ISS · ${t("nasaLive")}`}
           {!loading ? ` (${list.length})` : ""}
         </h2>
         <button
@@ -140,8 +149,10 @@ export default function IssVideoPanel({ videos, issInfo, onClose }) {
         ) : list.length === 0 ? (
           // 빈 상태 (빈 공간 금지 원칙)
           <div className="mt-6 flex flex-col items-center gap-2 px-4 text-center">
-            <span className="text-3xl">🛰️</span>
-            <p className="text-sm text-ink-muted">{t("noNasaLive")}</p>
+            <span className="text-3xl">📡</span>
+            <p className="text-sm text-ink-muted">
+              {emptyText || t("noNasaLive")}
+            </p>
             <p className="text-xs text-ink-muted">{t("nasaWillAppear")}</p>
           </div>
         ) : (
