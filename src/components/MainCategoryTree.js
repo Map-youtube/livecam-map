@@ -103,11 +103,12 @@ export default function MainCategoryTree({
   onSelectTag,
   selectedCity,
   selectedTag,
-  // 자동 라이브 채널(방송/우주 등) — 지역과 별개로 대분류>소분류>채널 로 표시
+  // 자동 라이브 채널(방송/우주 등) — 지역과 별개로 대분류 > 소분류(말단) 로 표시.
+  //   소분류가 곧 "영상 목록"이며, 그 소분류에 속한 모든 채널의 라이브가 합쳐진다.
   liveChannels,
   channelVideoCounts,
-  onSelectChannel,
-  selectedChannelId,
+  onSelectChannelGroup,
+  selectedGroup, // { major, minor } | null
 }) {
   const markerList = Array.isArray(markers) ? markers : [];
   const tagList = Array.isArray(tags) ? tags : [];
@@ -239,9 +240,17 @@ export default function MainCategoryTree({
     }
     return known ? sum : undefined;
   }
-  // 현재 선택된 채널이 이 채널 배열에 속하는지 (조상 강조/자동펼침용)
-  function hasSelectedChannel(channels) {
-    return channels.some((ch) => ch && ch.id === selectedChannelId);
+  // 현재 선택된 소분류(그룹)인지 판별
+  function isGroupSelected(major, minor) {
+    return (
+      selectedGroup &&
+      selectedGroup.major === major &&
+      selectedGroup.minor === minor
+    );
+  }
+  // 이 대분류 안에 현재 선택된 소분류가 있는지(조상 강조/자동펼침용)
+  function majorHasSelected(major) {
+    return Boolean(selectedGroup && selectedGroup.major === major);
   }
 
   return (
@@ -370,59 +379,38 @@ export default function MainCategoryTree({
                 count={sumChannelCounts(allInMajor)}
                 depth={0}
                 defaultOpen={false}
-                forceOpen={hasSelectedChannel(allInMajor)}
-                ancestorActive={hasSelectedChannel(allInMajor)}
+                forceOpen={majorHasSelected(M)}
+                ancestorActive={majorHasSelected(M)}
               >
+                {/* 소분류가 말단(클릭 대상). 그 소분류에 속한 모든 채널의 라이브가 합쳐진다. */}
                 {minorKeys.map((mk) => {
                   const channels = minors[mk];
+                  const active = isGroupSelected(M, mk);
                   return (
-                    <CollapsibleRow
+                    <button
                       key={`ch-minor-${M}-${mk}`}
-                      label={trFn(mk)}
-                      count={sumChannelCounts(channels)}
-                      depth={1}
-                      defaultOpen={false}
-                      forceOpen={hasSelectedChannel(channels)}
-                      ancestorActive={hasSelectedChannel(channels)}
+                      type="button"
+                      onClick={() =>
+                        typeof onSelectChannelGroup === "function" &&
+                        onSelectChannelGroup({ major: M, minor: mk })
+                      }
+                      style={{ paddingLeft: "30px" }}
+                      className={
+                        "flex w-full items-center gap-1 rounded-md py-1 pr-1 text-left text-xs transition hover:bg-brand-light " +
+                        (active
+                          ? "bg-blue-100 font-bold text-blue-800"
+                          : "text-ink")
+                      }
                     >
-                      {channels
-                        .slice()
-                        .sort((a, b) =>
-                          String(a.channel_name || "").localeCompare(
-                            String(b.channel_name || ""),
-                            "ko"
-                          )
-                        )
-                        .map((ch) => {
-                          const active = selectedChannelId === ch.id;
-                          const cnt = channelCounts[ch.id];
-                          return (
-                            <button
-                              key={ch.id}
-                              type="button"
-                              onClick={() =>
-                                typeof onSelectChannel === "function" &&
-                                onSelectChannel(ch)
-                              }
-                              style={{ paddingLeft: "30px" }}
-                              className={
-                                "flex w-full items-center gap-1 rounded-md py-1 pr-1 text-left text-xs transition hover:bg-brand-light " +
-                                (active
-                                  ? "bg-blue-100 font-bold text-blue-800"
-                                  : "text-ink")
-                              }
-                            >
-                              <span className="w-3 text-ink-muted">·</span>
-                              <span className="truncate">
-                                {trFn(ch.channel_name || ch.channel_id)}
-                              </span>
-                              <span className="ml-auto font-mono text-[11px] text-ink-muted">
-                                {typeof cnt === "number" ? cnt : ""}
-                              </span>
-                            </button>
-                          );
-                        })}
-                    </CollapsibleRow>
+                      <span className="w-3 text-ink-muted">·</span>
+                      <span className="truncate">{trFn(mk)}</span>
+                      <span className="ml-auto font-mono text-[11px] text-ink-muted">
+                        {(() => {
+                          const c = sumChannelCounts(channels);
+                          return typeof c === "number" ? c : "";
+                        })()}
+                      </span>
+                    </button>
                   );
                 })}
               </CollapsibleRow>
