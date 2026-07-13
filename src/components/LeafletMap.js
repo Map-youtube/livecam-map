@@ -306,29 +306,70 @@ function MarkerClusterLayer({
         spiderfyOnMaxZoom: false,
       });
 
-      // 클러스터 클릭 → 부드러운 확대. 더 확대해도 안 나뉘는(같은 위치) 클러스터는 펼침(spiderfy).
+      // 클러스터 클릭 → "부드럽게" 확대.
+      // ⚠️ 핵심: markercluster 기본 zoomToBounds 는 모든 마커를 화면에 꽉 채우는 게 아니라,
+      //   "클러스터를 한 단계 풀 만큼만" 클러스터 중심을 유지한 채 확대한다(마커가 화면 밖으로
+      //   흩어지지 않게). 그 로직을 그대로 재현하되 애니메이션만 느린 flyTo/flyToBounds 로 바꾼다.
       group.on("clusterclick", (e) => {
         try {
           const cluster = e.layer;
           const bounds = cluster.getBounds();
-          const samePoint = bounds
-            .getNorthEast()
-            .equals(bounds.getSouthWest());
-          const targetZoom = map.getBoundsZoom(bounds, false);
-          if (samePoint || targetZoom <= map.getZoom()) {
-            // 같은 지점에 뭉쳐 더 확대해도 안 나뉘면 마커들을 펼쳐서 보여준다.
+          // 같은 지점에 뭉쳐 아무리 확대해도 안 나뉘는 클러스터는 펼쳐서(spiderfy) 보여준다.
+          if (bounds.getNorthEast().equals(bounds.getSouthWest())) {
             cluster.spiderfy();
             return;
           }
-          // 영상 패널이 열려 있으면 그 폭만큼 왼쪽 여백을 줘 보이는 영역 기준으로 맞춘다.
+
+          const mapZoom = map.getZoom();
+          const boundsZoom = map.getBoundsZoom(bounds); // 모든 마커가 다 보이는 최대 줌
+          // 이 클러스터를 "한 단계" 풀 목표 줌 계산 (markercluster 원본 로직과 동일)
+          let childClusters = Array.isArray(cluster._childClusters)
+            ? cluster._childClusters.slice()
+            : [];
+          let zoom =
+            (typeof cluster._zoom === "number" ? cluster._zoom : mapZoom) + 1;
+          while (childClusters.length > 0 && boundsZoom > zoom) {
+            zoom += 1;
+            let next = [];
+            for (const cc of childClusters) {
+              if (cc && Array.isArray(cc._childClusters)) {
+                next = next.concat(cc._childClusters);
+              }
+            }
+            childClusters = next;
+          }
+
+          const flyOpts = { duration: 1.0 }; // 기본 즉시확대보다 느리고 부드럽게(초)
           const panelPx =
             panelOpenRef && panelOpenRef.current
               ? panelOverlayWidth(map.getSize().x)
               : 0;
-          map.flyToBounds(bounds, {
-            duration: 1.0, // 기본 즉시확대보다 느리고 부드럽게 (초)
-            paddingTopLeft: panelPx > 0 ? [panelPx, 0] : [0, 0],
-          });
+
+          // 좌표+줌으로 이동하되, 패널이 열려 있으면 보이는 영역 중앙 보정(중심을 왼쪽으로).
+          const flyToCenter = (latlng, targetZoom) => {
+            let center = latlng;
+            if (panelPx > 0) {
+              const pt = map.project(latlng, targetZoom);
+              pt.x -= panelPx / 2;
+              center = map.unproject(pt, targetZoom);
+            }
+            map.flyTo(center, targetZoom, flyOpts);
+          };
+
+          if (boundsZoom > zoom) {
+            // 마커가 다 보이려면 더 확대해야 하지만, 화면 밖으로 흩어지지 않게
+            // "한 단계"까지만 확대(클러스터 중심 유지).
+            flyToCenter(cluster.getLatLng(), zoom);
+          } else if (boundsZoom <= mapZoom) {
+            // 이미 충분히 확대됨 → 한 칸만 더(중심 유지).
+            flyToCenter(cluster.getLatLng(), mapZoom + 1);
+          } else {
+            // 클러스터 전체가 화면에 딱 맞는 범위 → 바운즈로 부드럽게.
+            map.flyToBounds(bounds, {
+              ...flyOpts,
+              paddingTopLeft: panelPx > 0 ? [panelPx, 0] : [0, 0],
+            });
+          }
         } catch (clusterError) {
           console.error("[LeafletMap] 클러스터 클릭 처리 실패:", clusterError); // TODO: 배포 전 제거
         }
