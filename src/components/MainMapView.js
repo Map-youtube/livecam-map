@@ -688,35 +688,7 @@ export default function MainMapView({ markers, tags, liveChannels }) {
           />
         </aside>
 
-        {/* 중간: 패널 (소분류 선택 시 그 그룹의 합쳐진 라이브 영상, 그 외 라이브캠 목록) */}
-        {isPanelOpen && (
-          <section className="h-full w-[36%] min-w-[420px] overflow-hidden border-r border-border bg-bg">
-            {selectedGroup ? (
-              <IssVideoPanel
-                videos={selectedGroupVideos}
-                // ISS 포함 그룹일 때만 위치 정보바 표시(그 외 그룹은 issInfo 없음)
-                issInfo={selectedGroupHasIss ? issInfo : null}
-                title={channelPanelTitle}
-                emptyText={t("noNasaLive")}
-                titleTr={trTitle}
-                expandedId={expandedChannelVideoId}
-                onSelectVideo={handleSelectChannelVideo}
-                onClose={closePanel}
-              />
-            ) : (
-              <VideoListPanel
-                markers={filteredMarkers}
-                title={panelTitle}
-                tr={tr}
-                onClose={closePanel}
-                onSelectMarker={handleSelectMarker}
-                expandedMarkerId={expandedMarkerId}
-              />
-            )}
-          </section>
-        )}
-
-        {/* 오른쪽: 지도 (2D/3D 통합) */}
+        {/* 오른쪽: 지도 (2D/3D 통합) — 영상 목록 패널은 지도 위에 반투명 오버레이로 얹는다 */}
         <main className="relative h-full flex-1">
           <MapView
             ref={mapRef}
@@ -734,6 +706,36 @@ export default function MainMapView({ markers, tags, liveChannels }) {
             defaultCenter={DEFAULT_CENTER}
             defaultZoom={DEFAULT_ZOOM}
           />
+
+          {/* 영상 목록 패널: 지도 좌측 위에 겹치는 오버레이.
+              카드가 나열되는 영역 배경만 반투명+블러 → 뒤 지도가 희미하게 비친다.
+              (상단 제목/소분류 영역은 불투명 유지) */}
+          {isPanelOpen && (
+            <section className="absolute inset-y-0 left-0 z-[500] w-[36%] min-w-[420px] overflow-hidden border-r border-border shadow-xl">
+              {selectedGroup ? (
+                <IssVideoPanel
+                  videos={selectedGroupVideos}
+                  // ISS 포함 그룹일 때만 위치 정보바 표시(그 외 그룹은 issInfo 없음)
+                  issInfo={selectedGroupHasIss ? issInfo : null}
+                  title={channelPanelTitle}
+                  emptyText={t("noNasaLive")}
+                  titleTr={trTitle}
+                  expandedId={expandedChannelVideoId}
+                  onSelectVideo={handleSelectChannelVideo}
+                  onClose={closePanel}
+                />
+              ) : (
+                <VideoListPanel
+                  markers={filteredMarkers}
+                  title={panelTitle}
+                  tr={tr}
+                  onClose={closePanel}
+                  onSelectMarker={handleSelectMarker}
+                  expandedMarkerId={expandedMarkerId}
+                />
+              )}
+            </section>
+          )}
 
           {/* 우측 상단: 2D/3D 토글 + 레이어 토글 4종 (위치·스타일 유지) */}
           <div className="absolute right-3 top-3 z-[1000] flex flex-wrap justify-end gap-2">

@@ -143,8 +143,9 @@ export default function IssVideoPanel({
   }
 
   return (
-    <div className="flex h-full flex-col bg-bg">
-      {/* 상단: 제목(개수 포함) + 닫기 */}
+    // 루트는 투명 — 헤더(불투명)와 카드 목록 영역(반투명)만 각자 배경을 갖는다.
+    <div className="flex h-full flex-col">
+      {/* 상단: 제목(개수 포함) + 닫기 (소분류/제목 영역 — 불투명 유지) */}
       <div className="flex flex-shrink-0 items-center justify-between border-b border-border bg-surface px-4 py-3">
         <h2 className="truncate font-display text-sm font-bold text-ink">
           {title || `🛰️ ISS · ${t("nasaLive")}`}
@@ -163,8 +164,8 @@ export default function IssVideoPanel({
       {/* ISS 현재 위치 정보 (작게) */}
       <IssInfoBar issInfo={issInfo} />
 
-      {/* 라이브 카드 목록 */}
-      <div className="flex-1 overflow-auto p-3">
+      {/* 라이브 카드 목록 — 배경만 반투명+블러로 뒤 지도가 희미하게 비치게 한다 */}
+      <div className="flex-1 overflow-auto bg-bg/75 p-3 backdrop-blur-md">
         {loading ? (
           <p className="mt-6 text-center text-sm text-ink-muted">
             {t("loading")}...
