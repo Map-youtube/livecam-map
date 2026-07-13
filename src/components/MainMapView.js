@@ -531,6 +531,18 @@ export default function MainMapView({ markers, tags, liveChannels }) {
     [selectedGroupChannels]
   );
 
+  // ─── "보이는 패널"의 영상 제목만 현재 언어로 번역(+캐시) ──────
+  // 지금 열린 소분류 패널의 영상 제목만 대상 → 낭비 없이 최소 비용. (locale=ko 면 원문 유지)
+  const visibleTitles = useMemo(() => {
+    if (!Array.isArray(selectedGroupVideos)) return [];
+    const set = new Set();
+    for (const v of selectedGroupVideos) {
+      if (v && v.title) set.add(String(v.title));
+    }
+    return [...set];
+  }, [selectedGroupVideos]);
+  const { tr: trTitle } = useAutoTranslate(visibleTitles, locale);
+
   const channelPanelTitle = selectedGroup
     ? `📡 ${capitalizeWords(tr(selectedGroup.minor || ""))}`
     : "";
@@ -581,6 +593,7 @@ export default function MainMapView({ markers, tags, liveChannels }) {
                 issInfo={selectedGroupHasIss ? issInfo : null}
                 title={channelPanelTitle}
                 emptyText={t("noNasaLive")}
+                titleTr={trTitle}
                 onClose={closePanel}
               />
             ) : (

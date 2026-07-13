@@ -65,9 +65,12 @@ export default function IssVideoPanel({
   onClose,
   title,
   emptyText,
+  titleTr, // 영상 제목을 현재 언어로 번역하는 함수(없으면 원문). "보이는 패널만" 번역.
 }) {
   // 다국어 정적 문자열
   const { t } = useI18n();
+  // 영상 제목 번역기(없으면 원문 그대로)
+  const trTitle = typeof titleTr === "function" ? titleTr : (x) => x;
   // 현재 선택된(재생 중인) 영상 videoId (없으면 null)
   const [expandedId, setExpandedId] = useState(null);
 
@@ -206,7 +209,7 @@ export default function IssVideoPanel({
                           {/* 본문 (카드가 작아 여백/글자 축소, 제목은 2줄까지 자동 줄바꿈) */}
                           <div className="p-2">
                             <h3 className="line-clamp-2 font-display text-xs font-semibold leading-snug text-ink">
-                              {v.title || t("noTitle")}
+                              {v.title ? trTitle(v.title) : t("noTitle")}
                             </h3>
                             <p className="mt-1 truncate text-[11px] text-ink-muted">
                               {v.channelName || "NASA"}
