@@ -94,11 +94,13 @@ export async function verifyAdminRequest(request) {
     //   ⚠️ 환경변수에 눈에 안 보이는 공백/개행이 붙는 경우가 많아 양쪽 모두 trim + 소문자 비교.
     const adminEmail = (process.env.ADMIN_EMAIL || "").trim();
     if (!adminEmail) {
-      console.error(
-        "[authUtils] ADMIN_EMAIL 환경변수가 설정되지 않아 관리자 여부를 판별할 수 없습니다."
+      // ADMIN_EMAIL 미설정: 관리가 통째로 잠기지 않도록, 예전처럼 "유효한 로그인 토큰"이면 통과시킨다.
+      //   (보안은 약해지므로 경고만 남긴다. Vercel 환경변수에 ADMIN_EMAIL 을 넣으면
+      //    아래 화이트리스트 검증이 자동으로 켜져 그 계정만 관리자로 인정된다.)
+      console.warn(
+        "[authUtils] ADMIN_EMAIL 미설정 — 관리자 이메일 화이트리스트 없이 동작 중(보안 약화). 배포 환경변수에 ADMIN_EMAIL 설정 권장."
       ); // TODO: 배포 전 제거
-      // 설정 누락은 "로그인 문제"가 아니라 "서버 설정 문제"임을 구분해 알린다.
-      return { valid: false, error: "관리자 이메일(ADMIN_EMAIL) 설정이 필요합니다", reason: "no_admin_email" };
+      return { valid: true, uid: payload.sub, email };
     }
     if (email.trim().toLowerCase() !== adminEmail.toLowerCase()) {
       // 로그인은 됐지만 ADMIN_EMAIL 과 다른 계정 → 명확히 구분해 알린다.
