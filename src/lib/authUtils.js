@@ -91,15 +91,23 @@ export async function verifyAdminRequest(request) {
     //   토큰이 "유효한 Firebase 사용자"임을 증명할 뿐 "관리자"임을 보장하지 않는다
     //   (Identity Toolkit REST API로 누구나 자체 계정을 만들 수 있음).
     //   → ADMIN_EMAIL 환경변수와 정확히 일치하는 이메일만 관리자로 인정한다.
-    const adminEmail = process.env.ADMIN_EMAIL;
+    //   ⚠️ 환경변수에 눈에 안 보이는 공백/개행이 붙는 경우가 많아 양쪽 모두 trim + 소문자 비교.
+    const adminEmail = (process.env.ADMIN_EMAIL || "").trim();
     if (!adminEmail) {
       console.error(
         "[authUtils] ADMIN_EMAIL 환경변수가 설정되지 않아 관리자 여부를 판별할 수 없습니다."
       ); // TODO: 배포 전 제거
-      return { valid: false, error: "인증에 실패했습니다" };
+      // 설정 누락은 "로그인 문제"가 아니라 "서버 설정 문제"임을 구분해 알린다.
+      return { valid: false, error: "관리자 이메일(ADMIN_EMAIL) 설정이 필요합니다", reason: "no_admin_email" };
     }
-    if (email.toLowerCase() !== adminEmail.toLowerCase()) {
-      return { valid: false, error: "관리자 계정이 아닙니다" };
+    if (email.trim().toLowerCase() !== adminEmail.toLowerCase()) {
+      // 로그인은 됐지만 ADMIN_EMAIL 과 다른 계정 → 명확히 구분해 알린다.
+      return {
+        valid: false,
+        error: "이 계정은 관리자로 등록되어 있지 않습니다",
+        reason: "not_admin",
+        email,
+      };
     }
 
     // 검증 성공

@@ -25,7 +25,7 @@ export async function PATCH(request, context) {
   try {
     const authResult = await verifyAdminRequest(request);
     if (!authResult.valid) {
-      return Response.json({ ok: false, error: "로그인이 필요합니다" }, { status: 401 });
+      return Response.json({ ok: false, error: authResult.error || "로그인이 필요합니다" }, { status: 401 });
     }
 
     const { id } = await context.params;
@@ -98,7 +98,7 @@ export async function DELETE(request, context) {
   try {
     const authResult = await verifyAdminRequest(request);
     if (!authResult.valid) {
-      return Response.json({ ok: false, error: "로그인이 필요합니다" }, { status: 401 });
+      return Response.json({ ok: false, error: authResult.error || "로그인이 필요합니다" }, { status: 401 });
     }
 
     const { id } = await context.params;

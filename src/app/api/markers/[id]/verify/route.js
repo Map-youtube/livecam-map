@@ -31,7 +31,7 @@ export async function POST(request, context) {
     const authResult = await verifyAdminRequest(request);
     if (!authResult.valid) {
       return Response.json(
-        { ok: false, error: "로그인이 필요합니다" },
+        { ok: false, error: authResult.error || "로그인이 필요합니다" },
         { status: 401 }
       );
     }
