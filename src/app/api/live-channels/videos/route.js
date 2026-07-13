@@ -4,8 +4,8 @@
 // GET → { ok, byChannel: { [channelDocId]: [{videoId,title,thumbnailUrl,channelName}] } }
 //
 //   - 활성 채널(getLiveChannels)마다 getChannelLiveVideos 로 현재 라이브 영상을 수집.
-//   - unstable_cache 로 5분(300초) 캐싱 → 방문자 수와 무관하게 채널당 videos.list 는
-//     5분에 최대 1회. (채널 N개면 5분당 최대 N유닛)
+//   - unstable_cache 로 30분(1800초) 캐싱 → 방문자 수와 무관하게 채널당 videos.list 는
+//     30분에 최대 1회. (채널 N개면 30분당 최대 N유닛 = 하루 최대 48×N 유닛)
 //   - 실패해도 500 대신 빈 결과 반환.
 //
 // Node.js 런타임(외부 fetch + 서버 키).
@@ -62,9 +62,9 @@ async function computeByChannel() {
   return byChannel;
 }
 
-// 5분 캐시
+// 30분 캐시 (라이브 영상 목록 갱신 주기 = YouTube videos.list 유닛 소모 주기)
 const getByChannelCached = unstable_cache(computeByChannel, ["live-channel-videos"], {
-  revalidate: 300,
+  revalidate: 1800,
   tags: ["live-channel-videos"],
 });
 
