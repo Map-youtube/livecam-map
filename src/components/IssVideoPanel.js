@@ -66,26 +66,25 @@ export default function IssVideoPanel({
   title,
   emptyText,
   titleTr, // 영상 제목을 현재 언어로 번역하는 함수(없으면 원문). "보이는 패널만" 번역.
+  // ─ 부모(MainMapView)가 선택 상태를 제어한다(VideoListPanel 과 동일한 패턴) ─
+  //   expandedId    : 현재 재생 중인 영상 videoId (없으면 null)
+  //   onSelectVideo : 카드 클릭 콜백 (부모가 펼치기/접기 + 지도 이동 결정). null 이면 접기.
+  expandedId: expandedIdProp,
+  onSelectVideo,
 }) {
   // 다국어 정적 문자열
   const { t } = useI18n();
   // 영상 제목 번역기(없으면 원문 그대로)
   const trTitle = typeof titleTr === "function" ? titleTr : (x) => x;
-  // 현재 선택된(재생 중인) 영상 videoId (없으면 null)
-  const [expandedId, setExpandedId] = useState(null);
+  // 현재 선택된(재생 중인) 영상 videoId — 부모가 제어(제어 안 하면 null)
+  const expandedId = expandedIdProp != null ? expandedIdProp : null;
+  // 카드 클릭 → 부모에 알림(부모가 토글 + 지도 이동 결정)
+  const selectVideo =
+    typeof onSelectVideo === "function" ? onSelectVideo : () => {};
 
   // videos 가 아직 안 온 상태(null/undefined)면 로딩으로 취급
   const loading = videos == null;
   const list = Array.isArray(videos) ? videos : [];
-
-  // ─── 카드 클릭 → 재생 토글 (같은 카드 다시 클릭하면 접기) ───
-  function toggleExpand(videoId) {
-    try {
-      setExpandedId((prev) => (prev === videoId ? null : videoId));
-    } catch (error) {
-      console.error("[IssVideoPanel] 카드 토글 실패:", error); // TODO: 배포 전 제거
-    }
-  }
 
   function handleClose() {
     try {
@@ -183,7 +182,7 @@ export default function IssVideoPanel({
                         <button
                           key={v.videoId}
                           type="button"
-                          onClick={() => toggleExpand(v.videoId)}
+                          onClick={() => selectVideo(v)}
                           className={
                             "block overflow-hidden rounded-lg border border-border bg-surface text-left shadow-card transition duration-150 hover:-translate-y-0.5 " +
                             // 선택된 카드: 빨간 테두리 + 은은하게 켜졌다 꺼지는 발광(box-shadow 애니메이션)
@@ -233,7 +232,7 @@ export default function IssVideoPanel({
                           {/* 접기(X) 버튼 */}
                           <button
                             type="button"
-                            onClick={() => setExpandedId(null)}
+                            onClick={() => selectVideo(null)}
                             aria-label={t("closePanel")}
                             className="absolute right-1 top-1 z-10 rounded-md bg-ink/70 px-1.5 py-0.5 text-xs text-white transition hover:bg-ink"
                           >

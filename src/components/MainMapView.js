@@ -134,6 +134,10 @@ export default function MainMapView({ markers, tags, liveChannels }) {
   // selectedGroup: 현재 선택된 소분류 { major, middle, minor }(없으면 null. middle 은 중분류 없으면 "").
   //   소분류가 곧 "영상 목록"이며, 그 소분류에 속한 모든 채널의 라이브가 합쳐진다.
   const [selectedGroup, setSelectedGroup] = useState(null);
+  // 라이브 채널 패널에서 현재 재생 중인 영상 videoId (기존 마커의 expandedMarkerId 와 대응).
+  const [expandedChannelVideoId, setExpandedChannelVideoId] = useState(null);
+  // 마커/ISS 클릭으로 그룹을 열었을 때 첫 영상 자동재생을 예약하는 플래그.
+  const [autoplayGroupFirst, setAutoplayGroupFirst] = useState(false);
   const [issInfo, setIssInfo] = useState(null); // ISS 위치 정보(iss 채널 포함 그룹 선택 시만)
   const [channelVideos, setChannelVideos] = useState({}); // { channelDocId: [videos] }
   const issPositionRef = useRef(null); // 최신 ISS 위치(리렌더 없이 보관)
@@ -189,6 +193,8 @@ export default function MainMapView({ markers, tags, liveChannels }) {
         });
         setSelectedTag(null);
         setSelectedGroup(null);
+        setExpandedChannelVideoId(null);
+        setAutoplayGroupFirst(false);
         issSelectedRef.current = false;
         setExpandedMarkerId(null);
         if (mapRef.current) {
@@ -221,6 +227,8 @@ export default function MainMapView({ markers, tags, liveChannels }) {
         setSelectedTag(tagName);
         setSelectedCity(null);
         setSelectedGroup(null);
+        setExpandedChannelVideoId(null);
+        setAutoplayGroupFirst(false);
         issSelectedRef.current = false;
         setExpandedMarkerId(null);
       }
@@ -312,7 +320,7 @@ export default function MainMapView({ markers, tags, liveChannels }) {
   //   - 그룹에 iss 채널이 있으면 : ISS 추적을 켜고 실시간 위치를 따라간다.
   //   - 그 외(고정 채널 그룹)      : 그룹 채널들의 중심으로 카메라 이동.
   const handleSelectChannelGroup = useCallback(
-    (group) => {
+    (group, opts = {}) => {
       try {
         if (!group || !group.major || !group.minor) return;
         const middle = group.middle || "";
@@ -320,6 +328,10 @@ export default function MainMapView({ markers, tags, liveChannels }) {
         setSelectedTag(null);
         setExpandedMarkerId(null);
         setSelectedGroup({ major: group.major, middle, minor: group.minor });
+        // 새 그룹을 열 때 이전 영상 선택은 초기화.
+        setExpandedChannelVideoId(null);
+        // 마커/ISS 클릭으로 열면(autoplayFirst) 영상 로드 후 첫 영상 자동재생 예약.
+        setAutoplayGroupFirst(!!opts.autoplayFirst);
 
         const channels = getChannelsInGroup(group.major, middle, group.minor);
         const hasIss = channels.some((c) => c && c.channel_type === "iss");
@@ -368,11 +380,14 @@ export default function MainMapView({ markers, tags, liveChannels }) {
   );
   const handleIssClick = useCallback(() => {
     if (issChannel) {
-      handleSelectChannelGroup({
-        major: issChannel.major_category || "",
-        middle: issChannel.middle_category || "",
-        minor: issChannel.minor_category || "",
-      });
+      handleSelectChannelGroup(
+        {
+          major: issChannel.major_category || "",
+          middle: issChannel.middle_category || "",
+          minor: issChannel.minor_category || "",
+        },
+        { autoplayFirst: true } // 마커 클릭 → 목록 열고 첫 영상 자동재생
+      );
     }
   }, [issChannel, handleSelectChannelGroup]);
 
@@ -386,11 +401,14 @@ export default function MainMapView({ markers, tags, liveChannels }) {
         // 자동 라이브 채널 마커(__channel 플래그)면, 그 채널이 속한 소분류(그룹)를 연다.
         if (marker.__channel) {
           const ch = marker.__channel;
-          handleSelectChannelGroup({
-            major: ch.major_category || "",
-            middle: ch.middle_category || "",
-            minor: ch.minor_category || "",
-          });
+          handleSelectChannelGroup(
+            {
+              major: ch.major_category || "",
+              middle: ch.middle_category || "",
+              minor: ch.minor_category || "",
+            },
+            { autoplayFirst: true } // 마커 클릭 → 목록 열고 첫 영상 자동재생
+          );
           return;
         }
         setSelectedCity({
@@ -400,6 +418,8 @@ export default function MainMapView({ markers, tags, liveChannels }) {
         });
         setSelectedTag(null);
         setSelectedGroup(null);
+        setExpandedChannelVideoId(null);
+        setAutoplayGroupFirst(false);
         issSelectedRef.current = false;
         setExpandedMarkerId(marker.id);
         // 마커 클릭 시 그 위치로 카메라 이동 (2D는 LeafletMap 내부에서도 이동하지만,
@@ -529,7 +549,8 @@ export default function MainMapView({ markers, tags, liveChannels }) {
       const vids = channelVideos[ch.id];
       if (Array.isArray(vids)) {
         anyKnown = true;
-        for (const v of vids) merged.push(v);
+        // 각 영상에 소속 채널을 붙여, 영상 선택 시 그 채널 위치로 지도를 이동할 수 있게 한다.
+        for (const v of vids) merged.push({ ...v, __channel: ch });
       }
     }
     return anyKnown ? merged : null;
@@ -539,6 +560,78 @@ export default function MainMapView({ markers, tags, liveChannels }) {
     () => selectedGroupChannels.some((c) => c && c.channel_type === "iss"),
     [selectedGroupChannels]
   );
+
+  // ─── 마커/ISS 클릭으로 그룹을 연 경우: 영상 로드되면 첫 영상 자동재생 ──
+  //   (기존 마커: 마커 클릭 → 그 영상 자동재생. 라이브 채널도 동일 동작.)
+  useEffect(() => {
+    if (!autoplayGroupFirst) return;
+    if (!Array.isArray(selectedGroupVideos) || selectedGroupVideos.length === 0) {
+      return; // 아직 영상 로딩 중 → 다음 렌더에서 재시도
+    }
+    const first = selectedGroupVideos[0];
+    if (first && first.videoId) {
+      setExpandedChannelVideoId(first.videoId);
+    }
+    setAutoplayGroupFirst(false);
+  }, [autoplayGroupFirst, selectedGroupVideos]);
+
+  // ─── 라이브 채널 영상 카드 선택 → 재생 토글 + 그 영상의 채널 위치로 지도 이동 ──
+  //   기존 마커의 handleSelectMarker 와 동일한 로직(자기 데이터로 이동). null 이면 접기.
+  const handleSelectChannelVideo = useCallback(
+    (video) => {
+      try {
+        if (!video) {
+          setExpandedChannelVideoId(null); // 접기
+          return;
+        }
+        // 같은 카드 재클릭 → 접기
+        if (video.videoId === expandedChannelVideoId) {
+          setExpandedChannelVideoId(null);
+          return;
+        }
+        setExpandedChannelVideoId(video.videoId);
+
+        // 이 영상이 속한 채널의 위치로 이동 (각 영상은 자기 __channel 을 참조).
+        const ch = video.__channel;
+        if (!ch) return;
+        if (ch.channel_type === "iss") {
+          // ISS(이동 채널): 최신 위치로 이동(있으면).
+          const pos = issPositionRef.current;
+          if (
+            mapRef.current &&
+            pos &&
+            typeof pos.lat === "number" &&
+            typeof pos.lng === "number"
+          ) {
+            mapRef.current.flyToLocation({ lat: pos.lat, lng: pos.lng, zoom: 4 });
+          }
+          return;
+        }
+        // 고정 채널: 지도 위 그 채널 마커로 포커싱(기존 마커 클릭과 동일한 focusMarker 흐름).
+        const marker = channelMapMarkers.find(
+          (mm) => mm.__channel && mm.__channel.id === ch.id
+        );
+        if (mapRef.current && marker) {
+          mapRef.current.focusMarker(marker);
+        }
+      } catch (error) {
+        console.error("[MainMapView] 채널 영상 선택 처리 실패:", error); // TODO: 배포 전 제거
+      }
+    },
+    [expandedChannelVideoId, channelMapMarkers]
+  );
+
+  // 지도에서 강조할 마커 id: 채널 영상 재생 중이면 그 채널 마커, 아니면 기존 마커 선택.
+  const mapSelectedMarkerId = useMemo(() => {
+    if (expandedChannelVideoId && Array.isArray(selectedGroupVideos)) {
+      const v = selectedGroupVideos.find(
+        (x) => x && x.videoId === expandedChannelVideoId
+      );
+      const ch = v && v.__channel;
+      if (ch && ch.channel_type !== "iss") return `chan-${ch.id}`;
+    }
+    return expandedMarkerId;
+  }, [expandedChannelVideoId, selectedGroupVideos, expandedMarkerId]);
 
   // ─── "보이는 패널"의 영상 제목만 현재 언어로 번역(+캐시) ──────
   // 지금 열린 소분류 패널의 영상 제목만 대상 → 낭비 없이 최소 비용. (locale=ko 면 원문 유지)
@@ -603,6 +696,8 @@ export default function MainMapView({ markers, tags, liveChannels }) {
                 title={channelPanelTitle}
                 emptyText={t("noNasaLive")}
                 titleTr={trTitle}
+                expandedId={expandedChannelVideoId}
+                onSelectVideo={handleSelectChannelVideo}
                 onClose={closePanel}
               />
             ) : (
@@ -624,7 +719,7 @@ export default function MainMapView({ markers, tags, liveChannels }) {
             ref={mapRef}
             mode={mode}
             markers={allMapMarkers}
-            selectedMarkerId={expandedMarkerId}
+            selectedMarkerId={mapSelectedMarkerId}
             issEnabled={issEnabled}
             eqEnabled={eqEnabled}
             auroraEnabled={auroraEnabled}
