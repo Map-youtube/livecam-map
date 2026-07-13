@@ -11,7 +11,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import LiveChannelForm from "@/components/LiveChannelForm";
+import LeafletMapWrapper from "@/components/LeafletMapWrapper";
 import { getAdminIdToken } from "@/lib/clientAuth";
+
+const EDIT_MAP_CENTER = { lat: 20, lng: 0 };
 
 export default function LiveChannelSection() {
   const [channels, setChannels] = useState([]);
@@ -155,9 +158,25 @@ export default function LiveChannelSection() {
       channel_name: ch.channel_name || "",
       major_category: ch.major_category || "",
       minor_category: ch.minor_category || "",
+      channel_input: "", // 비워두면 기존 채널 유지, 입력하면 그 링크로 교체
       lat: typeof ch.lat === "number" ? String(ch.lat) : "",
       lng: typeof ch.lng === "number" ? String(ch.lng) : "",
     });
+  }
+
+  // 수정 폼 지도 클릭 → 좌표 반영 (등록 폼과 동일 방식)
+  function handleEditMapClick(coord) {
+    try {
+      if (coord && typeof coord.lat === "number" && typeof coord.lng === "number") {
+        setEditForm((f) => ({
+          ...f,
+          lat: coord.lat.toFixed(6),
+          lng: coord.lng.toFixed(6),
+        }));
+      }
+    } catch (error) {
+      console.error("[LiveChannelSection] 수정 지도 클릭 실패:", error); // TODO: 배포 전 제거
+    }
   }
   function cancelEdit() {
     setEditingId(null);
@@ -177,6 +196,10 @@ export default function LiveChannelSection() {
         major_category: editForm.major_category,
         minor_category: editForm.minor_category,
       };
+      // 채널 링크를 새로 입력했으면 그 링크로 교체(서버가 재해석). 비우면 기존 채널 유지.
+      if (editForm.channel_input && editForm.channel_input.trim()) {
+        payload.channel_input = editForm.channel_input.trim();
+      }
       // ISS(추적 채널)는 좌표가 없으므로 좌표는 고정 채널만 반영
       if (ch.channel_type !== "iss") {
         const lat = Number(editForm.lat);
@@ -339,6 +362,22 @@ export default function LiveChannelSection() {
                                         className="mt-0.5 w-full rounded border border-border px-2 py-1 text-xs"
                                       />
                                     </label>
+                                    {/* 채널 링크 변경 (선택) — 전체 폭 */}
+                                    <label className="col-span-2 text-[11px] text-gray-600">
+                                      채널 링크 변경 (선택 — 비우면 기존 채널 유지)
+                                      <input
+                                        type="text"
+                                        value={editForm.channel_input}
+                                        onChange={(e) =>
+                                          setEditForm((f) => ({
+                                            ...f,
+                                            channel_input: e.target.value,
+                                          }))
+                                        }
+                                        placeholder={`현재: ${ch.handle || ch.channel_id}  ·  새 채널 URL/@핸들/UC-id 붙여넣기`}
+                                        className="mt-0.5 w-full rounded border border-border px-2 py-1 text-xs"
+                                      />
+                                    </label>
                                     {!isIss && (
                                       <>
                                         <label className="text-[11px] text-gray-600">
@@ -372,6 +411,48 @@ export default function LiveChannelSection() {
                                       </>
                                     )}
                                   </div>
+
+                                  {/* 위치 수정: 등록 폼과 동일하게 지도를 클릭해 마커 위치 변경 */}
+                                  {!isIss && (
+                                    <div className="mt-2">
+                                      <div className="mb-1 text-[11px] text-gray-600">
+                                        지도를 클릭해 위치를 수정하세요.
+                                      </div>
+                                      <div className="h-64 w-full overflow-hidden rounded-md border border-border">
+                                        <LeafletMapWrapper
+                                          markers={
+                                            !Number.isNaN(Number(editForm.lat)) &&
+                                            !Number.isNaN(Number(editForm.lng)) &&
+                                            editForm.lat !== "" &&
+                                            editForm.lng !== ""
+                                              ? [
+                                                  {
+                                                    id: "edit-selected",
+                                                    lat: Number(editForm.lat),
+                                                    lng: Number(editForm.lng),
+                                                    location: "선택한 위치",
+                                                  },
+                                                ]
+                                              : []
+                                          }
+                                          center={
+                                            !Number.isNaN(Number(editForm.lat)) &&
+                                            editForm.lat !== ""
+                                              ? {
+                                                  lat: Number(editForm.lat),
+                                                  lng: Number(editForm.lng),
+                                                }
+                                              : EDIT_MAP_CENTER
+                                          }
+                                          zoom={
+                                            editForm.lat !== "" ? 8 : 2
+                                          }
+                                          onMapClick={handleEditMapClick}
+                                          selectedMarkerId="edit-selected"
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
                                   <div className="mt-2 flex gap-2">
                                     <button
                                       type="button"

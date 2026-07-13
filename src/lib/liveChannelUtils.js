@@ -167,10 +167,12 @@ async function scrapeChannelPage(pageUrl) {
     if (!res.ok) return out;
     const html = await res.text();
 
-    // channelId (UC…) — 여러 위치 중 먼저 잡히는 것 사용
+    // channelId (UC…) — 여러 위치 중 먼저 잡히는 것 사용(서버 환경에서 일부 패턴이 없을 수 있어 다중 시도)
     const idM =
       html.match(/"channelId":"(UC[0-9A-Za-z_-]{20,})"/) ||
-      html.match(/<meta itemprop="channelId" content="(UC[0-9A-Za-z_-]{20,})">/) ||
+      html.match(/"externalId":"(UC[0-9A-Za-z_-]{20,})"/) ||
+      html.match(/<meta itemprop="(?:channelId|identifier)" content="(UC[0-9A-Za-z_-]{20,})">/) ||
+      html.match(/<link[^>]+rel="canonical"[^>]+href="https:\/\/www\.youtube\.com\/channel\/(UC[0-9A-Za-z_-]{20,})"/) ||
       html.match(/\/channel\/(UC[0-9A-Za-z_-]{20,})/);
     if (idM) out.channelId = idM[1];
 
