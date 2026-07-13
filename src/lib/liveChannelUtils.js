@@ -145,8 +145,21 @@ function parseChannelInput(input) {
     //    /c/name 또는 /user/name (레거시) → 페이지 스크래핑으로 해석 필요
     const legacy = s.match(/\/(?:c|user)\/([A-Za-z0-9._-]+)/);
     if (legacy) out.legacyPath = s;
+    //    영상/라이브 링크(watch?v=, youtu.be/, /live/, /embed/, /shorts/, /v/) → videoId 로 채널 역추적
+    if (!out.channelId && !out.handle) {
+      const vid =
+        s.match(/[?&]v=([A-Za-z0-9_-]{11})/) ||
+        s.match(/youtu\.be\/([A-Za-z0-9_-]{11})/) ||
+        s.match(/\/(?:live|embed|shorts|v)\/([A-Za-z0-9_-]{11})/);
+      if (vid) out.videoId = vid[1];
+    }
     // URL 인데 아무것도 못 뽑았으면 통째로 스크래핑 대상(legacyPath)로 둔다
-    if (!out.channelId && !out.handle && /youtube\.com|youtu\.be/.test(s)) {
+    if (
+      !out.channelId &&
+      !out.handle &&
+      !out.videoId &&
+      /youtube\.com|youtu\.be/.test(s)
+    ) {
       out.legacyPath = s;
     }
   } catch (error) {
@@ -193,6 +206,26 @@ async function scrapeChannelPage(pageUrl) {
   return out;
 }
 
+// 영상 watch 페이지에서 그 영상의 채널 ID(UC…)를 추출한다.
+// (관리자가 채널 링크 대신 라이브/영상 링크를 붙여넣어도 채널로 등록되도록)
+async function scrapeChannelIdFromVideo(videoId) {
+  try {
+    if (!videoId) return null;
+    const url = `https://www.youtube.com/watch?v=${videoId}&hl=en&gl=US`;
+    const res = await fetch(url, { cache: "no-store", headers: SCRAPE_HEADERS });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const m =
+      html.match(/"channelId":"(UC[0-9A-Za-z_-]{20,})"/) ||
+      html.match(/"externalChannelId":"(UC[0-9A-Za-z_-]{20,})"/) ||
+      html.match(/\/channel\/(UC[0-9A-Za-z_-]{20,})/);
+    return m ? m[1] : null;
+  } catch (error) {
+    console.error("[liveChannelUtils] 영상→채널 스크래핑 실패:", error); // TODO: 배포 전 제거
+    return null;
+  }
+}
+
 // 간단한 HTML 엔티티 디코딩(og:title 등에서 &amp; 등 처리)
 function decodeHtmlEntities(s) {
   try {
@@ -217,6 +250,11 @@ export async function resolveYoutubeChannel(input) {
     let { channelId, handle } = parsed;
     let channelName = "";
 
+    // 영상/라이브 링크만 준 경우: 그 영상의 watch 페이지에서 채널 ID 를 먼저 알아낸다.
+    if (!channelId && !handle && parsed.videoId) {
+      channelId = await scrapeChannelIdFromVideo(parsed.videoId);
+    }
+
     // channelId 가 아직 없으면(핸들/레거시/URL) 페이지를 스크래핑해 보강한다.
     if (!channelId) {
       let pageUrl = "";
@@ -232,7 +270,10 @@ export async function resolveYoutubeChannel(input) {
         handle = handle || scraped.handle;
         channelName = scraped.channelName || "";
       }
-    } else {
+    }
+
+    // channelId 를 알아냈지만 이름/핸들이 비어 있으면 채널 페이지에서 보강한다.
+    if (channelId && (!channelName || !handle)) {
       // channelId 는 있는데 이름/핸들이 없으면 채널 페이지에서 보강(선택)
       const scraped = await scrapeChannelPage(
         `https://www.youtube.com/channel/${channelId}`

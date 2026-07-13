@@ -70,6 +70,22 @@ export async function PATCH(request, context) {
       if (!resolved.ok) {
         return Response.json({ ok: false, error: resolved.error || "채널 해석 실패" }, { status: 400 });
       }
+      // 다른 문서가 이미 같은 채널을 쓰고 있으면 중복이므로 막는다(자기 자신은 제외).
+      try {
+        const dup = await adminDb
+          .collection(COLLECTION)
+          .where("channel_id", "==", resolved.channelId)
+          .get();
+        const conflict = dup.docs.find((d) => d.id !== id);
+        if (conflict) {
+          return Response.json(
+            { ok: false, error: "이미 등록된 채널입니다" },
+            { status: 409 }
+          );
+        }
+      } catch (dupErr) {
+        console.error("[api/live-channels/[id]][PATCH] 중복확인 실패:", dupErr); // TODO: 배포 전 제거
+      }
       update.channel_id = resolved.channelId;
       update.handle = resolved.handle || "";
       // 이름을 명시적으로 안 바꿨으면 해석된 이름으로 갱신
