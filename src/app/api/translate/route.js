@@ -62,6 +62,15 @@ function cacheDocId(target, text) {
   return `${target}_${hash}`;
 }
 
+// (원문) → 감지된 소스 언어 저장용 문서 id.
+// ⚠️ #1 최적화: 한 번 번역하며 감지한 원문 언어를 저장해두고,
+//    이후 "그 언어로 보기" 요청이 오면 번역 호출 없이 원문을 그대로 반환한다.
+//    (예: NASA 영상 영어 제목 → 영어 사용자에겐 번역 호출 생략 → 영상당 실질 16개 언어만 번역)
+function sourceDocId(text) {
+  const hash = crypto.createHash("sha1").update(text).digest("hex");
+  return `src_${hash}`;
+}
+
 // ─── HTML 엔티티 디코드 ────────────────────────────────────────
 // Google v2 는 format:"text" 라도 일부 문자(작은따옴표 등)를 &#39; 형태로 돌려줄 때가 있어
 // 화면에 이상하게 보이지 않도록 흔한 엔티티를 원래 문자로 되돌린다.
@@ -113,6 +122,7 @@ async function callGoogleTranslate(apiKey, texts, target) {
   if (!translations) throw new Error("Google 응답에 translations 배열 없음");
 
   const out = {};
+  const sources = {}; // 원문(감지된 소스 언어) 저장 → 이후 그 언어 요청은 번역 생략
   translations.forEach((tr, i) => {
     const src = texts[i];
     const val =
@@ -120,26 +130,35 @@ async function callGoogleTranslate(apiKey, texts, target) {
         ? decodeHtmlEntities(tr.translatedText).trim()
         : "";
     if (src != null && val) out[src] = val;
+    if (src != null && tr && typeof tr.detectedSourceLanguage === "string") {
+      sources[src] = tr.detectedSourceLanguage;
+    }
   });
-  return out;
+  return { out, sources };
 }
 
 // ─── 청크 1개 번역 (실패/누락 시 1회 재시도) ──────────────────
-// 반환: { 원문: 번역 } (번역된 것만 포함). 두 번 시도해도 전부 실패하면 빈 객체.
+// 반환: { out: {원문:번역}, sources: {원문:감지된소스언어} }. 두 번 시도해도 전부 실패하면 빈 객체.
 // usage: { calls, characters } 누적 객체 — 성공한 호출의 글자 수/호출 수를 집계한다.
 async function translateChunk(apiKey, texts, target, usage) {
   let best = {};
+  let bestSources = {};
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const out = await callGoogleTranslate(apiKey, texts, target);
+      const { out, sources } = await callGoogleTranslate(apiKey, texts, target);
       // 성공한 호출만 사용량 집계 (실패 호출은 대개 과금되지 않음)
       // 글자 수는 소스 문자열 기준(Google 과금 기준). 코드포인트로 세어 한글도 1자로 계산.
       usage.calls += 1;
       usage.characters += texts.reduce((n, s) => n + [...String(s)].length, 0);
       // 더 많이 번역된 결과를 채택
-      if (Object.keys(out).length > Object.keys(best).length) best = out;
+      if (Object.keys(out).length > Object.keys(best).length) {
+        best = out;
+        bestSources = sources;
+      }
       // 전부 번역됐으면 재시도 불필요
-      if (Object.keys(best).length >= texts.length) return best;
+      if (Object.keys(best).length >= texts.length) {
+        return { out: best, sources: bestSources };
+      }
     } catch (error) {
       console.error(
         `[translate] 청크 번역 시도 ${attempt} 실패:`,
@@ -147,7 +166,7 @@ async function translateChunk(apiKey, texts, target, usage) {
       ); // TODO: 배포 전 제거
     }
   }
-  return best;
+  return { out: best, sources: bestSources };
 }
 
 // ─── 사용량 집계 저장 (api_usage/월별 문서에 누적) ─────────────
@@ -232,6 +251,58 @@ export async function POST(request) {
       missing = uniqueTexts.slice();
     }
 
+    // 이 요청 대상 언어의 Google 코드 (원문 언어 비교용)
+    const googleTarget = GOOGLE_LANG[target] || target;
+
+    // ── 1.5) 원문 언어 스킵 ─────────────────────────────────────
+    // 이전에 번역하며 감지해 저장해둔 "원문 언어" 가 이번 target 과 같은 문자열은
+    // 번역이 불필요(원문 자체가 그 언어)하므로 Google 호출 없이 원문 그대로 반환한다.
+    // → 영상당 원문 언어 1개는 번역 비용에서 제외된다.
+    if (missing.length > 0) {
+      try {
+        const srcRefs = missing.map((s) =>
+          adminDb.collection(COLLECTION).doc(sourceDocId(s))
+        );
+        const srcSnaps = await adminDb.getAll(...srcRefs);
+        const skipBatch = adminDb.batch();
+        let skipWrites = 0;
+        const stillMissing = [];
+        missing.forEach((src, i) => {
+          const snap = srcSnaps[i];
+          const detected =
+            snap && snap.exists && snap.data()
+              ? snap.data().detected
+              : null;
+          if (typeof detected === "string" && detected === googleTarget) {
+            // 원문이 이미 target 언어 → 원문 그대로 + (target,원문) 캐시에 원문 저장
+            map[src] = src;
+            const ref = adminDb
+              .collection(COLLECTION)
+              .doc(cacheDocId(target, src));
+            skipBatch.set(ref, {
+              target,
+              source: src,
+              value: src,
+              updated_at: new Date(),
+            });
+            skipWrites += 1;
+          } else {
+            stillMissing.push(src);
+          }
+        });
+        if (skipWrites > 0) {
+          try {
+            await skipBatch.commit();
+          } catch (e) {
+            console.error("[translate] 원문언어 스킵 캐시 저장 실패:", e); // TODO: 배포 전 제거
+          }
+        }
+        missing = stillMissing;
+      } catch (e) {
+        console.error("[translate] 원문 언어 조회 실패(계속 진행):", e); // TODO: 배포 전 제거
+      }
+    }
+
     // ── 2) 캐시에 없는 것만 Google 번역 + 캐시 저장 ──────────────
     // ⚠️ 한 번에 다 보내면 한 번의 실패/누락으로 그 언어 전체가 미번역이 되므로,
     //    작은 청크로 나눠(각 청크 실패는 그 청크에만 영향) 번역한다.
@@ -261,7 +332,9 @@ export async function POST(request) {
         );
 
         chunks.forEach((chunk, ci) => {
-          const out = results[ci] || {};
+          const res = results[ci] || {};
+          const out = res.out || {};
+          const sources = res.sources || {};
           for (const src of chunk) {
             // out 에 키가 있으면 "번역 성공"(원문과 같아도 정식 결과) → 응답+캐시.
             // out 에 없으면 "번역 실패" → 응답 map 에 넣지 않는다(클라이언트가 원문 표시 +
@@ -279,6 +352,21 @@ export async function POST(request) {
                 updated_at: new Date(),
               });
               writeCount += 1;
+
+              // 감지된 원문 언어 저장 → 이후 그 언어 요청은 번역 스킵(#1 최적화).
+              // 최초 저장만 하면 되므로 이미 있으면 덮어써도 무방(merge).
+              const detected = sources[src];
+              if (typeof detected === "string" && detected) {
+                const srcRef = adminDb
+                  .collection(COLLECTION)
+                  .doc(sourceDocId(src));
+                batch.set(
+                  srcRef,
+                  { source: src, detected, updated_at: new Date() },
+                  { merge: true }
+                );
+                writeCount += 1;
+              }
             }
           }
         });
