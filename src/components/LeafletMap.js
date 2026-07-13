@@ -99,19 +99,26 @@ try {
 
 // ─── 마커 아이콘 생성 함수 ─────────────────────────────────────
 // divIcon(HTML) 으로 기존 핀 이미지를 그리고, live 인 마커에는 그 위에 라이브 신호점(.live-dot)을
-// CSS 오버레이로 얹는다. selected(강조) 여부에 따라 크기를 다르게 한다.
-// (클러스터링/클릭 등 기존 동작은 그대로 — 시각적 오버레이만 추가)
-function makeIcon(live, selected) {
+// CSS 오버레이로 얹는다.
+//   - red  : 재생 중인 마커 → 빨간 핀 + 크게(강조)
+//   - glow : 현재 펼쳐진 소분류/도시 목록에 해당하는 마커 → 뒤에 녹색 형광 글로우(핀 형식 유지)
+// (클러스터링/클릭 등 기존 동작은 그대로 — 시각적 표시만 추가)
+function makeIcon(live, red, glow) {
   try {
-    const size = selected ? [37, 61] : [25, 41];
-    const anchor = selected ? [18, 61] : [12, 41];
+    // 재생 중인 마커만 크게(강조), 그 외(글로우/기본)는 기본 크기.
+    const size = red ? [37, 61] : [25, 41];
+    const anchor = red ? [18, 61] : [12, 41];
     const w = size[0];
     const h = size[1];
     // 라이브면 핀 머리 부분 위에 신호점을 얹는다 (globals.css 의 .live-dot 애니메이션 사용)
     const pulse = live ? '<span class="live-dot"></span>' : "";
+    const wrapClass = "lm-marker" + (glow ? " lm-glow" : "");
+    const imgClass = red ? "lm-red" : "";
     const html =
-      `<div class="lm-marker" style="width:${w}px;height:${h}px;">` +
-      `<img src="${ICON_BASE}marker-icon.png" width="${w}" height="${h}" alt="" style="display:block;width:${w}px;height:${h}px;" />` +
+      `<div class="${wrapClass}" style="width:${w}px;height:${h}px;">` +
+      // 형광 글로우 배경(핀보다 먼저 그려져 뒤에 깔림). glow 아닐 땐 CSS 로 숨김.
+      `<span class="lm-glow-bg"></span>` +
+      `<img class="${imgClass}" src="${ICON_BASE}marker-icon.png" width="${w}" height="${h}" alt="" style="display:block;width:${w}px;height:${h}px;" />` +
       pulse +
       `</div>`;
     return L.divIcon({
@@ -283,6 +290,7 @@ function MarkerClusterLayer({
   markers,
   onMarkerClick,
   selectedMarkerId,
+  glowMarkerIds,
   panelOpenRef,
 }) {
   const map = useMap();
@@ -382,8 +390,10 @@ function MarkerClusterLayer({
         const lng = Number(m.lng);
         if (Number.isNaN(lat) || Number.isNaN(lng)) continue;
 
-        const isSelected =
-          selectedMarkerId != null && m.id === selectedMarkerId;
+        // 재생 중(빨강): 현재 선택된 마커. 글로우(녹색): 현재 목록에 속하되 재생 중은 아님.
+        const isRed = selectedMarkerId != null && m.id === selectedMarkerId;
+        const isGlow =
+          !isRed && glowMarkerIds && glowMarkerIds.has(m.id);
         // 실제 라이브 상태(비활성/재생불가가 아니고 is_live 가 false 가 아님)
         const isLive =
           m.auto_disabled !== true &&
@@ -391,8 +401,9 @@ function MarkerClusterLayer({
           m.is_live !== false;
 
         const marker = L.marker([lat, lng], {
-          icon: makeIcon(isLive, isSelected),
-          zIndexOffset: isSelected ? 1000 : 0,
+          icon: makeIcon(isLive, isRed, isGlow),
+          // 재생 중 > 글로우 > 기본 순으로 위에 오게
+          zIndexOffset: isRed ? 1000 : isGlow ? 500 : 0,
         });
 
         // 간단한 팝업 (장소명). 미지정 시 언어별 대체 문구.
@@ -444,7 +455,7 @@ function MarkerClusterLayer({
         console.error("[LeafletMap] 클러스터 정리 실패:", cleanupError); // TODO: 배포 전 제거
       }
     };
-  }, [map, markers, onMarkerClick, selectedMarkerId]);
+  }, [map, markers, onMarkerClick, selectedMarkerId, glowMarkerIds]);
 
   return null;
 }
@@ -527,6 +538,8 @@ export default function LeafletMap({
   onMarkerClick,
   onMapClick,
   selectedMarkerId,
+  // 현재 목록(소분류/도시)에 해당해 녹색 형광 글로우로 표시할 마커 id 집합(Set) — 선택적.
+  glowMarkerIds,
   onMapReady,
   // true 면 최초 1회 "전 세계가 가로로 꽉 차는" 뷰로 맞춘다(메인 지도 전용).
   initialWorldFit = false,
@@ -649,6 +662,7 @@ export default function LeafletMap({
             markers={markers}
             onMarkerClick={onMarkerClick}
             selectedMarkerId={selectedMarkerId}
+            glowMarkerIds={glowMarkerIds}
             panelOpenRef={panelOpenRef}
           />
         </MapContainer>

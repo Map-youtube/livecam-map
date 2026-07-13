@@ -66,6 +66,8 @@ function MapView(
   {
     markers,
     selectedMarkerId,
+    // 현재 목록(소분류/도시)에 해당해 녹색 형광 글로우로 표시할 마커 id 집합(Set)
+    glowMarkerIds,
     mode,
     issEnabled,
     eqEnabled,
@@ -285,6 +287,7 @@ function MapView(
         onMapClick={onMapClick}
         onMarkerClick={onMarkerClick}
         selectedMarkerId={selectedMarkerId}
+        glowMarkerIds={glowMarkerIds}
         onMapReady={handleLeafletReady}
         // 최초 진입 시 전 대륙이 가로로 꽉 차는 세계 뷰(알래스카~러시아)로 시작
         initialWorldFit={true}

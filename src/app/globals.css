@@ -204,3 +204,58 @@ button:disabled,
     box-shadow: 0 0 0 2px var(--color-live);
   }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   지도 마커 상태 표시 (LeafletMap divIcon)
+   - 기본: 파란 핀(현재 형식 유지)
+   - .lm-red  : 재생 중인 마커 → 빨간 핀 (핀 이미지를 빨강으로 색상 변환)
+   - .lm-glow : 현재 펼쳐진 소분류/도시 목록에 해당하는 마커 → 뒷배경 형광 녹색이
+     은은하게 빛나는 표시. (핀 형식은 그대로, 뒤에 녹색 글로우만 얹음)
+   ───────────────────────────────────────────────────────────── */
+
+/* 재생 중(빨간) 핀 — 파란 기본 핀 이미지를 색상 회전으로 빨강 계열로 변환 */
+.lm-marker img.lm-red {
+  filter: hue-rotate(150deg) saturate(2.4) brightness(0.95);
+}
+
+/* 형광 녹색 글로우 배경 (img 보다 먼저 그려져 핀 뒤에 깔린다) */
+.lm-glow-bg {
+  display: none;
+}
+.lm-marker.lm-glow .lm-glow-bg {
+  display: block;
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: 40px;
+  height: 40px;
+  transform: translate(-50%, -50%);
+  border-radius: 9999px;
+  /* 밝은 녹색이 중심에서 바깥으로 부드럽게 사라지는 형광 후광 */
+  background: radial-gradient(
+    circle,
+    rgba(74, 255, 120, 0.9) 0%,
+    rgba(74, 255, 120, 0.45) 42%,
+    rgba(74, 255, 120, 0) 72%
+  );
+  filter: blur(1px);
+  pointer-events: none;
+  animation: lm-glow-pulse 1.6s ease-in-out infinite;
+}
+@keyframes lm-glow-pulse {
+  0%,
+  100% {
+    opacity: 0.6;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.15);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lm-marker.lm-glow .lm-glow-bg {
+    animation: none;
+    opacity: 0.85;
+  }
+}

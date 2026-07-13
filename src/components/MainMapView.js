@@ -664,6 +664,37 @@ export default function MainMapView({ markers, tags, liveChannels }) {
     return expandedMarkerId;
   }, [expandedChannelVideoId, selectedGroupVideos, expandedMarkerId]);
 
+  // 지도에서 "녹색 형광 글로우"로 표시할 마커 id 집합:
+  //   현재 펼쳐진 목록(도시/태그의 영상 목록, 또는 소분류 그룹)에 해당하는 마커들.
+  //   재생 중(빨강) 마커는 LeafletMap 에서 자동으로 글로우에서 제외한다.
+  const glowMarkerIds = useMemo(() => {
+    const set = new Set();
+    try {
+      if (selectedCity || selectedTag) {
+        // 지역(도시/태그) 목록: 그 목록의 마커들 전부.
+        for (const m of filteredMarkers) {
+          if (m && m.id != null) set.add(m.id);
+        }
+      } else if (selectedGroup) {
+        // 라이브 채널 소분류: 그 그룹의 (고정) 채널 마커들. ISS(추적 마커)는 제외.
+        for (const ch of selectedGroupChannels) {
+          if (ch && ch.channel_type !== "iss" && ch.id != null) {
+            set.add(`chan-${ch.id}`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("[MainMapView] 글로우 마커 계산 실패:", error); // TODO: 배포 전 제거
+    }
+    return set;
+  }, [
+    selectedCity,
+    selectedTag,
+    selectedGroup,
+    filteredMarkers,
+    selectedGroupChannels,
+  ]);
+
   // ─── "보이는 패널"의 영상 제목만 현재 언어로 번역(+캐시) ──────
   // 지금 열린 소분류 패널의 영상 제목만 대상 → 낭비 없이 최소 비용. (locale=ko 면 원문 유지)
   const visibleTitles = useMemo(() => {
@@ -723,6 +754,7 @@ export default function MainMapView({ markers, tags, liveChannels }) {
             mode={mode}
             markers={allMapMarkers}
             selectedMarkerId={mapSelectedMarkerId}
+            glowMarkerIds={glowMarkerIds}
             issEnabled={issEnabled}
             eqEnabled={eqEnabled}
             auroraEnabled={auroraEnabled}
