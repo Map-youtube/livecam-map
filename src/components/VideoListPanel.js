@@ -347,6 +347,27 @@ export default function VideoListPanel({
     return () => clearTimeout(timer);
   }, [expandedMarkerId, lastExpandedMarker]);
 
+  // ─── 영상이 열리면 그 영상이 화면에 보이도록 목록을 자동 스크롤 ──
+  // 아래쪽 카드를 눌러도 펼쳐진 영상이 잘리지 않게, 펼침 애니메이션(300ms) 후
+  // 최종 높이 기준으로 영상 영역을 보이는 위치까지 스크롤한다.
+  const videoAreaRef = useRef(null);
+  useEffect(() => {
+    if (expandedMarkerId == null) return;
+    const timer = setTimeout(() => {
+      try {
+        if (videoAreaRef.current) {
+          videoAreaRef.current.scrollIntoView({
+            behavior: "smooth",
+            block: "nearest",
+          });
+        }
+      } catch (error) {
+        console.error("[VideoListPanel] 자동 스크롤 실패:", error); // TODO: 배포 전 제거
+      }
+    }, 360);
+    return () => clearTimeout(timer);
+  }, [expandedMarkerId]);
+
   // 카드를 COLUMNS 개씩 "줄" 단위로 묶는다 — 선택된 카드가 속한 줄 바로 아래에만
   // 영상 영역을 넣기 위함(그 줄의 다음 줄들은 자연스럽게 아래로 밀려난다).
   const rows = [];
@@ -457,15 +478,18 @@ export default function VideoListPanel({
                   </div>
 
                   {/* 이 줄에 선택된 카드가 있을 때만 그 바로 아래에 영상 영역을 편다.
-                      grid-template-rows 0fr↔1fr 트랜지션으로 사이가 벌어지듯 부드럽게
-                      열리고, 그 아래 다음 줄들은 자연스럽게 밀려 내려간다. */}
+                      max-height 트랜지션으로 부드럽게 열리며, 영상이 "실제 높이"를 차지해
+                      아래 줄을 밀어내고 스크롤 영역(scrollHeight)에도 포함된다
+                      → 아래쪽 카드를 눌러도 자동 스크롤로 영상까지 내려갈 수 있다. */}
                   <div
-                    className="grid transition-[grid-template-rows] duration-300 ease-out"
-                    style={{ gridTemplateRows: rowOpen ? "1fr" : "0fr" }}
+                    className="overflow-hidden transition-[max-height] duration-300 ease-out"
+                    style={{ maxHeight: rowOpen ? "600px" : "0px" }}
                   >
-                    <div className="overflow-hidden">
-                      {rowMarker && (
-                        <div className="relative mt-2 overflow-hidden rounded-md">
+                    {rowMarker && (
+                        <div
+                          ref={videoAreaRef}
+                          className="relative mt-2 overflow-hidden rounded-md"
+                        >
                           {/* 접기(X) 버튼 — 영상만 접고 지도 위치는 유지 */}
                           <button
                             type="button"
@@ -495,8 +519,7 @@ export default function VideoListPanel({
                             </div>
                           )}
                         </div>
-                      )}
-                    </div>
+                    )}
                   </div>
                 </Fragment>
               );

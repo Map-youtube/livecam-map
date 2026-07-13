@@ -275,7 +275,10 @@ export default function MainCategoryTree({
 
   // 소분류(말단) 버튼 하나 렌더 — 클릭 시 그 그룹(대/중/소) 선택.
   //   그 소분류에 속한 모든 채널의 라이브가 패널에서 합쳐진다.
+  //   ⚠️ 현재 라이브 영상이 0개인 소분류는 숨긴다(기존 마커와 동일: 재생 없는 항목 미표시).
+  //      아직 개수 로딩 전(undefined)이면 숨기지 않는다(=== 0 만 숨김).
   function renderMinorLeaf(M, mid, mk, channels, indentPx) {
+    if (sumChannelCounts(channels) === 0) return null;
     const active = isGroupSelected(M, mid, mk);
     return (
       <button
@@ -425,6 +428,8 @@ export default function MainCategoryTree({
               (acc, mid) => acc.concat(channelsUnderMiddle(middles[mid])),
               []
             );
+            // 라이브 영상이 하나도 없는(개수 0으로 확정된) 대분류는 숨긴다.
+            if (sumChannelCounts(allInMajor) === 0) return null;
             return (
               <CollapsibleRow
                 key={`ch-major-${M}`}
@@ -445,6 +450,10 @@ export default function MainCategoryTree({
                     return minorKeys.map((mk) =>
                       renderMinorLeaf(M, "", mk, minors[mk], 30)
                     );
+                  }
+                  // 라이브 영상이 하나도 없는(개수 0으로 확정된) 중분류는 숨긴다.
+                  if (sumChannelCounts(channelsUnderMiddle(minors)) === 0) {
+                    return null;
                   }
                   // 중분류(국가) 폴더: 펼치면 소분류(채널명) 말단들이 나온다(3단계).
                   return (

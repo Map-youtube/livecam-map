@@ -508,6 +508,9 @@ export default function MainMapView({ markers, tags, liveChannels }) {
     for (const ch of channelList) {
       if (!ch || !ch.id) continue;
       if (ch.channel_type === "iss") continue; // ISS 는 추적 마커(IssTracker)가 그림
+      // 현재 라이브 영상이 0개로 확정된 채널은 지도에서도 숨긴다(기존 마커와 동일).
+      //   개수 로딩 전(undefined)에는 숨기지 않는다(=== 0 만 숨김).
+      if (channelVideoCounts[ch.id] === 0) continue;
       const lat = Number(ch.lat);
       const lng = Number(ch.lng);
       if (Number.isNaN(lat) || Number.isNaN(lng)) continue;
@@ -521,7 +524,7 @@ export default function MainMapView({ markers, tags, liveChannels }) {
       });
     }
     return out;
-  }, [channelList]);
+  }, [channelList, channelVideoCounts]);
 
   // 지도에 넘길 전체 마커(지역 + 고정 채널)
   const allMapMarkers = useMemo(
