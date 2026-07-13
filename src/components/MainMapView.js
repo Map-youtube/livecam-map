@@ -28,6 +28,7 @@ import Footer from "@/components/Footer";
 import LanguageSelector from "@/components/i18n/LanguageSelector";
 import { useI18n } from "@/components/i18n/LanguageProvider";
 import { useAutoTranslate } from "@/components/i18n/useAutoTranslate";
+import { capitalizeWords } from "@/lib/textCase";
 
 // 지도 기본 중심/줌 (최초 표시)
 const DEFAULT_CENTER = { lat: 20, lng: 0 };
@@ -531,7 +532,7 @@ export default function MainMapView({ markers, tags, liveChannels }) {
   );
 
   const channelPanelTitle = selectedGroup
-    ? `📡 ${tr(selectedGroup.minor || "")}`
+    ? `📡 ${capitalizeWords(tr(selectedGroup.minor || ""))}`
     : "";
 
   return (

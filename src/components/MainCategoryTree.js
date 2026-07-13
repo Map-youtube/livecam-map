@@ -18,6 +18,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/components/i18n/LanguageProvider";
+import { capitalizeWords } from "@/lib/textCase";
 
 // 대륙 표시 순서
 const CONTINENT_ORDER = [
@@ -375,7 +376,7 @@ export default function MainCategoryTree({
             return (
               <CollapsibleRow
                 key={`ch-major-${M}`}
-                label={trFn(M)}
+                label={capitalizeWords(trFn(M))}
                 count={sumChannelCounts(allInMajor)}
                 depth={0}
                 defaultOpen={false}
@@ -403,7 +404,7 @@ export default function MainCategoryTree({
                       }
                     >
                       <span className="w-3 text-ink-muted">·</span>
-                      <span className="truncate">{trFn(mk)}</span>
+                      <span className="truncate">{capitalizeWords(trFn(mk))}</span>
                       <span className="ml-auto font-mono text-[11px] text-ink-muted">
                         {(() => {
                           const c = sumChannelCounts(channels);
