@@ -298,8 +298,41 @@ function MarkerClusterLayer({
         groupRef.current = null;
       }
 
-      // 새 클러스터 그룹 생성
-      const group = L.markerClusterGroup();
+      // 새 클러스터 그룹 생성.
+      // 기본 클러스터 클릭(즉시 fitBounds 확대 = 너무 빠름)과 자동 스파이더파이를 끄고,
+      // 아래 clusterclick 에서 flyToBounds(지속시간 지정)로 "느리고 부드럽게" 확대한다.
+      const group = L.markerClusterGroup({
+        zoomToBoundsOnClick: false,
+        spiderfyOnMaxZoom: false,
+      });
+
+      // 클러스터 클릭 → 부드러운 확대. 더 확대해도 안 나뉘는(같은 위치) 클러스터는 펼침(spiderfy).
+      group.on("clusterclick", (e) => {
+        try {
+          const cluster = e.layer;
+          const bounds = cluster.getBounds();
+          const samePoint = bounds
+            .getNorthEast()
+            .equals(bounds.getSouthWest());
+          const targetZoom = map.getBoundsZoom(bounds, false);
+          if (samePoint || targetZoom <= map.getZoom()) {
+            // 같은 지점에 뭉쳐 더 확대해도 안 나뉘면 마커들을 펼쳐서 보여준다.
+            cluster.spiderfy();
+            return;
+          }
+          // 영상 패널이 열려 있으면 그 폭만큼 왼쪽 여백을 줘 보이는 영역 기준으로 맞춘다.
+          const panelPx =
+            panelOpenRef && panelOpenRef.current
+              ? panelOverlayWidth(map.getSize().x)
+              : 0;
+          map.flyToBounds(bounds, {
+            duration: 1.0, // 기본 즉시확대보다 느리고 부드럽게 (초)
+            paddingTopLeft: panelPx > 0 ? [panelPx, 0] : [0, 0],
+          });
+        } catch (clusterError) {
+          console.error("[LeafletMap] 클러스터 클릭 처리 실패:", clusterError); // TODO: 배포 전 제거
+        }
+      });
 
       const list = Array.isArray(markers) ? markers : [];
       for (const m of list) {
