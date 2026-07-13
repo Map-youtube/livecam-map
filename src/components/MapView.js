@@ -184,6 +184,34 @@ function MapView(
     [flyToLocation]
   );
 
+  // ─── 공통 인터페이스: 패널 닫힘 시 중심 복원 ─────────────────
+  // 패널(왼쪽 오버레이)이 닫히면, 열렸을 때 "보이는 영역 중앙"에 있던 지점을
+  // 전체 지도 중앙으로 부드럽게 옮긴다. (여는 쪽에서 준 오프셋을 되돌리는 것)
+  const recenterForPanelClose = useCallback(() => {
+    try {
+      if (mode === "3d") {
+        if (
+          cesiumApiRef.current &&
+          cesiumApiRef.current.recenterForPanelClose
+        ) {
+          cesiumApiRef.current.recenterForPanelClose();
+        }
+        return;
+      }
+      if (!leafletMap) return;
+      const offset = panelOverlayWidth(leafletMap.getSize().x);
+      if (offset <= 0) return;
+      const zoom = leafletMap.getZoom();
+      const pt = leafletMap.project(leafletMap.getCenter(), zoom);
+      // 중심을 오른쪽(동쪽)으로 패널 폭의 절반만큼 옮김 → 보이던 중앙이 전체 중앙으로.
+      pt.x += offset / 2;
+      const newCenter = leafletMap.unproject(pt, zoom);
+      leafletMap.panTo(newCenter, { animate: true, duration: 0.6 });
+    } catch (error) {
+      console.error("[MapView] recenterForPanelClose 실패:", error); // TODO: 배포 전 제거
+    }
+  }, [mode, leafletMap]);
+
   // ─── 공통 인터페이스: 대륙/국가/도시 선택 시 포커싱 ──────────
   const highlightSelection = useCallback(
     (type, value) => {
@@ -215,8 +243,13 @@ function MapView(
 
   useImperativeHandle(
     ref,
-    () => ({ flyToLocation, focusMarker, highlightSelection }),
-    [flyToLocation, focusMarker, highlightSelection]
+    () => ({
+      flyToLocation,
+      focusMarker,
+      highlightSelection,
+      recenterForPanelClose,
+    }),
+    [flyToLocation, focusMarker, highlightSelection, recenterForPanelClose]
   );
 
   // ─── 렌더 ────────────────────────────────────────────────────
@@ -235,6 +268,8 @@ function MapView(
           eqEnabled={eqEnabled}
           auroraEnabled={auroraEnabled}
           disasterEnabled={disasterEnabled}
+          // 패널이 지도를 덮은 만큼 마커를 "보이는 영역" 중앙에 오도록 카메라 보정
+          panelOpenRef={panelOpenRef}
         />
       </div>
     );

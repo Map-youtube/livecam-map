@@ -37,6 +37,7 @@ import {
   toCesiumCoordRaw,
   toCesiumRectangle,
   zoomToCesiumHeight,
+  panelOverlayWidth,
 } from "@/lib/coordUtils";
 
 // ─── 갱신 주기 상수 (기존 레이어들과 동일) ────────────────────
@@ -125,6 +126,8 @@ export default function CesiumMapView({
   eqEnabled = false,
   auroraEnabled = false,
   disasterEnabled = false,
+  // 영상 패널이 지도 왼쪽을 덮고 있는지(현재값) — 카메라 수평 보정 여부 판단.
+  panelOpenRef,
 }) {
   // 다국어: 팝업/오버레이 문자열(t) + 날짜 로케일(locale)
   const { t, locale } = useI18n();
@@ -159,6 +162,31 @@ export default function CesiumMapView({
     }
   }
 
+  // ─── 카메라 수평 보정 (영상 패널 오버레이 대응) ──────────────
+  // pixels > 0 이면 화면 내용을 오른쪽으로 그만큼 옮긴다(마커가 보이는 오른쪽 영역 중앙으로).
+  // pixels < 0 이면 왼쪽으로(패널 닫힘 시 전체 중앙으로 복원).
+  // top-down 근사: 화면 가로가 덮는 지상거리 ≈ 2*height*tan(fov/2).
+  function shiftContentHorizontally(pixels) {
+    try {
+      const viewer = viewerRef.current;
+      if (!viewer || viewer.isDestroyed() || !pixels) return;
+      const cam = viewer.camera;
+      const canvas = viewer.scene.canvas;
+      const w = canvas.clientWidth || canvas.width || 1;
+      const h =
+        (cam.positionCartographic && cam.positionCartographic.height) || 0;
+      if (h <= 0) return;
+      const fov = (cam.frustum && cam.frustum.fov) || Math.PI / 3;
+      const metersPerPixel = (2 * h * Math.tan(fov / 2)) / w;
+      const meters = metersPerPixel * pixels;
+      // 카메라를 왼쪽으로 옮기면 화면 내용은 오른쪽으로 이동한다(moveLeft = content right).
+      cam.moveLeft(meters);
+      requestRender();
+    } catch (error) {
+      // 보정 실패는 무시(이동 자체는 이미 됨)
+    }
+  }
+
   // ─── 엔티티 배열 제거 헬퍼 ────────────────────────────────────
   function removeEntities(entRef) {
     try {
@@ -186,10 +214,25 @@ export default function CesiumMapView({
         const Cesium = cesiumRef.current;
         if (!viewer || !Cesium || viewer.isDestroyed() || !target) return;
 
+        // 영상 패널이 지도 왼쪽을 덮고 있으면, 이동 완료 후 화면 내용을 오른쪽으로 보정해
+        // 목표 지점이 "보이는(오른쪽) 영역" 중앙에 오게 한다. (2D 와 동일한 컨셉)
+        const canvas = viewer.scene.canvas;
+        const panelPx =
+          panelOpenRef && panelOpenRef.current
+            ? panelOverlayWidth(canvas.clientWidth || canvas.width || 0)
+            : 0;
+        const onArrive = () => {
+          if (panelPx > 0) shiftContentHorizontally(panelPx / 2);
+        };
+
         // ① 경계 사각형(대륙/국가)이 있으면 그 영역이 화면에 꽉 차도록 자동 계산 (훨씬 정확)
         const rect = toCesiumRectangle(Cesium, target);
         if (rect) {
-          viewer.camera.flyTo({ destination: rect, duration: 1.2 });
+          viewer.camera.flyTo({
+            destination: rect,
+            duration: 1.2,
+            complete: onArrive,
+          });
           requestRender();
           return;
         }
@@ -201,10 +244,26 @@ export default function CesiumMapView({
         const heightM = zoomToCesiumHeight(target.zoom);
         const dest = toCesiumCoordRaw(Cesium, lat, lng, heightM / 1000);
         if (!dest) return;
-        viewer.camera.flyTo({ destination: dest, duration: 1.2 });
+        viewer.camera.flyTo({
+          destination: dest,
+          duration: 1.2,
+          complete: onArrive,
+        });
         requestRender();
       } catch (error) {
         console.error("[CesiumMapView] flyToLocation 실패:", error); // TODO: 배포 전 제거
+      }
+    },
+    // 패널 닫힘 시 중심 복원: 열렸을 때 오른쪽으로 보정했던 만큼 왼쪽으로 되돌린다.
+    recenterForPanelClose() {
+      try {
+        const viewer = viewerRef.current;
+        if (!viewer || viewer.isDestroyed()) return;
+        const canvas = viewer.scene.canvas;
+        const panelPx = panelOverlayWidth(canvas.clientWidth || canvas.width || 0);
+        if (panelPx > 0) shiftContentHorizontally(-panelPx / 2);
+      } catch (error) {
+        console.error("[CesiumMapView] recenterForPanelClose 실패:", error); // TODO: 배포 전 제거
       }
     },
     // 특정 마커로 이동 (자기 좌표 사용 — 클로저 고정값 아님)

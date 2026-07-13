@@ -251,11 +251,24 @@ export default function MainMapView({ markers, tags, liveChannels }) {
   // ─── 패널 닫기 ───────────────────────────────────────────────
   const closePanel = useCallback(() => {
     try {
+      const wasOpen = panelOpenRef.current;
       setSelectedCity(null);
       setSelectedTag(null);
       setSelectedGroup(null);
+      setExpandedChannelVideoId(null);
+      setAutoplayGroupFirst(false);
       issSelectedRef.current = false;
       setExpandedMarkerId(null);
+      panelOpenRef.current = false;
+      // 패널이 열려 있었다면, (패널을 뺀) 전체 지도 기준으로 중심을 다시 맞춘다.
+      // → 열렸을 때 "보이는 영역 중앙"에 있던 지점이 닫힌 뒤엔 전체 화면 중앙으로 온다. (2D/3D 공통)
+      if (
+        wasOpen &&
+        mapRef.current &&
+        typeof mapRef.current.recenterForPanelClose === "function"
+      ) {
+        mapRef.current.recenterForPanelClose();
+      }
     } catch (error) {
       console.error("[MainMapView] 패널 닫기 실패:", error); // TODO: 배포 전 제거
     }
