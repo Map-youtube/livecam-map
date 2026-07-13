@@ -20,6 +20,7 @@ const DEFAULT_CENTER = { lat: 20, lng: 0 };
 
 export default function LiveChannelForm({ onRegistered, existingChannels }) {
   const [major, setMajor] = useState("");
+  const [middle, setMiddle] = useState(""); // 중분류(국가) — 방송 채널용. 우주 등 2단계면 비워둠.
   const [minor, setMinor] = useState("");
   const [channelInput, setChannelInput] = useState("");
   const [lat, setLat] = useState("");
@@ -97,6 +98,17 @@ export default function LiveChannelForm({ onRegistered, existingChannels }) {
     };
   }, [channelInput]);
 
+  // 소분류(채널명) 자동 채움: 채널이 확인되면(available) 소분류가 비어 있을 때
+  // 해석된 채널명을 소분류로 넣는다. (소분류 = 방송국/채널명. 관리자가 수정 가능)
+  useEffect(() => {
+    if (channelStatus === "available" && resolvedName && minor.trim() === "") {
+      setMinor(resolvedName);
+    }
+    // minor 를 의존성에 넣으면 지우자마자 다시 채워져 수정이 불가하므로 제외.
+    // resolvedName/상태 변화 시에만 1회 채운다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channelStatus, resolvedName]);
+
   // 기존 분류 자동완성 목록.
   //   - 상위(LiveChannelSection)가 existingChannels 를 주면 그대로 사용.
   //   - 안 주면(단독 사용 시) 자체 조회한 목록(selfChannels)을 사용.
@@ -131,16 +143,28 @@ export default function LiveChannelForm({ onRegistered, existingChannels }) {
     return [...set].sort((a, b) => a.localeCompare(b, "ko"));
   }, [channels]);
 
-  // 소분류 자동완성 후보 (선택된 대분류 기준, 없으면 전체)
+  // 중분류(국가) 자동완성 후보 (선택된 대분류 기준, 없으면 전체)
+  const middleOptions = useMemo(() => {
+    const set = new Set();
+    for (const c of channels) {
+      if (!c || !c.middle_category) continue;
+      if (major && c.major_category !== major) continue;
+      set.add(c.middle_category);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, "ko"));
+  }, [channels, major]);
+
+  // 소분류 자동완성 후보 (선택된 대분류/중분류 기준, 없으면 상위 기준)
   const minorOptions = useMemo(() => {
     const set = new Set();
     for (const c of channels) {
       if (!c || !c.minor_category) continue;
       if (major && c.major_category !== major) continue;
+      if (middle && (c.middle_category || "") !== middle) continue;
       set.add(c.minor_category);
     }
     return [...set].sort((a, b) => a.localeCompare(b, "ko"));
-  }, [channels, major]);
+  }, [channels, major, middle]);
 
   // 지도 클릭 → 좌표 반영
   function handleMapClick(coord) {
@@ -179,7 +203,9 @@ export default function LiveChannelForm({ onRegistered, existingChannels }) {
     setExistingChannel(null);
     setLat("");
     setLng("");
-    // 대/소분류는 연속 등록 편의를 위해 유지한다(같은 분류로 여러 채널 등록하는 경우가 많음).
+    // 대분류·중분류(국가)는 연속 등록 편의를 위해 유지한다(같은 국가에 여러 채널 등록이 흔함).
+    // 소분류(=채널명)는 채널마다 다르므로 비워서 다음 채널명이 자동으로 채워지게 한다.
+    setMinor("");
   }
 
   async function handleSubmit() {
@@ -203,6 +229,7 @@ export default function LiveChannelForm({ onRegistered, existingChannels }) {
         body: JSON.stringify({
           channel_input: channelInput.trim(),
           major_category: major.trim(),
+          middle_category: middle.trim(),
           minor_category: minor.trim(),
           lat: latNum,
           lng: lngNum,
@@ -212,7 +239,10 @@ export default function LiveChannelForm({ onRegistered, existingChannels }) {
       if (res.ok && data.ok) {
         const name =
           (data.channel && data.channel.channel_name) || "채널";
-        setMessage(`등록되었습니다: ${name} (${major.trim()} > ${minor.trim()})`);
+        const path = [major.trim(), middle.trim(), minor.trim()]
+          .filter(Boolean)
+          .join(" > ");
+        setMessage(`등록되었습니다: ${name} (${path})`);
         resetForm();
         if (typeof onRegistered === "function") onRegistered();
       } else {
@@ -245,10 +275,11 @@ export default function LiveChannelForm({ onRegistered, existingChannels }) {
           1. 분류 <span className="text-red-500">*</span>
         </label>
         <p className="text-xs text-gray-500">
-          대분류·소분류를 직접 입력하세요. 이전에 쓴 분류는 자동완성으로 다시 선택할 수 있습니다.
-          (예: 대분류 <strong>방송</strong> / 소분류 <strong>한국</strong>)
+          방송 채널은 <strong>대분류 방송 / 중분류 국가 / 소분류 채널명</strong> 3단계로 등록합니다.
+          소분류(채널명)는 채널을 확인하면 자동으로 채워지며 수정할 수 있습니다.
+          이전에 쓴 분류는 자동완성으로 다시 선택할 수 있습니다.
         </p>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <div>
             <label className="block text-xs text-gray-600">대분류</label>
             <input
@@ -256,7 +287,7 @@ export default function LiveChannelForm({ onRegistered, existingChannels }) {
               list="lc-major-options"
               value={major}
               onChange={(e) => setMajor(e.target.value)}
-              placeholder="예: 방송 / 우주"
+              placeholder="예: 방송"
               className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
             />
             <datalist id="lc-major-options">
@@ -266,13 +297,29 @@ export default function LiveChannelForm({ onRegistered, existingChannels }) {
             </datalist>
           </div>
           <div>
-            <label className="block text-xs text-gray-600">소분류</label>
+            <label className="block text-xs text-gray-600">중분류 (국가)</label>
+            <input
+              type="text"
+              list="lc-middle-options"
+              value={middle}
+              onChange={(e) => setMiddle(e.target.value)}
+              placeholder="예: 한국 / 미국"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
+            />
+            <datalist id="lc-middle-options">
+              {middleOptions.map((m) => (
+                <option key={m} value={m} />
+              ))}
+            </datalist>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600">소분류 (채널명)</label>
             <input
               type="text"
               list="lc-minor-options"
               value={minor}
               onChange={(e) => setMinor(e.target.value)}
-              placeholder="예: 한국 / 미국 / ISS"
+              placeholder="채널 확인 시 자동 입력"
               className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
             />
             <datalist id="lc-minor-options">
@@ -330,8 +377,14 @@ export default function LiveChannelForm({ onRegistered, existingChannels }) {
             {resolvedName && <p className="mt-1">채널: {resolvedName}</p>}
             {existingChannel && (
               <p className="mt-1">
-                기존 등록 위치: {existingChannel.major_category || "-"} &gt;{" "}
-                {existingChannel.minor_category || "-"}
+                기존 등록 위치:{" "}
+                {[
+                  existingChannel.major_category,
+                  existingChannel.middle_category,
+                  existingChannel.minor_category,
+                ]
+                  .filter(Boolean)
+                  .join(" > ") || "-"}
               </p>
             )}
             <p className="mt-1">중복 등록을 막기 위해 등록 버튼이 비활성화됩니다.</p>
@@ -399,7 +452,7 @@ export default function LiveChannelForm({ onRegistered, existingChannels }) {
         </button>
         {!canSubmit && !submitting && (
           <p className="mt-2 text-xs text-gray-500">
-            대분류·소분류·채널·위치를 모두 채우면 등록할 수 있습니다.
+            대분류·소분류·채널·위치를 모두 채우면 등록할 수 있습니다. (중분류는 선택)
           </p>
         )}
       </div>

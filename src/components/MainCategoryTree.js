@@ -109,7 +109,7 @@ export default function MainCategoryTree({
   liveChannels,
   channelVideoCounts,
   onSelectChannelGroup,
-  selectedGroup, // { major, minor } | null
+  selectedGroup, // { major, middle, minor } | null  (middle 은 중분류 없으면 "")
 }) {
   const markerList = Array.isArray(markers) ? markers : [];
   const tagList = Array.isArray(tags) ? tags : [];
@@ -204,17 +204,21 @@ export default function MainCategoryTree({
     });
   }, [tree]);
 
-  // ─── 자동 라이브 채널: 대분류 > 소분류 > 채널 트리 구성 ────────
+  // ─── 자동 라이브 채널: 대분류 > (중분류) > 소분류 트리 구성 ─────
+  //   byMajor[M][mid][minor] = [채널들].  mid("중분류/국가")가 없으면 "" 로 저장 →
+  //   렌더링 시 중분류 폴더 없이 소분류를 대분류 바로 아래에 표시(우주/ISS 처럼 2단계).
   const channelTree = useMemo(() => {
     const byMajor = {};
     try {
       for (const ch of channelList) {
         if (!ch || !ch.id) continue;
         const M = ch.major_category || "(미분류)";
+        const mid = ch.middle_category || ""; // 중분류(국가). 없으면 "".
         const m = ch.minor_category || "(미분류)";
         if (!byMajor[M]) byMajor[M] = {};
-        if (!byMajor[M][m]) byMajor[M][m] = [];
-        byMajor[M][m].push(ch);
+        if (!byMajor[M][mid]) byMajor[M][mid] = {};
+        if (!byMajor[M][mid][m]) byMajor[M][mid][m] = [];
+        byMajor[M][mid][m].push(ch);
       }
     } catch (error) {
       console.error("[MainCategoryTree] 채널 트리 구성 실패:", error); // TODO: 배포 전 제거
@@ -241,17 +245,62 @@ export default function MainCategoryTree({
     }
     return known ? sum : undefined;
   }
-  // 현재 선택된 소분류(그룹)인지 판별
-  function isGroupSelected(major, minor) {
+  // 한 중분류(mid) 아래 모든 소분류의 채널을 평평하게 모은다(개수 배지용).
+  function channelsUnderMiddle(midObj) {
+    const acc = [];
+    for (const mk of Object.keys(midObj)) acc.push(...midObj[mk]);
+    return acc;
+  }
+  // 현재 선택된 소분류(그룹)인지 판별 (대/중/소 모두 일치)
+  function isGroupSelected(major, middle, minor) {
     return (
       selectedGroup &&
       selectedGroup.major === major &&
+      (selectedGroup.middle || "") === (middle || "") &&
       selectedGroup.minor === minor
     );
   }
   // 이 대분류 안에 현재 선택된 소분류가 있는지(조상 강조/자동펼침용)
   function majorHasSelected(major) {
     return Boolean(selectedGroup && selectedGroup.major === major);
+  }
+  // 이 중분류(대분류+중분류) 안에 현재 선택된 소분류가 있는지
+  function middleHasSelected(major, middle) {
+    return Boolean(
+      selectedGroup &&
+        selectedGroup.major === major &&
+        (selectedGroup.middle || "") === (middle || "")
+    );
+  }
+
+  // 소분류(말단) 버튼 하나 렌더 — 클릭 시 그 그룹(대/중/소) 선택.
+  //   그 소분류에 속한 모든 채널의 라이브가 패널에서 합쳐진다.
+  function renderMinorLeaf(M, mid, mk, channels, indentPx) {
+    const active = isGroupSelected(M, mid, mk);
+    return (
+      <button
+        key={`ch-minor-${M}-${mid}-${mk}`}
+        type="button"
+        onClick={() =>
+          typeof onSelectChannelGroup === "function" &&
+          onSelectChannelGroup({ major: M, middle: mid, minor: mk })
+        }
+        style={{ paddingLeft: `${indentPx}px` }}
+        className={
+          "flex w-full items-center gap-1 rounded-md py-1 pr-1 text-left text-xs transition hover:bg-brand-light " +
+          (active ? "bg-blue-100 font-bold text-blue-800" : "text-ink")
+        }
+      >
+        <span className="w-3 text-ink-muted">·</span>
+        <span className="truncate">{capitalizeWords(trFn(mk))}</span>
+        <span className="ml-auto font-mono text-[11px] text-ink-muted">
+          {(() => {
+            const c = sumChannelCounts(channels);
+            return typeof c === "number" ? c : "";
+          })()}
+        </span>
+      </button>
+    );
   }
 
   return (
@@ -364,13 +413,16 @@ export default function MainCategoryTree({
               지역(대륙/국가/도시)과 별개 데이터. 현재 우주 항목이 있던 자리처럼
               지역 목록 바로 아래에, 대분류 > 소분류 > 채널 로 표시한다. */}
           {channelMajorKeys.map((M) => {
-            const minors = channelTree[M];
-            const minorKeys = Object.keys(minors).sort((a, b) =>
-              a.localeCompare(b, "ko")
-            );
-            // 이 대분류 하위 전체 채널
-            const allInMajor = minorKeys.reduce(
-              (acc, mk) => acc.concat(minors[mk]),
+            const middles = channelTree[M];
+            // 중분류 키: 실제 국가명(비어있지 않은) 먼저, "" (중분류 없음)는 뒤로.
+            const middleKeys = Object.keys(middles).sort((a, b) => {
+              if (a === "" && b !== "") return 1;
+              if (b === "" && a !== "") return -1;
+              return a.localeCompare(b, "ko");
+            });
+            // 이 대분류 하위 전체 채널(개수 배지용)
+            const allInMajor = middleKeys.reduce(
+              (acc, mid) => acc.concat(channelsUnderMiddle(middles[mid])),
               []
             );
             return (
@@ -383,35 +435,32 @@ export default function MainCategoryTree({
                 forceOpen={majorHasSelected(M)}
                 ancestorActive={majorHasSelected(M)}
               >
-                {/* 소분류가 말단(클릭 대상). 그 소분류에 속한 모든 채널의 라이브가 합쳐진다. */}
-                {minorKeys.map((mk) => {
-                  const channels = minors[mk];
-                  const active = isGroupSelected(M, mk);
+                {middleKeys.map((mid) => {
+                  const minors = middles[mid];
+                  const minorKeys = Object.keys(minors).sort((a, b) =>
+                    a.localeCompare(b, "ko")
+                  );
+                  // 중분류가 없는(mid==="") 채널: 소분류를 대분류 바로 아래 말단으로(2단계).
+                  if (mid === "") {
+                    return minorKeys.map((mk) =>
+                      renderMinorLeaf(M, "", mk, minors[mk], 30)
+                    );
+                  }
+                  // 중분류(국가) 폴더: 펼치면 소분류(채널명) 말단들이 나온다(3단계).
                   return (
-                    <button
-                      key={`ch-minor-${M}-${mk}`}
-                      type="button"
-                      onClick={() =>
-                        typeof onSelectChannelGroup === "function" &&
-                        onSelectChannelGroup({ major: M, minor: mk })
-                      }
-                      style={{ paddingLeft: "30px" }}
-                      className={
-                        "flex w-full items-center gap-1 rounded-md py-1 pr-1 text-left text-xs transition hover:bg-brand-light " +
-                        (active
-                          ? "bg-blue-100 font-bold text-blue-800"
-                          : "text-ink")
-                      }
+                    <CollapsibleRow
+                      key={`ch-middle-${M}-${mid}`}
+                      label={capitalizeWords(trFn(mid))}
+                      count={sumChannelCounts(channelsUnderMiddle(minors))}
+                      depth={1}
+                      defaultOpen={false}
+                      forceOpen={middleHasSelected(M, mid)}
+                      ancestorActive={middleHasSelected(M, mid)}
                     >
-                      <span className="w-3 text-ink-muted">·</span>
-                      <span className="truncate">{capitalizeWords(trFn(mk))}</span>
-                      <span className="ml-auto font-mono text-[11px] text-ink-muted">
-                        {(() => {
-                          const c = sumChannelCounts(channels);
-                          return typeof c === "number" ? c : "";
-                        })()}
-                      </span>
-                    </button>
+                      {minorKeys.map((mk) =>
+                        renderMinorLeaf(M, mid, mk, minors[mk], 42)
+                      )}
+                    </CollapsibleRow>
                   );
                 })}
               </CollapsibleRow>

@@ -61,6 +61,7 @@ export async function GET(request) {
           id: d.id,
           channel_name: data.channel_name || "",
           major_category: data.major_category || "",
+          middle_category: data.middle_category || "",
           minor_category: data.minor_category || "",
         };
       }

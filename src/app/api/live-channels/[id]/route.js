@@ -50,6 +50,7 @@ export async function PATCH(request, context) {
 
     // 분류/표시명/위치/활성 여부 (전달된 것만)
     if (typeof body.major_category === "string") update.major_category = body.major_category.trim();
+    if (typeof body.middle_category === "string") update.middle_category = body.middle_category.trim();
     if (typeof body.minor_category === "string") update.minor_category = body.minor_category.trim();
     if (typeof body.channel_name === "string") update.channel_name = body.channel_name.trim();
     if (typeof body.location === "string") update.location = body.location.trim();

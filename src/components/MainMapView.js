@@ -105,6 +105,7 @@ export default function MainMapView({ markers, tags, liveChannels }) {
     for (const ch of channelList) {
       if (!ch) continue;
       if (ch.major_category) set.add(String(ch.major_category));
+      if (ch.middle_category) set.add(String(ch.middle_category));
       if (ch.minor_category) set.add(String(ch.minor_category));
       if (ch.channel_name) set.add(String(ch.channel_name));
     }
@@ -130,7 +131,7 @@ export default function MainMapView({ markers, tags, liveChannels }) {
   const [disasterEnabled, setDisasterEnabled] = useState(false); // 자연재해
 
   // ─── 자동 라이브 채널 선택 상태 (방송/우주 패널) ────────────
-  // selectedGroup: 현재 선택된 소분류 { major, minor }(없으면 null).
+  // selectedGroup: 현재 선택된 소분류 { major, middle, minor }(없으면 null. middle 은 중분류 없으면 "").
   //   소분류가 곧 "영상 목록"이며, 그 소분류에 속한 모든 채널의 라이브가 합쳐진다.
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [issInfo, setIssInfo] = useState(null); // ISS 위치 정보(iss 채널 포함 그룹 선택 시만)
@@ -294,13 +295,14 @@ export default function MainMapView({ markers, tags, liveChannels }) {
     }
   }, []);
 
-  // 특정 소분류(그룹)에 속한 채널들
+  // 특정 소분류(그룹)에 속한 채널들 (대/중/소 모두 일치)
   const getChannelsInGroup = useCallback(
-    (major, minor) =>
+    (major, middle, minor) =>
       channelList.filter(
         (c) =>
           c &&
           (c.major_category || "") === major &&
+          (c.middle_category || "") === (middle || "") &&
           (c.minor_category || "") === minor
       ),
     [channelList]
@@ -313,12 +315,13 @@ export default function MainMapView({ markers, tags, liveChannels }) {
     (group) => {
       try {
         if (!group || !group.major || !group.minor) return;
+        const middle = group.middle || "";
         setSelectedCity(null);
         setSelectedTag(null);
         setExpandedMarkerId(null);
-        setSelectedGroup({ major: group.major, minor: group.minor });
+        setSelectedGroup({ major: group.major, middle, minor: group.minor });
 
-        const channels = getChannelsInGroup(group.major, group.minor);
+        const channels = getChannelsInGroup(group.major, middle, group.minor);
         const hasIss = channels.some((c) => c && c.channel_type === "iss");
         issSelectedRef.current = hasIss;
 
@@ -367,6 +370,7 @@ export default function MainMapView({ markers, tags, liveChannels }) {
     if (issChannel) {
       handleSelectChannelGroup({
         major: issChannel.major_category || "",
+        middle: issChannel.middle_category || "",
         minor: issChannel.minor_category || "",
       });
     }
@@ -384,6 +388,7 @@ export default function MainMapView({ markers, tags, liveChannels }) {
           const ch = marker.__channel;
           handleSelectChannelGroup({
             major: ch.major_category || "",
+            middle: ch.middle_category || "",
             minor: ch.minor_category || "",
           });
           return;
@@ -508,7 +513,11 @@ export default function MainMapView({ markers, tags, liveChannels }) {
   // 그 소분류에 속한 모든 채널의 라이브 영상을 하나의 목록으로 합친다.
   const selectedGroupChannels = useMemo(() => {
     if (!selectedGroup) return [];
-    return getChannelsInGroup(selectedGroup.major, selectedGroup.minor);
+    return getChannelsInGroup(
+      selectedGroup.major,
+      selectedGroup.middle,
+      selectedGroup.minor
+    );
   }, [selectedGroup, getChannelsInGroup]);
 
   const selectedGroupVideos = useMemo(() => {

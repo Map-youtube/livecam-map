@@ -109,15 +109,17 @@ export default function LiveChannelSection() {
     }
   }
 
-  // ─── 카테고리(대/소분류) 이름 일괄 변경 ─────────────────────
-  async function handleRename(scope, major, minor) {
-    const cur = scope === "major" ? major : minor;
-    const newName = window.prompt(
+  // ─── 카테고리(대/중/소분류) 이름 일괄 변경 ───────────────────
+  async function handleRename(scope, major, middle, minor) {
+    const cur =
+      scope === "major" ? major : scope === "middle" ? middle : minor;
+    const promptMsg =
       scope === "major"
         ? `대분류 '${major}' 의 새 이름을 입력하세요 (이 대분류의 모든 채널에 적용):`
-        : `소분류 '${minor}' 의 새 이름을 입력하세요 (대분류 '${major}' 안 이 소분류의 모든 채널에 적용):`,
-      cur
-    );
+        : scope === "middle"
+        ? `중분류 '${middle}' 의 새 이름을 입력하세요 (대분류 '${major}' 안 이 중분류의 모든 채널에 적용):`
+        : `소분류 '${minor}' 의 새 이름을 입력하세요 (이 소분류의 모든 채널에 적용):`;
+    const newName = window.prompt(promptMsg, cur);
     if (newName == null) return; // 취소
     const trimmed = newName.trim();
     if (!trimmed || trimmed === cur) return;
@@ -134,7 +136,7 @@ export default function LiveChannelSection() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ scope, major, minor, newName: trimmed }),
+        body: JSON.stringify({ scope, major, middle, minor, newName: trimmed }),
       });
       const data = await res.json();
       if (res.ok && data.ok) {
@@ -157,6 +159,7 @@ export default function LiveChannelSection() {
     setEditForm({
       channel_name: ch.channel_name || "",
       major_category: ch.major_category || "",
+      middle_category: ch.middle_category || "",
       minor_category: ch.minor_category || "",
       channel_input: "", // 비워두면 기존 채널 유지, 입력하면 그 링크로 교체
       lat: typeof ch.lat === "number" ? String(ch.lat) : "",
@@ -194,6 +197,7 @@ export default function LiveChannelSection() {
       const payload = {
         channel_name: editForm.channel_name,
         major_category: editForm.major_category,
+        middle_category: editForm.middle_category,
         minor_category: editForm.minor_category,
       };
       // 채널 링크를 새로 입력했으면 그 링크로 교체(서버가 재해석). 비우면 기존 채널 유지.
@@ -230,21 +234,32 @@ export default function LiveChannelSection() {
     }
   }
 
-  // ─── 대분류 > 소분류 트리 구성 ───────────────────────────────
+  // ─── 대분류 > (중분류) > 소분류 트리 구성 ─────────────────────
+  //   byMajor[M][mid][minor] = [채널들]. 중분류 없는(우주/ISS) 채널은 mid="".
   const tree = useMemo(() => {
     const byMajor = {};
     for (const ch of channels) {
       if (!ch) continue;
       const M = ch.major_category || "(미분류)";
+      const mid = ch.middle_category || "";
       const m = ch.minor_category || "(미분류)";
       if (!byMajor[M]) byMajor[M] = {};
-      if (!byMajor[M][m]) byMajor[M][m] = [];
-      byMajor[M][m].push(ch);
+      if (!byMajor[M][mid]) byMajor[M][mid] = {};
+      if (!byMajor[M][mid][m]) byMajor[M][mid][m] = [];
+      byMajor[M][mid][m].push(ch);
     }
     return byMajor;
   }, [channels]);
 
   const majorKeys = Object.keys(tree).sort((a, b) => a.localeCompare(b, "ko"));
+  // 중분류 키 정렬: 실제 국가명 먼저, "" (중분류 없음)는 뒤로.
+  function sortMiddleKeys(midObj) {
+    return Object.keys(midObj).sort((a, b) => {
+      if (a === "" && b !== "") return 1;
+      if (b === "" && a !== "") return -1;
+      return a.localeCompare(b, "ko");
+    });
+  }
 
   return (
     <div className="space-y-8">
@@ -272,10 +287,8 @@ export default function LiveChannelSection() {
         ) : (
           <div className="space-y-4">
             {majorKeys.map((M) => {
-              const minors = tree[M];
-              const minorKeys = Object.keys(minors).sort((a, b) =>
-                a.localeCompare(b, "ko")
-              );
+              const middles = tree[M];
+              const middleKeys = sortMiddleKeys(middles);
               return (
                 <div key={M} className="rounded-md border border-border">
                   <div className="flex items-center gap-2 border-b border-border bg-surface px-3 py-2 text-sm font-bold text-ink">
@@ -289,13 +302,19 @@ export default function LiveChannelSection() {
                     </button>
                   </div>
                   <div className="divide-y divide-border">
-                    {minorKeys.map((m) => (
-                      <div key={m} className="px-3 py-2">
+                    {middleKeys.map((mid) => {
+                      const minors = middles[mid];
+                      const minorKeys = Object.keys(minors).sort((a, b) =>
+                        a.localeCompare(b, "ko")
+                      );
+                      // 각 소분류(채널명) 그룹 렌더. 중분류가 있으면 아래에서 폴더로 감싼다.
+                      const minorGroups = minorKeys.map((m) => (
+                      <div key={`${mid}-${m}`} className="px-3 py-2">
                         <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-ink-muted">
                           <span>{m}</span>
                           <button
                             type="button"
-                            onClick={() => handleRename("minor", M, m)}
+                            onClick={() => handleRename("minor", M, mid, m)}
                             className="rounded border border-border px-1.5 py-0.5 text-[11px] font-normal text-gray-600 hover:bg-gray-100"
                           >
                             소분류명 변경
@@ -349,7 +368,22 @@ export default function LiveChannelSection() {
                                       />
                                     </label>
                                     <label className="text-[11px] text-gray-600">
-                                      소분류
+                                      중분류 (국가)
+                                      <input
+                                        type="text"
+                                        value={editForm.middle_category}
+                                        onChange={(e) =>
+                                          setEditForm((f) => ({
+                                            ...f,
+                                            middle_category: e.target.value,
+                                          }))
+                                        }
+                                        placeholder="비우면 2단계"
+                                        className="mt-0.5 w-full rounded border border-border px-2 py-1 text-xs"
+                                      />
+                                    </label>
+                                    <label className="text-[11px] text-gray-600">
+                                      소분류 (채널명)
                                       <input
                                         type="text"
                                         value={editForm.minor_category}
@@ -536,7 +570,28 @@ export default function LiveChannelSection() {
                           })}
                         </ul>
                       </div>
-                    ))}
+                      ));
+                      // 중분류 없음(우주/ISS 등 2단계): 소분류 그룹을 그대로 나열.
+                      if (mid === "") return minorGroups;
+                      // 중분류(국가) 폴더로 감싼다(3단계: 방송 > 국가 > 채널명).
+                      return (
+                        <div key={`mid-${M}-${mid}`}>
+                          <div className="flex items-center gap-2 bg-surface/60 px-3 py-1.5 text-xs font-bold text-ink">
+                            <span>📂 {mid}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRename("middle", M, mid)}
+                              className="rounded border border-border px-1.5 py-0.5 text-[11px] font-normal text-gray-600 hover:bg-gray-100"
+                            >
+                              중분류명 변경
+                            </button>
+                          </div>
+                          <div className="divide-y divide-border border-l-2 border-border/50 pl-2">
+                            {minorGroups}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               );
