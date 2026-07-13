@@ -221,6 +221,18 @@ export async function POST(request) {
       );
     }
 
+    // ─── 2.5) "현재 라이브 방송 중"인 영상만 등록 허용 ─────────────
+    // 이 서비스는 라이브 스트림 전용이다. 일반 영상/예정/종료된 방송은 등록을 막는다.
+    // (이미 수집한 ytInfo 를 재사용 — 추가 API 호출 없음)
+    if (ytInfo.liveBroadcastContent !== "live") {
+      const msg = ytInfo.streamEnded
+        ? "이미 종료된 라이브 방송입니다. 현재 라이브 중인 스트림만 등록할 수 있습니다."
+        : ytInfo.liveBroadcastContent === "upcoming"
+          ? "아직 시작되지 않은 예정 방송입니다. 실제 라이브가 시작된 뒤 등록하세요."
+          : "현재 라이브 방송 중인 영상이 아닙니다. (일반 영상이 아니라 라이브 스트림 링크를 등록하세요)";
+      return Response.json({ ok: false, error: msg }, { status: 400 });
+    }
+
     // ─── 3) continent 결정 (관리자 선택값 우선, 없으면 국가로 자동 계산) ──
     // 폼에서 대륙을 직접 선택해 보내면 그 값을 저장하고,
     // 값이 없거나 허용 목록에 없으면 국가코드로 자동 계산한다.

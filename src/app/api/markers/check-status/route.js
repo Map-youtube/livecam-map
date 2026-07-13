@@ -101,6 +101,10 @@ export async function POST(request) {
       } else if (status.streamEnded === true) {
         // 라이브 방송 종료(영상은 남아있으나 재생 불가/라이브 아님)
         reason = "stream_ended";
+      } else if (status.liveBroadcastContent !== "live") {
+        // 현재 라이브 방송이 아님(일반 영상 또는 예정) → 이 서비스는 라이브 전용이라 제외.
+        // (등록은 막지만, 이전에 잘못 등록됐거나 라이브가 내려간 경우를 여기서 정리한다)
+        reason = "not_live";
       }
 
       if (reason) toDisable.push({ ref: t.ref, reason });

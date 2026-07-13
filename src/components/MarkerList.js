@@ -168,6 +168,10 @@ function getStatusBadge(marker) {
     if (marker.disabled_reason === "stream_ended") {
       return { text: "⏹ 방송종료", className: "bg-purple-100 text-purple-700" };
     }
+    if (marker.disabled_reason === "not_live") {
+      // 애초에 라이브가 아닌(일반) 영상 → 라이브 전용 서비스라 노출 제외
+      return { text: "⚫ 라이브 아님", className: "bg-orange-100 text-orange-700" };
+    }
     return { text: "⚫ 재생불가", className: "bg-orange-100 text-orange-700" };
   }
   if (marker.is_active === false) {

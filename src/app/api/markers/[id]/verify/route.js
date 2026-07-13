@@ -78,13 +78,15 @@ export async function POST(request, context) {
       );
     }
 
-    // ─── 라이브 방송이 종료된 영상은 복원하지 않는다 ───────────
-    // (영상 ID 는 남아있어 조회는 되지만 실제로는 재생 불가/라이브 아님 → 재활성 시 재발 방지)
-    if (ytInfo.streamEnded) {
+    // ─── "현재 라이브 방송 중"이 아니면 복원하지 않는다 ─────────
+    // 이 서비스는 라이브 전용이므로, 종료된 방송뿐 아니라 일반 영상/예정 방송도 복원 대상이 아니다.
+    // (영상 ID 는 남아있어 조회는 되지만 실제로는 라이브가 아님 → 재활성 시 재발 방지)
+    if (ytInfo.liveBroadcastContent !== "live") {
+      const reason = ytInfo.streamEnded ? "stream_ended" : "not_live";
       await docRef.update({
         auto_disabled: true,
         is_active: false,
-        disabled_reason: "stream_ended",
+        disabled_reason: reason,
         last_checked_at: FieldValue.serverTimestamp(),
       });
       // 손님 화면에서 확실히 제외되도록 캐시 무효화
@@ -99,7 +101,9 @@ export async function POST(request, context) {
       return Response.json(
         {
           ok: false,
-          error: "라이브 방송이 종료된 영상입니다 (재생 불가)",
+          error: ytInfo.streamEnded
+            ? "라이브 방송이 종료된 영상입니다 (재생 불가)"
+            : "현재 라이브 방송 중인 영상이 아닙니다 (라이브만 노출됩니다)",
         },
         { status: 200 }
       );
