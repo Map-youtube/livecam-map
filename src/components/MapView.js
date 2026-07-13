@@ -29,7 +29,11 @@ import {
 } from "react";
 import dynamic from "next/dynamic";
 import LeafletMapWrapper from "@/components/LeafletMapWrapper";
-import { toLeafletCoordRaw, getCityCenter } from "@/lib/coordUtils";
+import {
+  toLeafletCoordRaw,
+  getCityCenter,
+  panelOverlayWidth,
+} from "@/lib/coordUtils";
 import { CONTINENT_GEO } from "@/lib/continentGeo";
 import { COUNTRY_GEO } from "@/lib/countryList";
 
@@ -73,6 +77,11 @@ function MapView(
     onIssPosition,
     defaultCenter,
     defaultZoom,
+    // 영상 목록 패널이 지도 왼쪽을 덮고 있는지(현재값) 알려주는 ref.
+    //   fly 는 패널을 여는 클릭과 "같은 tick"에 실행되어 prop 으로는 최신값을 못 받으므로 ref 로 받는다.
+    panelOpenRef,
+    // 지도 컨트롤(줌/타일전환) 위치 이동용 — 패널 열림 여부(리렌더 기반, 타이밍 민감하지 않음)
+    panelOpen,
   },
   ref
 ) {
@@ -114,14 +123,26 @@ function MapView(
         // 2D: Leaflet — 대륙/국가/도시 모두 동일한 부드러운 애니메이션(duration 통일)
         if (!leafletMap) return;
         const FLY_DURATION = 1.8; // 초 (약간 더 느리게 — 도시/국가/대륙 이동 느낌 일관화)
+
+        // 영상 목록 패널이 지도 왼쪽을 덮고 있으면, 그 폭(px)만큼을 보정해
+        // 마커/영역이 "실제로 보이는(오른쪽) 지도 영역"의 중앙에 오도록 한다.
+        const panelPx =
+          panelOpenRef && panelOpenRef.current
+            ? panelOverlayWidth(leafletMap.getSize().x)
+            : 0;
+
         if (hasBounds) {
-          // 대륙/국가: 경계 사각형이 화면에 꽉 차도록 부드럽게 이동(flyToBounds)
+          // 대륙/국가: 경계 사각형이 (패널을 제외한) 화면에 꽉 차도록 이동.
+          // paddingTopLeft 로 왼쪽 패널 폭만큼 여백을 줘 보이는 영역 기준으로 맞춘다.
           leafletMap.flyToBounds(
             [
               [target.south, target.west],
               [target.north, target.east],
             ],
-            { duration: FLY_DURATION }
+            {
+              duration: FLY_DURATION,
+              paddingTopLeft: panelPx > 0 ? [panelPx, 0] : [0, 0],
+            }
           );
         } else {
           // 도시/마커: 좌표 + 줌 (동일 duration 으로 부드럽게)
@@ -129,9 +150,14 @@ function MapView(
           const lng = Number(target.lng);
           if (Number.isNaN(lat) || Number.isNaN(lng)) return;
           const zoom = typeof target.zoom === "number" ? target.zoom : 6;
-          leafletMap.flyTo(toLeafletCoordRaw(lat, lng), zoom, {
-            duration: FLY_DURATION,
-          });
+          let center = toLeafletCoordRaw(lat, lng);
+          if (panelPx > 0) {
+            // 지도 중심을 왼쪽으로 (패널 폭의 절반)만큼 옮겨, 마커가 보이는 영역 중앙에 오게 한다.
+            const pt = leafletMap.project(center, zoom);
+            pt.x -= panelPx / 2;
+            center = leafletMap.unproject(pt, zoom);
+          }
+          leafletMap.flyTo(center, zoom, { duration: FLY_DURATION });
         }
       } catch (error) {
         console.error("[MapView] flyToLocation 실패:", error); // TODO: 배포 전 제거
@@ -227,6 +253,10 @@ function MapView(
         onMapReady={handleLeafletReady}
         // 최초 진입 시 전 대륙이 가로로 꽉 차는 세계 뷰(알래스카~러시아)로 시작
         initialWorldFit={true}
+        // 영상 패널이 열리면 줌/타일전환 버튼을 패널 폭만큼 오른쪽으로 옮긴다
+        panelOpen={panelOpen}
+        // 마커 직접 클릭 시 지도 내부 flyTo 도 패널 폭만큼 보정하도록 ref 전달
+        panelOpenRef={panelOpenRef}
       />
 
       {/* 오버레이 레이어 (leaflet 인스턴스 준비 후 동작, enabled=false 면 정지) */}

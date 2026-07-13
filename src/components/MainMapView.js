@@ -142,6 +142,9 @@ export default function MainMapView({ markers, tags, liveChannels }) {
   const [channelVideos, setChannelVideos] = useState({}); // { channelDocId: [videos] }
   const issPositionRef = useRef(null); // 최신 ISS 위치(리렌더 없이 보관)
   const issSelectedRef = useRef(false); // ISS 채널 선택 중 여부(콜백에서 즉시 참조)
+  // 영상 패널이 지도 왼쪽을 덮고 있는지 "최신값"을 콜백에서 즉시 참조하기 위한 ref.
+  //   (마커 클릭 → 패널 열림 + flyTo 가 같은 tick 이라 state 로는 최신값을 못 봄 → ref 로 보정)
+  const panelOpenRef = useRef(false);
 
   // 채널별 현재 라이브 영상 수 (트리 배지용)
   const channelVideoCounts = useMemo(() => {
@@ -155,6 +158,12 @@ export default function MainMapView({ markers, tags, liveChannels }) {
   // 패널 열림 여부
   const isPanelOpen =
     selectedCity !== null || selectedTag !== null || selectedGroup !== null;
+
+  // 패널 열림 상태를 ref 에도 반영(닫힘/트리 전환 등 일반 경로용).
+  //   패널을 "여는 순간"의 flyTo 는 아래 각 핸들러에서 ref 를 직접 true 로 먼저 세팅한다.
+  useEffect(() => {
+    panelOpenRef.current = isPanelOpen;
+  }, [isPanelOpen]);
 
   // ─── 저장된 지도 모드 로드 (마운트 1회, 클라이언트 전용) ─────
   useEffect(() => {
@@ -197,6 +206,8 @@ export default function MainMapView({ markers, tags, liveChannels }) {
         setAutoplayGroupFirst(false);
         issSelectedRef.current = false;
         setExpandedMarkerId(null);
+        // 패널이 이번에 열리므로, 아래 지도 이동이 "보이는 영역" 기준이 되도록 ref 를 먼저 true 로.
+        panelOpenRef.current = true;
         if (mapRef.current) {
           mapRef.current.highlightSelection("city", {
             continent: selection.continent || "",
@@ -332,6 +343,8 @@ export default function MainMapView({ markers, tags, liveChannels }) {
         setExpandedChannelVideoId(null);
         // 마커/ISS 클릭으로 열면(autoplayFirst) 영상 로드 후 첫 영상 자동재생 예약.
         setAutoplayGroupFirst(!!opts.autoplayFirst);
+        // 패널이 이번에 열리므로 아래 지도 이동이 "보이는 영역" 기준이 되도록 ref 를 먼저 true 로.
+        panelOpenRef.current = true;
 
         const channels = getChannelsInGroup(group.major, middle, group.minor);
         const hasIss = channels.some((c) => c && c.channel_type === "iss");
@@ -422,6 +435,8 @@ export default function MainMapView({ markers, tags, liveChannels }) {
         setAutoplayGroupFirst(false);
         issSelectedRef.current = false;
         setExpandedMarkerId(marker.id);
+        // 패널이 이번에 열리므로 지도 이동이 "보이는 영역" 기준이 되도록 ref 를 먼저 true 로.
+        panelOpenRef.current = true;
         // 마커 클릭 시 그 위치로 카메라 이동 (2D는 LeafletMap 내부에서도 이동하지만,
         // 3D는 이 호출이 있어야 이동한다 → 영상 카드 클릭과 동일한 focusMarker 흐름 재사용)
         if (mapRef.current) mapRef.current.focusMarker(marker);
@@ -705,6 +720,9 @@ export default function MainMapView({ markers, tags, liveChannels }) {
             onIssPosition={handleIssPosition}
             defaultCenter={DEFAULT_CENTER}
             defaultZoom={DEFAULT_ZOOM}
+            // 패널이 지도를 덮는 폭만큼 마커 중심 보정(ref) + 지도 컨트롤 위치 이동(bool)
+            panelOpenRef={panelOpenRef}
+            panelOpen={isPanelOpen}
           />
 
           {/* 영상 목록 패널: 지도 좌측 위에 겹치는 오버레이.

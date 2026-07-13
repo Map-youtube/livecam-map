@@ -164,8 +164,8 @@ export default function IssVideoPanel({
       {/* ISS 현재 위치 정보 (작게) */}
       <IssInfoBar issInfo={issInfo} />
 
-      {/* 라이브 카드 목록 — 배경만 반투명+블러로 뒤 지도가 희미하게 비치게 한다 */}
-      <div className="flex-1 overflow-auto bg-bg/75 p-3 backdrop-blur-md">
+      {/* 라이브 카드 목록 — 배경만 반투명(50%)+블러로 뒤 지도가 비치게 한다 */}
+      <div className="flex-1 overflow-auto bg-bg/50 p-3 backdrop-blur-md">
         {loading ? (
           <p className="mt-6 text-center text-sm text-ink-muted">
             {t("loading")}...

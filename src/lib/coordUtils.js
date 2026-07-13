@@ -122,3 +122,18 @@ export function getCityCenter(markersInCity) {
     return null;
   }
 }
+
+// ─── 영상 목록 패널이 지도 왼쪽을 덮는 폭(px) ─────────────────
+// 메인 화면에서 영상 목록 패널은 지도 위에 왼쪽 오버레이로 겹친다.
+// 그 폭은 MainMapView 의 CSS(w-[36%] min-w-[420px])와 동일하게 계산한다.
+// mapWidthPx: 지도(=main) 픽셀 폭. 반환: 패널이 가리는 폭(px). 열려있지 않으면 호출부에서 0 처리.
+// (마커 중심 보정 + 지도 컨트롤 위치 이동에 공용으로 쓴다)
+export function panelOverlayWidth(mapWidthPx) {
+  try {
+    const w = Number(mapWidthPx) || 0;
+    if (w <= 0) return 0;
+    return Math.max(420, Math.round(w * 0.36));
+  } catch (error) {
+    return 0;
+  }
+}

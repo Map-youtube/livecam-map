@@ -24,6 +24,7 @@ import { MapContainer, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { useI18n } from "@/components/i18n/LanguageProvider";
 import { ts } from "@/lib/i18n/static";
+import { panelOverlayWidth } from "@/lib/coordUtils";
 
 // Leaflet 기본 스타일 (이걸 import 하지 않으면 타일이 어긋나고 지도가 깨진다)
 import "leaflet/dist/leaflet.css";
@@ -278,7 +279,12 @@ function MapResizeHandler() {
 // ─── 마커 클러스터 레이어 (내부 헬퍼 컴포넌트, imperative) ─────
 // react-leaflet 의 <Marker> 대신, L.markerClusterGroup 을 map 인스턴스에 직접 추가한다.
 // markers 가 바뀔 때마다 기존 그룹을 제거(map.removeLayer)한 뒤 새로 그려 메모리 누수를 막는다.
-function MarkerClusterLayer({ markers, onMarkerClick, selectedMarkerId }) {
+function MarkerClusterLayer({
+  markers,
+  onMarkerClick,
+  selectedMarkerId,
+  panelOpenRef,
+}) {
   const map = useMap();
   const groupRef = useRef(null);
 
@@ -326,7 +332,19 @@ function MarkerClusterLayer({ markers, onMarkerClick, selectedMarkerId }) {
               onMarkerClick(m);
             }
             const targetZoom = Math.max(map.getZoom(), 8);
-            map.flyTo([lat, lng], targetZoom);
+            // 영상 패널이 지도 왼쪽을 덮고 있으면(방금 onMarkerClick 이 ref 를 true 로 세팅),
+            // 그 폭의 절반만큼 중심을 왼쪽으로 옮겨 마커가 "보이는 영역" 중앙에 오게 한다.
+            let center = L.latLng(lat, lng);
+            const panelPx =
+              panelOpenRef && panelOpenRef.current
+                ? panelOverlayWidth(map.getSize().x)
+                : 0;
+            if (panelPx > 0) {
+              const pt = map.project(center, targetZoom);
+              pt.x -= panelPx / 2;
+              center = map.unproject(pt, targetZoom);
+            }
+            map.flyTo(center, targetZoom);
           } catch (clickError) {
             console.error("[LeafletMap] 마커 클릭 처리 실패:", clickError); // TODO: 배포 전 제거
           }
@@ -361,12 +379,16 @@ function MarkerClusterLayer({ markers, onMarkerClick, selectedMarkerId }) {
 // 겹친 사각형(레이어) 아이콘 버튼 → 클릭 시 "일반 지도"/"지형도" 드롭다운을 연다.
 // 좌측 하단에 배치(줌=좌상단, 저작권=우하단, ISS 토글=우상단과 겹치지 않음).
 // ⚠️ MapContainer 의 자식이 아니라 형제(오버레이)로 렌더 → Leaflet 드래그가 클릭을 가로채지 않는다.
-function LayerSwitcher({ currentKey, onChange }) {
+function LayerSwitcher({ currentKey, onChange, offsetLeft = 0 }) {
   const [open, setOpen] = useState(false);
   const { t } = useI18n();
 
   return (
-    <div className="absolute bottom-3 left-3 z-[1000]">
+    // 영상 패널이 지도 왼쪽을 덮으면 그 폭만큼 오른쪽으로 밀어 패널에 가리지 않게 한다.
+    <div
+      className="absolute bottom-3 z-[1000]"
+      style={{ left: `${offsetLeft + 12}px` }}
+    >
       {/* 열렸을 때: 옵션 목록 (버튼 위쪽으로 펼침) */}
       {open ? (
         <div className="mb-2 overflow-hidden rounded-md border border-border bg-surface shadow-card">
@@ -434,9 +456,41 @@ export default function LeafletMap({
   onMapReady,
   // true 면 최초 1회 "전 세계가 가로로 꽉 차는" 뷰로 맞춘다(메인 지도 전용).
   initialWorldFit = false,
+  // 메인 화면에서 영상 목록 패널이 지도 왼쪽을 덮고 있는지(줌/타일전환 버튼 위치 이동용).
+  panelOpen = false,
+  // 패널 덮임 여부의 "최신값" ref (마커 직접 클릭 시 내부 flyTo 보정용).
+  panelOpenRef,
 }) {
   // ─── 지도 타일 스타일 (일반/지형도) — localStorage 로 유지 ───
   const [mapStyle, setMapStyle] = useState(readSavedMapStyle);
+
+  // ─── 패널이 지도를 덮는 폭(px) 측정 → 지도 컨트롤(줌/타일전환) 위치 이동 ───
+  // 컨테이너 폭을 재어 CSS 의 w-[36%] min-w-[420px] 와 동일하게 패널 폭을 계산한다.
+  const containerRef = useRef(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return undefined;
+    const update = () => {
+      try {
+        setContainerWidth(el.clientWidth);
+      } catch (error) {
+        // 무시
+      }
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => {
+      try {
+        ro.disconnect();
+      } catch (error) {
+        // 무시
+      }
+    };
+  }, []);
+  // 패널이 열려 있을 때만 컨트롤을 그 폭만큼 오른쪽으로 옮긴다(닫히면 0 → 원위치).
+  const panelOffset = panelOpen ? panelOverlayWidth(containerWidth) : 0;
   // 현재 스타일 설정 (없으면 첫 번째=일반)
   const currentStyle =
     MAP_STYLES.find((s) => s.key === mapStyle) || MAP_STYLES[0];
@@ -455,7 +509,16 @@ export default function LeafletMap({
     return (
       // 컨테이너 높이는 부모가 정한다 (부모에서 height 지정 필수).
       // position:relative → 레이어 전환 버튼(absolute 오버레이)의 기준이 된다.
-      <div style={{ height: "100%", width: "100%", position: "relative" }}>
+      // --panel-offset: 영상 패널이 덮는 폭 → globals.css 에서 줌 컨트롤(.leaflet-top.leaflet-left)을 그만큼 오른쪽으로 민다.
+      <div
+        ref={containerRef}
+        style={{
+          height: "100%",
+          width: "100%",
+          position: "relative",
+          "--panel-offset": `${panelOffset}px`,
+        }}
+      >
         <MapContainer
           center={[center.lat, center.lng]}
           zoom={zoom}
@@ -512,11 +575,17 @@ export default function LeafletMap({
             markers={markers}
             onMarkerClick={onMarkerClick}
             selectedMarkerId={selectedMarkerId}
+            panelOpenRef={panelOpenRef}
           />
         </MapContainer>
 
-        {/* 지도 스타일 전환 버튼 (지도 위 오버레이 — 베이스 타일만 바뀌고 마커는 유지) */}
-        <LayerSwitcher currentKey={mapStyle} onChange={handleStyleChange} />
+        {/* 지도 스타일 전환 버튼 (지도 위 오버레이 — 베이스 타일만 바뀌고 마커는 유지).
+            영상 패널이 열리면 그 폭만큼 오른쪽으로 이동해 패널에 가리지 않는다. */}
+        <LayerSwitcher
+          currentKey={mapStyle}
+          onChange={handleStyleChange}
+          offsetLeft={panelOffset}
+        />
       </div>
     );
   } catch (error) {
