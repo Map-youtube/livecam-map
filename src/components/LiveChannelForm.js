@@ -29,6 +29,74 @@ export default function LiveChannelForm({ onRegistered, existingChannels }) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  // ─── 채널 링크 즉시확인 상태 (마커 등록과 동일한 UX) ─────────
+  // channelStatus: idle | checking | available | duplicate | invalid | error
+  const [channelStatus, setChannelStatus] = useState("idle");
+  const [resolvedName, setResolvedName] = useState(""); // 해석된 채널명(미리보기)
+  const [checkError, setCheckError] = useState("");
+  const [existingChannel, setExistingChannel] = useState(null); // 중복 시 기존 등록 정보
+
+  // 채널 링크 입력 → 디바운스 후 서버에 즉시확인(해석 + 중복 여부)
+  useEffect(() => {
+    const input = channelInput.trim();
+    if (!input) {
+      setChannelStatus("idle");
+      setResolvedName("");
+      setCheckError("");
+      setExistingChannel(null);
+      return;
+    }
+    let cancelled = false;
+    const handle = setTimeout(async () => {
+      // 확인 시작(디바운스 콜백 안에서 상태 갱신 → 즉시 setState 규칙 회피)
+      if (!cancelled) {
+        setChannelStatus("checking");
+        setResolvedName("");
+        setCheckError("");
+        setExistingChannel(null);
+      }
+      try {
+        const token = await getAdminIdToken();
+        if (!token) {
+          if (!cancelled) {
+            setChannelStatus("error");
+            setCheckError("로그인이 필요합니다.");
+          }
+          return;
+        }
+        const res = await fetch(
+          `/api/live-channels/check?channel_input=${encodeURIComponent(input)}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const data = await res.json();
+        if (cancelled) return;
+        if (data.status === "available") {
+          setChannelStatus("available");
+          setResolvedName(data.channel_name || "");
+        } else if (data.status === "duplicate") {
+          setChannelStatus("duplicate");
+          setResolvedName(data.channel_name || "");
+          setExistingChannel(data.existing || null);
+        } else if (data.status === "invalid") {
+          setChannelStatus("invalid");
+          setCheckError(data.error || "채널을 찾을 수 없습니다.");
+        } else {
+          setChannelStatus("error");
+          setCheckError(data.error || "확인에 실패했습니다.");
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setChannelStatus("error");
+          setCheckError("확인 중 네트워크 오류가 발생했습니다.");
+        }
+      }
+    }, 600);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [channelInput]);
+
   // 기존 분류 자동완성 목록.
   //   - 상위(LiveChannelSection)가 existingChannels 를 주면 그대로 사용.
   //   - 안 주면(단독 사용 시) 자체 조회한 목록(selfChannels)을 사용.
@@ -99,11 +167,16 @@ export default function LiveChannelForm({ onRegistered, existingChannels }) {
     major.trim() !== "" &&
     minor.trim() !== "" &&
     channelInput.trim() !== "" &&
+    channelStatus === "available" && // 등록 가능한(중복 아님) 채널로 확인됐을 때만
     hasValidCoord &&
     !submitting;
 
   function resetForm() {
     setChannelInput("");
+    setChannelStatus("idle");
+    setResolvedName("");
+    setCheckError("");
+    setExistingChannel(null);
     setLat("");
     setLng("");
     // 대/소분류는 연속 등록 편의를 위해 유지한다(같은 분류로 여러 채널 등록하는 경우가 많음).
@@ -217,8 +290,8 @@ export default function LiveChannelForm({ onRegistered, existingChannels }) {
           2. 채널 <span className="text-red-500">*</span>
         </label>
         <p className="text-xs text-gray-500">
-          유튜브 <strong>채널 홈 주소</strong>나 <strong>@핸들</strong>, 또는 <strong>UC로 시작하는 채널 ID</strong>를
-          붙여넣으세요. 등록 시 채널명이 자동으로 확인됩니다. (개별 영상 링크가 아니라 <em>채널</em> 주소)
+          유튜브 <strong>채널 홈 주소</strong>·<strong>@핸들</strong>·<strong>UC 채널 ID</strong>,
+          또는 그 채널의 <strong>영상/라이브 링크</strong> 어느 것이든 붙여넣으세요. 입력하는 즉시 등록 가능 여부를 확인합니다.
         </p>
         <input
           type="text"
@@ -227,6 +300,43 @@ export default function LiveChannelForm({ onRegistered, existingChannels }) {
           placeholder="예: https://www.youtube.com/@NASA  또는  @NASA  또는  UCLA_DiR1FfKNvjuUpBHmylQ"
           className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
         />
+
+        {/* 즉시확인 상태 안내 (마커 등록과 동일한 방식) */}
+        {channelStatus === "checking" && (
+          <p className="flex items-center gap-2 text-sm text-gray-500">
+            <span
+              className="inline-block h-3 w-3 flex-none animate-spin rounded-full border-2 border-gray-300 border-t-brand"
+              aria-hidden="true"
+            />
+            채널 확인 중...
+          </p>
+        )}
+        {channelStatus === "available" && (
+          <p className="text-sm text-green-600">
+            ✅ 등록 가능한 채널입니다{resolvedName ? `: ${resolvedName}` : ""}.
+          </p>
+        )}
+        {channelStatus === "invalid" && (
+          <p className="text-sm text-red-600">
+            {checkError || "채널을 찾을 수 없습니다. 채널 주소/@핸들/영상 링크를 확인하세요."}
+          </p>
+        )}
+        {channelStatus === "error" && (
+          <p className="text-sm text-red-600">{checkError}</p>
+        )}
+        {channelStatus === "duplicate" && (
+          <div className="rounded-md border-2 border-red-400 bg-red-50 px-4 py-3 text-sm text-red-800">
+            <p className="font-bold">⛔ 이미 등록된 채널입니다.</p>
+            {resolvedName && <p className="mt-1">채널: {resolvedName}</p>}
+            {existingChannel && (
+              <p className="mt-1">
+                기존 등록 위치: {existingChannel.major_category || "-"} &gt;{" "}
+                {existingChannel.minor_category || "-"}
+              </p>
+            )}
+            <p className="mt-1">중복 등록을 막기 위해 등록 버튼이 비활성화됩니다.</p>
+          </div>
+        )}
       </section>
 
       {/* 위치 (지도) */}
