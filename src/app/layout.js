@@ -62,6 +62,18 @@ export const metadata = {
   description: "세계 곳곳의 실시간 라이브 영상을 지도로 탐험하는 서비스",
 };
 
+// ─── 뷰포트 설정 (모바일 / 추후 앱 전환 대비) ──────────────────
+//   - viewportFit: "cover" → 노치·홈바가 있는 기기에서 화면 끝까지 렌더링하고,
+//     CSS 의 env(safe-area-inset-*) (globals.css 의 .safe-top/.safe-bottom)가 동작하게 한다.
+//   - themeColor → 모바일 브라우저 주소창 / PWA 상단 바 색상을 브랜드 청록으로.
+//   - 확대(zoom)는 막지 않는다 — 저시력 사용자 접근성 때문.
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#146c6b",
+};
+
 export default function RootLayout({ children }) {
   return (
     <html

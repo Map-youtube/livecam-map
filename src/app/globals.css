@@ -326,9 +326,17 @@ button:disabled,
   pointer-events: none;
 }
 
+/* ─────────────────────────────────────────────────────────────
+   shadcn/ui 토큰 매핑
+   shadcn 컴포넌트는 --primary / --background / --ring 같은 자체 변수를 쓴다.
+   그 변수들을 위 @theme 의 "우리 디자인 토큰"에 연결해, shadcn 컴포넌트가
+   자동으로 우리 브랜드(청록) 톤으로 나오게 한다.
+   ───────────────────────────────────────────────────────────── */
 @theme inline {
-  --font-heading: var(--font-sans);
-  --font-sans: var(--font-sans);
+  /* 폰트 — shadcn 컴포넌트는 font-sans 를 쓰므로 우리 본문/제목 폰트에 연결
+     (init 기본값은 var(--font-sans) 자기 자신을 가리키는 순환참조였음) */
+  --font-sans: var(--font-body);
+  --font-heading: var(--font-display);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -360,82 +368,111 @@ button:disabled,
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  /* ⚠️ 반경(rounded-sm/md/lg)은 위 @theme 의 우리 토큰(6 / 10 / 16px)을 그대로 쓴다.
+     init 기본값은 이 값들을 덮어써서 사이트 전체 카드·모달 둥글기를 바꿔버리므로 제거했다.
+     shadcn 이 참조하는 더 큰 반경만 여기서 정의. */
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-3xl: 28px;
+  --radius-4xl: 32px;
 }
 
+/* 라이트 테마 (현재 사이트 기본) — shadcn 변수를 우리 브랜드 토큰에 연결 */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --background: var(--color-bg); /* #f7f8fa */
+  --foreground: var(--color-ink); /* #12181f */
+  --card: var(--color-surface); /* #ffffff */
+  --card-foreground: var(--color-ink);
+  --popover: var(--color-surface);
+  --popover-foreground: var(--color-ink);
+
+  /* 주요 버튼/포인트 = 브랜드 청록 */
+  --primary: var(--color-brand); /* #146c6b */
+  --primary-foreground: #ffffff;
+
+  /* 보조 버튼/조용한 배경 */
+  --secondary: #eef1f4;
+  --secondary-foreground: var(--color-ink);
+  --muted: #eef1f4;
+  --muted-foreground: var(--color-ink-muted); /* #5b6472 */
+
+  /* hover/선택 강조 = 브랜드 연한 배경 */
+  --accent: var(--color-brand-light); /* #e6f2f1 */
+  --accent-foreground: var(--color-brand-hover); /* #0f5654 */
+
+  /* 삭제/위험 = LIVE 레드 */
+  --destructive: var(--color-live); /* #e1483c */
+
+  /* ⚠️ 테두리/인풋은 리터럴 값으로 둔다.
+     (@theme inline 의 --color-border 가 var(--border) 를 가리키므로,
+      여기서 var(--color-border) 를 쓰면 순환참조가 되어 색이 깨진다) */
+  --border: #e4e7ec;
+  --input: #e4e7ec;
+
+  /* 키보드 포커스 링 = 브랜드색 (접근성) */
+  --ring: var(--color-brand);
+
+  /* 통계/차트용 팔레트 (브랜드 → 지역파랑 → 방송노랑 → LIVE레드 → 회색) */
+  --chart-1: #146c6b;
+  --chart-2: #2e7ec1;
+  --chart-3: #f5b301;
+  --chart-4: #e1483c;
+  --chart-5: #5b6472;
+
+  --radius: 10px;
+
+  --sidebar: var(--color-surface);
+  --sidebar-foreground: var(--color-ink);
+  --sidebar-primary: var(--color-brand);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--color-brand-light);
+  --sidebar-accent-foreground: var(--color-brand-hover);
+  --sidebar-border: #e4e7ec;
+  --sidebar-ring: var(--color-brand);
 }
 
+/* 다크 테마 — 현재 사이트는 라이트 전용(.dark 를 붙이지 않음).
+   추후 앱 전환 / 다크모드 지원 시 <html class="dark"> 만 붙이면 바로 동작하도록 미리 정의. */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: #0e1418;
+  --foreground: #e8ecef;
+  --card: #151c22;
+  --card-foreground: #e8ecef;
+  --popover: #151c22;
+  --popover-foreground: #e8ecef;
+
+  /* 어두운 배경에선 브랜드 청록을 밝게 올려야 대비가 확보된다 */
+  --primary: #35a3a1;
+  --primary-foreground: #06201f;
+
+  --secondary: #1d262d;
+  --secondary-foreground: #e8ecef;
+  --muted: #1d262d;
+  --muted-foreground: #9aa5b1;
+
+  --accent: #17322f;
+  --accent-foreground: #7fd8d5;
+
+  --destructive: #ef6a5e;
+
+  --border: rgba(255, 255, 255, 0.12);
+  --input: rgba(255, 255, 255, 0.16);
+  --ring: #35a3a1;
+
+  --chart-1: #35a3a1;
+  --chart-2: #5aa7e0;
+  --chart-3: #f5b301;
+  --chart-4: #ef6a5e;
+  --chart-5: #9aa5b1;
+
+  --sidebar: #151c22;
+  --sidebar-foreground: #e8ecef;
+  --sidebar-primary: #35a3a1;
+  --sidebar-primary-foreground: #06201f;
+  --sidebar-accent: #17322f;
+  --sidebar-accent-foreground: #7fd8d5;
+  --sidebar-border: rgba(255, 255, 255, 0.12);
+  --sidebar-ring: #35a3a1;
 }
 
 @layer base {
@@ -448,4 +485,33 @@ button:disabled,
   html {
     @apply font-sans;
   }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   모바일 / 앱(PWA·웹뷰) 기본기
+   추후 앱으로 감쌀 때 "웹사이트 티"가 나지 않도록 하는 최소 장치들.
+   ───────────────────────────────────────────────────────────── */
+html {
+  /* iOS 가로모드에서 글자가 제멋대로 커지는 것 방지 */
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  /* 터치할 때 뜨는 회색/파란 하이라이트 박스 제거 (네이티브 앱 느낌) */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 노치/홈 인디케이터 안전영역 — 앱 전환 시 상·하단 UI가 가려지지 않게.
+   (웹에서는 env() 값이 0 이라 아무 영향 없음) */
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* 손가락 터치 타깃 최소 44px (Apple/Google 접근성 권장).
+   모바일에서 누르는 버튼·아이콘 버튼에 붙인다. */
+.tap-target {
+  min-height: 44px;
+  min-width: 44px;
 }
