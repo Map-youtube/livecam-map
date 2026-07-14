@@ -24,6 +24,7 @@ import { getAdminIdToken } from "@/lib/clientAuth";
 import TagSelector from "@/components/TagSelector";
 import CityAutocomplete from "@/components/CityAutocomplete";
 import { COUNTRIES, COUNTRY_GEO } from "@/lib/countryList";
+import { SELECT_CLASS } from "@/lib/uiClasses";
 // shadcn/ui 프리미티브 (디자인 토큰이 브랜드 청록에 매핑되어 있어 자동으로 사이트 톤을 따른다)
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,15 +59,6 @@ function StepHeader({ step, title, required, children }) {
   );
 }
 
-// ─── 네이티브 select 공통 스타일 ───────────────────────────────
-// shadcn Select 대신 네이티브 <select> 를 유지한다:
-//   - 모바일에서 OS 기본 피커가 떠서 터치 사용성이 더 좋고(앱 전환 대비),
-//   - 기존 onChange 로직을 그대로 쓸 수 있어 동작이 바뀔 위험이 없다.
-// 대신 shadcn Input 과 시각적으로 동일해 보이도록 스타일만 맞춘다.
-const SELECT_CLASS =
-  "h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none " +
-  "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 " +
-  "disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground";
 
 // ─── 대륙 코드 → 한국어 라벨 ───────────────────────────────────
 const CONTINENT_LABELS = {

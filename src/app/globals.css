@@ -20,6 +20,8 @@
   --color-brand-light: #e6f2f1; /* 브랜드 연한 배경 (선택 강조 등) */
   --color-live: #e1483c; /* LIVE 신호색 */
   --color-live-light: #fdecea; /* LIVE 연한 배경 */
+  --color-warn: #a35a00; /* 주의(조치 필요) — 예: 재생불가 마커. LIVE 빨강과 구분되는 앰버 */
+  --color-warn-light: #fdf0e0; /* 주의 연한 배경 */
 
   /* 모서리 둥글기 */
   --radius-sm: 6px;

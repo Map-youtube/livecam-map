@@ -172,8 +172,12 @@ export default function TagSelector({ value, onChange }) {
       ) : allTags.length === 0 ? (
         <p className="text-xs text-ink-muted">등록된 태그가 없습니다.</p>
       ) : (
-        <div className="rounded-md border border-border bg-bg p-2.5">
-          <div className="grid grid-cols-3 gap-x-3 gap-y-1.5 sm:grid-cols-5">
+        // @container: 열 수를 "화면 폭"이 아니라 "이 상자의 폭"에 맞춘다.
+        //   - 수정 모달처럼 좁은 컬럼(≈380px) 안에서는 5열이면 태그 이름이 잘렸다 → 3열로.
+        //   - 등록 폼처럼 넓은 곳(≈660px)에서는 5열 그대로.
+        // 태그가 많아 세로로 길어지므로 상자 자체에 스크롤을 줘서 모달이 늘어나지 않게 한다.
+        <div className="@container max-h-[240px] overflow-y-auto rounded-md border border-border bg-bg p-2.5">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 @xs:grid-cols-3 @lg:grid-cols-4 @xl:grid-cols-5">
             {allTags.map((t) => {
               // 각 체크박스는 이 태그의 고유 id/이름만 참조한다.
               const checked = selected.includes(t.name);

@@ -23,6 +23,10 @@ import TagSelector from "@/components/TagSelector";
 import Thumbnail from "@/components/DefaultThumbnail";
 import { getContinentByCountry } from "@/lib/continentUtils";
 import { getAdminIdToken } from "@/lib/clientAuth";
+import { SELECT_CLASS } from "@/lib/uiClasses";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 // 등록 폼과 "동일한" 국가 목록을 사용해야 등록/수정 화면의 국가 리스트가 일치한다.
 import { COUNTRIES, COUNTRY_NAME_BY_CODE } from "@/lib/countryList";
 
@@ -72,7 +76,9 @@ const MARKER_COLUMNS = [
   { key: "status", label: "상태", width: 10 },
   { key: "channel", label: "채널명", width: 11 },
   { key: "lastChecked", label: "마지막 확인", width: 8 },
-  { key: "ai", label: "AI 설명", width: 7 },
+  // AI 자동 생성은 꺼져 있고 관리자가 직접 작성하므로 라벨을 "설명"으로 둔다.
+  // (key 는 저장된 컬럼 너비(localStorage)와 호환을 위해 "ai" 유지)
+  { key: "ai", label: "설명", width: 7 },
   { key: "edit", label: "수정", width: 4 },
   { key: "delete", label: "삭제", width: 4 },
 ];
@@ -127,21 +133,29 @@ function getThumb(marker) {
 // 우선순위: 재생불가/방송종료(auto_disabled) → 비활성(is_active===false) → LIVE
 //   - disabled_reason === "stream_ended" 이면 "방송종료"로 구분 표시
 //     (영상 ID 는 남아있지만 라이브가 종료돼 재생 불가)
+// 색은 3가지로만 절제한다(색 남용 금지):
+//   · warn(앰버)  = 조치 필요 — 재생불가 계열 3종. 구분은 색이 아니라 "글자"로 한다.
+//   · secondary   = 비활성 (관리자가 의도적으로 끈 것 → 조치 불필요)
+//   · live(빨강)  = 정상 라이브
+const BADGE_WARN = "bg-warn-light text-warn";
+const BADGE_MUTED = "bg-secondary text-ink-muted";
+const BADGE_LIVE = "bg-live-light text-live";
+
 function getStatusBadge(marker) {
   if (marker.auto_disabled === true) {
     if (marker.disabled_reason === "stream_ended") {
-      return { text: "⏹ 방송종료", className: "bg-purple-100 text-purple-700" };
+      return { text: "⏹ 방송종료", className: BADGE_WARN };
     }
     if (marker.disabled_reason === "not_live") {
       // 애초에 라이브가 아닌(일반) 영상 → 라이브 전용 서비스라 노출 제외
-      return { text: "⚫ 라이브 아님", className: "bg-orange-100 text-orange-700" };
+      return { text: "⚫ 라이브 아님", className: BADGE_WARN };
     }
-    return { text: "⚫ 재생불가", className: "bg-orange-100 text-orange-700" };
+    return { text: "⚫ 재생불가", className: BADGE_WARN };
   }
   if (marker.is_active === false) {
-    return { text: "⚫ 비활성", className: "bg-gray-200 text-gray-700" };
+    return { text: "⚫ 비활성", className: BADGE_MUTED };
   }
-  return { text: "🔴 LIVE", className: "bg-red-100 text-red-700" };
+  return { text: "🔴 LIVE", className: BADGE_LIVE };
 }
 
 // ─── 상태 필터용 키 계산 ───────────────────────────────────────
@@ -286,43 +300,45 @@ function EditModal({ marker, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-lg bg-surface p-5 shadow-xl">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-lg font-bold text-ink">마커 수정</h3>
+      <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-lg border border-border bg-surface p-5 shadow-card">
+        <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
+          <h3 className="font-display text-lg font-bold text-ink">마커 수정</h3>
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            aria-label="닫기"
+            className="rounded-md px-2 py-1 text-ink-muted transition hover:bg-secondary hover:text-ink"
           >
             ✕
           </button>
         </div>
 
         {errorMsg && (
-          <div className="mb-3 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div className="mb-3 rounded-md border border-live/30 bg-live-light px-3 py-2 text-sm text-live">
             {errorMsg}
           </div>
         )}
 
         {/* 2열 레이아웃: 왼쪽=입력 필드, 오른쪽=지도(+좌표) → 스크롤 없이 한 화면 */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
           {/* ── 왼쪽: 입력 필드들 ── */}
           <div className="space-y-3">
             {/* 장소명 */}
-            <div>
-              <label className="block text-xs text-gray-600">장소명</label>
-              <input
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-location">장소명</Label>
+              <Input
+                id="edit-location"
                 type="text"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
-                className="w-full rounded-md border border-border px-3 py-2 text-sm"
               />
             </div>
 
             {/* 대륙 (선택 시 국가 목록이 그 대륙으로 추려짐) */}
-            <div>
-              <label className="block text-xs text-gray-600">대륙</label>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-continent">대륙</Label>
               <select
+                id="edit-continent"
                 value={continent}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -330,7 +346,7 @@ function EditModal({ marker, onClose, onSaved }) {
                   // 대륙이 바뀌면 국가 목록이 달라지므로 기존 국가 선택을 초기화한다.
                   setCountry("");
                 }}
-                className="w-full rounded-md border border-border px-3 py-2 text-sm"
+                className={SELECT_CLASS}
               >
                 <option value="">대륙 선택</option>
                 {CONTINENT_ORDER.map((c) => (
@@ -342,9 +358,10 @@ function EditModal({ marker, onClose, onSaved }) {
             </div>
 
             {/* 국가 (대륙을 먼저 골라야 활성화, 선택 시 대륙 자동 보정) */}
-            <div>
-              <label className="block text-xs text-gray-600">국가</label>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-country">국가</Label>
               <select
+                id="edit-country"
                 value={country}
                 disabled={!continent}
                 onChange={(e) => {
@@ -354,7 +371,7 @@ function EditModal({ marker, onClose, onSaved }) {
                   const c = getContinentByCountry(code);
                   if (c) setContinent(c);
                 }}
-                className="w-full rounded-md border border-border px-3 py-2 text-sm disabled:bg-gray-100 disabled:text-gray-400"
+                className={SELECT_CLASS}
               >
                 <option value="">
                   {continent ? "국가를 선택하세요" : "대륙을 먼저 선택하세요"}
@@ -368,53 +385,58 @@ function EditModal({ marker, onClose, onSaved }) {
             </div>
 
             {/* 도시 */}
-            <div>
-              <label className="block text-xs text-gray-600">도시</label>
-              <input
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-city">도시</Label>
+              <Input
+                id="edit-city"
                 type="text"
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
-                className="w-full rounded-md border border-border px-3 py-2 text-sm"
               />
             </div>
 
             {/* 장소 특성 태그 (최대 3개) */}
-            <div>
-              <label className="block text-xs text-gray-600">
-                장소 특성 태그 (최대 3개)
-              </label>
+            <div className="space-y-1.5">
+              <Label>장소 특성 태그 (최대 3개)</Label>
               <TagSelector value={tags} onChange={setTags} />
             </div>
 
-            {/* is_live */}
-            <div className="flex items-center gap-2">
+            {/* is_live (네이티브 체크박스 유지 — 이 모달의 기존 onChange 로직 그대로) */}
+            <div className="flex items-center gap-2.5 rounded-md border border-border bg-bg px-3 py-2.5">
               <input
                 id="edit_is_live"
                 type="checkbox"
                 checked={isLive}
                 onChange={(e) => setIsLive(e.target.checked)}
-                className="h-4 w-4"
+                className="h-4 w-4 flex-none accent-brand"
               />
-              <label htmlFor="edit_is_live" className="text-sm text-gray-700">
-                실시간 라이브 영상입니다 (is_live)
+              <label
+                htmlFor="edit_is_live"
+                className="cursor-pointer text-sm text-ink"
+              >
+                실시간 라이브 영상입니다{" "}
+                <span className="font-mono text-xs text-ink-muted">
+                  (is_live)
+                </span>
               </label>
             </div>
 
             {/* youtube_url */}
-            <div>
-              <label className="block text-xs text-gray-600">유튜브 주소</label>
-              <input
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-url">유튜브 주소</Label>
+              <Input
+                id="edit-url"
                 type="text"
                 value={youtubeUrl}
                 onChange={(e) => setYoutubeUrl(e.target.value)}
-                className="w-full rounded-md border border-border px-3 py-2 text-sm"
               />
               {urlChanged ? (
-                <p className="mt-1 text-xs text-orange-600">
-                  유튜브 주소가 변경되어 저장 시 영상 정보를 다시 수집합니다(유튜브 API 1유닛 사용).
+                <p className="rounded-md border border-warn/30 bg-warn-light px-2.5 py-1.5 text-xs text-warn">
+                  ⚠️ 유튜브 주소가 변경되어 저장 시 영상 정보를 다시
+                  수집합니다(유튜브 API 1유닛 사용).
                 </p>
               ) : (
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="text-xs text-ink-muted">
                   유튜브 주소를 바꾸지 않으면 추가 비용 없이 저장됩니다.
                 </p>
               )}
@@ -424,9 +446,7 @@ function EditModal({ marker, onClose, onSaved }) {
           {/* ── 오른쪽: 위치 지정 지도 + 좌표 ── */}
           {/* flex 컬럼 — 지도가 왼쪽 필드 묶음 높이만큼 늘어나 아래 빈 공간을 채운다(크게 본다) */}
           <div className="flex flex-col gap-2">
-            <label className="block text-xs text-gray-600">
-              위치 (지도를 클릭하면 좌표가 바뀝니다)
-            </label>
+            <Label>위치 (지도를 클릭하면 좌표가 바뀝니다)</Label>
             {/* flex-1 로 남는 세로 공간을 지도가 모두 차지. 너무 작아지지 않게 최소 높이 지정 */}
             <div className="min-h-[420px] w-full flex-1 overflow-hidden rounded-md border border-border">
               <LeafletMapWrapper
@@ -438,22 +458,26 @@ function EditModal({ marker, onClose, onSaved }) {
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-gray-600">위도 (lat)</label>
-                <input
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-lat">위도 (lat)</Label>
+                <Input
+                  id="edit-lat"
                   type="text"
+                  inputMode="decimal"
                   value={lat}
                   onChange={(e) => setLat(e.target.value)}
-                  className="w-full rounded-md border border-border px-3 py-2 text-sm"
+                  className="font-mono"
                 />
               </div>
-              <div>
-                <label className="block text-xs text-gray-600">경도 (lng)</label>
-                <input
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-lng">경도 (lng)</Label>
+                <Input
+                  id="edit-lng"
                   type="text"
+                  inputMode="decimal"
                   value={lng}
                   onChange={(e) => setLng(e.target.value)}
-                  className="w-full rounded-md border border-border px-3 py-2 text-sm"
+                  className="font-mono"
                 />
               </div>
             </div>
@@ -461,25 +485,13 @@ function EditModal({ marker, onClose, onSaved }) {
         </div>
 
         {/* 버튼 */}
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-border px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-          >
+        <div className="mt-5 flex justify-end gap-2 border-t border-border pt-4">
+          <Button type="button" variant="outline" onClick={onClose}>
             취소
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className={
-              "rounded-md px-4 py-2 text-sm font-semibold text-white " +
-              (saving ? "cursor-not-allowed bg-gray-300" : "bg-brand hover:bg-brand-hover")
-            }
-          >
+          </Button>
+          <Button type="button" onClick={handleSave} disabled={saving}>
             {saving ? "저장 중..." : "저장"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -979,28 +991,28 @@ export default function MarkerList({ refreshSignal }) {
 
   return (
     <div>
-      {/* 검색창 + 드롭다운 필터 */}
-      <div className="mb-3 space-y-2">
-        {/* 텍스트 검색 (기존 유지) */}
-        <input
-          type="text"
+      {/* 검색 + 필터 (하나의 도구 모음으로 묶어 표와 시각적으로 분리) */}
+      <div className="mb-3 space-y-2.5 rounded-md border border-border bg-surface p-3">
+        {/* 텍스트 검색 */}
+        <Input
+          type="search"
           value={filterText}
           onChange={(e) => setFilterText(e.target.value)}
           placeholder="검색 (장소명 · 도시 · 국가)"
-          className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
         />
 
-        {/* 드롭다운 필터 4종 + 초기화 버튼 */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* 드롭다운 필터 4종 (좁은 화면에선 2열로 접힘) */}
+        <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
           {/* 대륙 필터 (변경 시 하위 국가/도시 선택은 초기화) */}
           <select
+            aria-label="대륙 필터"
             value={filterContinent}
             onChange={(e) => {
               setFilterContinent(e.target.value);
               setFilterCountry("all");
               setFilterCity("all");
             }}
-            className="rounded-md border border-border px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
+            className={SELECT_CLASS}
           >
             <option value="all">대륙 전체 ({optionCounts.contAll})</option>
             {availableContinents.map((cont) => (
@@ -1012,12 +1024,13 @@ export default function MarkerList({ refreshSignal }) {
 
           {/* 국가 필터 (변경 시 하위 도시 선택은 초기화) */}
           <select
+            aria-label="국가 필터"
             value={filterCountry}
             onChange={(e) => {
               setFilterCountry(e.target.value);
               setFilterCity("all");
             }}
-            className="rounded-md border border-border px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
+            className={SELECT_CLASS}
           >
             <option value="all">국가 전체 ({optionCounts.countryAll})</option>
             {availableCountries.map((code) => (
@@ -1030,9 +1043,10 @@ export default function MarkerList({ refreshSignal }) {
 
           {/* 도시 필터 (선택된 대륙/국가에 속한 도시만) */}
           <select
+            aria-label="도시 필터"
             value={filterCity}
             onChange={(e) => setFilterCity(e.target.value)}
-            className="rounded-md border border-border px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
+            className={SELECT_CLASS}
           >
             <option value="all">도시 전체 ({optionCounts.cityAll})</option>
             {availableCities.map((city) => (
@@ -1044,9 +1058,10 @@ export default function MarkerList({ refreshSignal }) {
 
           {/* 상태 필터 (고정 목록) */}
           <select
+            aria-label="상태 필터"
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="rounded-md border border-border px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
+            className={SELECT_CLASS}
           >
             <option value="all">상태 전체 ({optionCounts.statusAll})</option>
             {STATUS_OPTIONS.map((s) => (
@@ -1055,63 +1070,67 @@ export default function MarkerList({ refreshSignal }) {
               </option>
             ))}
           </select>
+        </div>
 
+        {/* 액션 + 개수 요약 */}
+        <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2.5">
           {/* 영상 상태 수동 새로고침 (누르면 즉시 점검 + 10분 자동점검 카운트 초기화) */}
-          <button
+          <Button
             type="button"
+            variant="outline"
             onClick={() => runScan()}
             disabled={scanning}
             title="지금 바로 영상 재생 가능 여부를 다시 확인합니다. (누르면 자동 점검 10분 카운트가 초기화됩니다)"
-            className={
-              "rounded-md border px-3 py-1.5 text-sm " +
-              (scanning
-                ? "cursor-not-allowed border-border text-gray-400"
-                : "border-teal-300 text-teal-700 hover:bg-teal-50")
-            }
           >
             {scanning ? "확인 중..." : "🔄 영상 상태 새로고침"}
-          </button>
+          </Button>
 
           {/* 필터 초기화 */}
-          <button
-            type="button"
-            onClick={resetFilters}
-            className="rounded-md border border-border px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
-          >
+          <Button type="button" variant="ghost" onClick={resetFilters}>
             필터 초기화
-          </button>
+          </Button>
 
           {/* 전체 개수 + 필터 결과 개수 */}
           <span className="ml-auto text-sm text-ink-muted">
-            전체 <strong className="text-ink">{markers.length}</strong>개
+            전체{" "}
+            <strong className="font-mono tabular-nums text-ink">
+              {markers.length}
+            </strong>
+            개
             {filteredMarkers.length !== markers.length && (
               <>
-                {" "}· 필터 결과{" "}
-                <strong className="text-brand">{filteredMarkers.length}</strong>개
+                {" "}
+                · 필터{" "}
+                <strong className="font-mono tabular-nums text-brand">
+                  {filteredMarkers.length}
+                </strong>
+                개
               </>
             )}
           </span>
         </div>
       </div>
 
-      {/* 자동 재생가능 여부 검사 진행/결과 안내 (버튼 없이 페이지 로드 시 자동 실행) */}
+      {/* 자동 재생가능 여부 검사 진행/결과 안내 (페이지 로드 시 + 10분마다 자동 실행) */}
       {scanning && (
-        <div className="mb-3 flex items-center gap-2 rounded border border-teal-300 bg-teal-50 px-3 py-2 text-sm text-teal-800">
+        <div className="mb-3 flex items-center gap-2 rounded-md border border-brand/30 bg-brand-light px-3 py-2 text-sm text-brand-hover">
           {/* 회전 스피너 → "진행 중"임을 명확히 표시 */}
           <span
-            className="inline-block h-4 w-4 flex-none animate-spin rounded-full border-2 border-teal-300 border-t-teal-700"
+            className="inline-block h-4 w-4 flex-none animate-spin rounded-full border-2 border-brand/30 border-t-brand"
             aria-hidden="true"
           />
-          <span>영상 재생 가능 여부를 확인하는 중입니다... (완료되면 결과가 표시됩니다)</span>
+          <span>
+            영상 재생 가능 여부를 확인하는 중입니다... (완료되면 결과가 표시됩니다)
+          </span>
         </div>
       )}
       {!scanning && scanMessage && (
-        <div className="mb-3 flex items-center justify-between rounded border border-teal-300 bg-teal-50 px-3 py-2 text-sm text-teal-800">
+        <div className="mb-3 flex items-center justify-between gap-2 rounded-md border border-brand/30 bg-brand-light px-3 py-2 text-sm text-brand-hover">
           <span>✅ {scanMessage}</span>
           <button
             type="button"
             onClick={() => setScanMessage("")}
-            className="ml-2 rounded px-1 text-teal-600 hover:bg-teal-100"
+            className="flex-none rounded px-1 text-brand hover:bg-brand/10"
             aria-label="안내 닫기"
           >
             ✕
@@ -1128,12 +1147,12 @@ export default function MarkerList({ refreshSignal }) {
 
       {/* 재생 확인 실패 안내 배너 */}
       {verifyMessage && (
-        <div className="mb-3 flex items-center justify-between rounded border border-orange-300 bg-orange-50 px-3 py-2 text-sm text-orange-800">
+        <div className="mb-3 flex items-center justify-between gap-2 rounded-md border border-warn/30 bg-warn-light px-3 py-2 text-sm text-warn">
           <span>⚠️ {verifyMessage}</span>
           <button
             type="button"
             onClick={() => setVerifyMessage("")}
-            className="ml-2 rounded px-1 text-orange-600 hover:bg-orange-100"
+            className="flex-none rounded px-1 text-warn hover:bg-warn/10"
             aria-label="안내 닫기"
           >
             ✕
@@ -1141,19 +1160,33 @@ export default function MarkerList({ refreshSignal }) {
         </div>
       )}
 
-      {/* 로딩 / 에러 / 빈 상태 */}
-      {loading && <p className="text-sm text-gray-500">목록을 불러오는 중...</p>}
+      {/* 로딩 / 에러 / 빈 상태 (빈 공간 방치 금지 — 항상 안내를 띄운다) */}
+      {loading && (
+        <p className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-6 text-sm text-ink-muted">
+          <span
+            className="inline-block h-4 w-4 flex-none animate-spin rounded-full border-2 border-border border-t-brand"
+            aria-hidden="true"
+          />
+          목록을 불러오는 중...
+        </p>
+      )}
       {!loading && loadError && (
-        <p className="text-sm text-red-600">{loadError}</p>
+        <p className="rounded-md border border-live/30 bg-live-light px-3 py-3 text-sm text-live">
+          {loadError}
+        </p>
       )}
       {!loading && !loadError && markers.length === 0 && (
-        <p className="text-sm text-gray-500">등록된 마커가 없습니다.</p>
+        <p className="rounded-md border border-border bg-surface px-3 py-6 text-center text-sm text-ink-muted">
+          등록된 마커가 없습니다. 왼쪽 폼에서 첫 마커를 등록해 보세요.
+        </p>
       )}
       {!loading &&
         !loadError &&
         markers.length > 0 &&
         filteredMarkers.length === 0 && (
-          <p className="text-sm text-gray-500">검색 결과가 없습니다.</p>
+          <p className="rounded-md border border-border bg-surface px-3 py-6 text-center text-sm text-ink-muted">
+            검색 결과가 없습니다. 필터를 바꾸거나 초기화해 보세요.
+          </p>
         )}
 
       {/* 표 (가로 스크롤 없음 — 모든 컬럼이 한눈에. 컬럼 경계 드래그로 너비 조절) */}
@@ -1170,12 +1203,12 @@ export default function MarkerList({ refreshSignal }) {
               ))}
             </colgroup>
             {/* sticky 헤더 + 컬럼 크기 조절 핸들 (마지막 컬럼 제외) */}
-            <thead className="sticky top-0 z-10 bg-gray-100 text-[11px] text-gray-600">
+            <thead className="sticky top-0 z-10 border-b border-border bg-secondary text-[11px] font-semibold text-ink-muted">
               <tr>
                 {MARKER_COLUMNS.map((c, idx) => (
                   <th
                     key={c.key}
-                    className="relative select-none px-1.5 py-1.5"
+                    className="relative select-none px-1.5 py-2"
                   >
                     <span className="block truncate">{c.label}</span>
                     {/* 오른쪽 경계 드래그 핸들 */}
@@ -1209,60 +1242,63 @@ export default function MarkerList({ refreshSignal }) {
                 return (
                   <tr
                     key={marker.id}
-                    className="border-t border-gray-100 align-top hover:bg-bg"
+                    className="border-t border-border align-top transition-colors hover:bg-brand-light/40"
                   >
                     {/* 썸네일 (컬럼 폭에 맞춰 축소, 없거나 로딩 실패 시 기본 이미지) */}
-                    <td className="px-1.5 py-1">
+                    <td className="px-1.5 py-1.5">
                       <Thumbnail
                         src={thumb}
                         alt={marker.location || "썸네일"}
-                        className="h-8 w-full rounded object-cover"
+                        className="h-8 w-full rounded border border-border object-cover"
                       />
                     </td>
                     {/* 장소명 (넘치면 2줄까지 표시, 나머지는 …+툴팁) */}
-                    <td className="px-1.5 py-1 font-medium text-ink">
+                    <td className="px-1.5 py-1.5 font-medium text-ink">
                       <div className="line-clamp-2" title={marker.location || ""}>
                         {marker.location || "(장소명 없음)"}
                       </div>
                     </td>
                     {/* 도시 */}
                     <td
-                      className="truncate px-1.5 py-1 text-gray-700"
+                      className="truncate px-1.5 py-1.5 text-ink-muted"
                       title={marker.city || ""}
                     >
                       {marker.city || "-"}
                     </td>
                     {/* 국가 */}
-                    <td className="truncate px-1.5 py-1 text-gray-700" title={countryLabel}>
+                    <td
+                      className="truncate px-1.5 py-1.5 text-ink-muted"
+                      title={countryLabel}
+                    >
                       {countryLabel}
                     </td>
                     {/* 대륙 */}
-                    <td className="truncate px-1.5 py-1 text-gray-700">
+                    <td className="truncate px-1.5 py-1.5 text-ink-muted">
                       {continentLabel}
                     </td>
                     {/* 특성 태그 (없으면 -) */}
-                    <td className="px-1.5 py-1">
+                    <td className="px-1.5 py-1.5">
                       {Array.isArray(marker.tags) && marker.tags.length > 0 ? (
                         <div className="flex flex-wrap gap-1">
                           {marker.tags.map((tag) => (
                             <span
                               key={tag}
-                              className="whitespace-nowrap rounded-full bg-brand-light px-1.5 py-0.5 text-xs text-brand"
+                              className="whitespace-nowrap rounded-full bg-brand-light px-1.5 py-0.5 text-[11px] font-medium text-brand"
                             >
                               #{tag}
                             </span>
                           ))}
                         </div>
                       ) : (
-                        <span className="text-gray-400">-</span>
+                        <span className="text-ink-muted/50">-</span>
                       )}
                     </td>
                     {/* 상태 배지 (+ 재생불가 마커에만 "재생 확인") */}
-                    <td className="px-1.5 py-1">
+                    <td className="px-1.5 py-1.5">
                       <div className="flex flex-col items-start gap-1">
                         <span
                           className={
-                            "whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-semibold " +
+                            "whitespace-nowrap rounded-full px-1.5 py-0.5 text-[11px] font-semibold " +
                             badge.className
                           }
                         >
@@ -1277,10 +1313,10 @@ export default function MarkerList({ refreshSignal }) {
                             disabled={verifyingId === marker.id}
                             title="재생 확인 = 상세 정보 갱신 및 복원 시도 (videos.list)"
                             className={
-                              "whitespace-nowrap rounded border px-2 py-0.5 text-xs " +
+                              "whitespace-nowrap rounded-sm border px-2 py-0.5 text-[11px] font-medium transition " +
                               (verifyingId === marker.id
-                                ? "cursor-not-allowed border-border text-gray-400"
-                                : "border-green-300 text-green-700 hover:bg-green-50")
+                                ? "cursor-not-allowed border-border text-ink-muted/50"
+                                : "border-brand text-brand hover:bg-brand-light")
                             }
                           >
                             {verifyingId === marker.id ? "확인 중..." : "재생 확인"}
@@ -1289,7 +1325,10 @@ export default function MarkerList({ refreshSignal }) {
                       </div>
                     </td>
                     {/* 채널명 */}
-                    <td className="truncate px-1.5 py-1 text-gray-700" title={channelName}>
+                    <td
+                      className="truncate px-1.5 py-1.5 text-ink-muted"
+                      title={channelName}
+                    >
                       {channelUrl ? (
                         <a
                           href={channelUrl}
@@ -1304,52 +1343,53 @@ export default function MarkerList({ refreshSignal }) {
                       )}
                     </td>
                     {/* 마지막 확인 */}
-                    <td className="truncate whitespace-nowrap px-1.5 py-1 text-gray-500">
+                    <td className="truncate whitespace-nowrap px-1.5 py-1.5 font-mono text-[11px] tabular-nums text-ink-muted">
                       {lastChecked}
                     </td>
-                    {/* AI 설명 (확정 여부 배지 + 편집 버튼, 좁은 칸이라 세로 배치) */}
-                    <td className="px-1.5 py-1">
+                    {/* 장소 설명 (확정 여부 배지 + 편집 버튼, 좁은 칸이라 세로 배치)
+                        ⚠️ AI 자동 생성은 꺼져 있고(aiUtils), 관리자가 직접 입력해 확정한다. */}
+                    <td className="px-1.5 py-1.5">
                       <div className="flex flex-col items-start gap-1">
                         {marker.description_confirmed === true ? (
                           <span
-                            className="whitespace-nowrap rounded bg-green-100 px-1 py-0.5 text-[11px] text-green-700"
-                            title="설명 확정됨"
+                            className="whitespace-nowrap rounded-full bg-brand-light px-1.5 py-0.5 text-[11px] font-medium text-brand"
+                            title="설명 확정됨 — 마커 상세(SEO) 페이지에 표시됨"
                           >
-                            확정✅
+                            확정 ✅
                           </span>
                         ) : (
                           <span
-                            className="whitespace-nowrap rounded bg-yellow-100 px-1 py-0.5 text-[11px] text-yellow-700"
-                            title="설명 미확정"
+                            className="whitespace-nowrap rounded-full bg-warn-light px-1.5 py-0.5 text-[11px] font-medium text-warn"
+                            title="설명 미확정 — SEO 페이지에 표시되지 않음"
                           >
-                            미확정⏳
+                            미확정 ⏳
                           </span>
                         )}
                         <button
                           type="button"
                           onClick={() => handleOpenAi(marker)}
-                          className="whitespace-nowrap rounded border border-brand px-1.5 py-0.5 text-[11px] text-brand hover:bg-brand-light"
+                          className="whitespace-nowrap rounded-sm border border-border px-1.5 py-0.5 text-[11px] font-medium text-ink transition hover:bg-secondary"
                         >
-                          AI 설명
+                          설명 편집
                         </button>
                       </div>
                     </td>
                     {/* 수정 */}
-                    <td className="px-1 py-1">
+                    <td className="px-1 py-1.5">
                       <button
                         type="button"
                         onClick={() => handleEdit(marker)}
-                        className="whitespace-nowrap rounded border border-border px-1.5 py-0.5 text-[11px] text-gray-700 hover:bg-gray-100"
+                        className="whitespace-nowrap rounded-sm border border-border px-1.5 py-0.5 text-[11px] font-medium text-ink transition hover:bg-secondary"
                       >
                         수정
                       </button>
                     </td>
                     {/* 삭제 */}
-                    <td className="px-1 py-1">
+                    <td className="px-1 py-1.5">
                       <button
                         type="button"
                         onClick={() => handleDelete(marker)}
-                        className="whitespace-nowrap rounded border border-red-300 px-1.5 py-0.5 text-[11px] text-red-600 hover:bg-red-50"
+                        className="whitespace-nowrap rounded-sm border border-live/40 px-1.5 py-0.5 text-[11px] font-medium text-live transition hover:bg-live-light"
                       >
                         삭제
                       </button>
