@@ -15,6 +15,8 @@ export const messages = {
     earthquake: "Earthquakes",
     aurora: "Aurora",
     disaster: "Natural Disasters",
+    browse: "Browse",
+
     region: "Regions",
     tags: "Tags",
     noMarkers: "No markers to show.",
@@ -49,6 +51,8 @@ export const messages = {
     earthquake: "지진",
     aurora: "오로라",
     disaster: "자연재해",
+    browse: "탐색",
+
     region: "지역",
     tags: "특성 태그",
     noMarkers: "표시할 마커가 없습니다.",
@@ -83,6 +87,8 @@ export const messages = {
     earthquake: "地震",
     aurora: "オーロラ",
     disaster: "自然災害",
+    browse: "さがす",
+
     region: "地域",
     tags: "タグ",
     noMarkers: "表示するマーカーがありません。",
@@ -117,6 +123,8 @@ export const messages = {
     earthquake: "地震",
     aurora: "极光",
     disaster: "自然灾害",
+    browse: "浏览",
+
     region: "地区",
     tags: "标签",
     noMarkers: "没有可显示的标记。",
@@ -151,6 +159,8 @@ export const messages = {
     earthquake: "Terremotos",
     aurora: "Aurora",
     disaster: "Desastres naturales",
+    browse: "Explorar",
+
     region: "Regiones",
     tags: "Etiquetas",
     noMarkers: "No hay marcadores para mostrar.",
@@ -185,6 +195,8 @@ export const messages = {
     earthquake: "Séismes",
     aurora: "Aurore",
     disaster: "Catastrophes naturelles",
+    browse: "Parcourir",
+
     region: "Régions",
     tags: "Étiquettes",
     noMarkers: "Aucun marqueur à afficher.",
@@ -219,6 +231,8 @@ export const messages = {
     earthquake: "Erdbeben",
     aurora: "Polarlicht",
     disaster: "Naturkatastrophen",
+    browse: "Entdecken",
+
     region: "Regionen",
     tags: "Tags",
     noMarkers: "Keine Marker zum Anzeigen.",
@@ -253,6 +267,8 @@ export const messages = {
     earthquake: "Terremoti",
     aurora: "Aurora",
     disaster: "Disastri naturali",
+    browse: "Esplora",
+
     region: "Regioni",
     tags: "Tag",
     noMarkers: "Nessun marcatore da mostrare.",
@@ -287,6 +303,8 @@ export const messages = {
     earthquake: "Terremotos",
     aurora: "Aurora",
     disaster: "Desastres naturais",
+    browse: "Explorar",
+
     region: "Regiões",
     tags: "Etiquetas",
     noMarkers: "Nenhum marcador para exibir.",
@@ -321,6 +339,8 @@ export const messages = {
     earthquake: "Землетрясения",
     aurora: "Полярное сияние",
     disaster: "Стихийные бедствия",
+    browse: "Обзор",
+
     region: "Регионы",
     tags: "Теги",
     noMarkers: "Нет маркеров для отображения.",
@@ -355,6 +375,8 @@ export const messages = {
     earthquake: "भूकंप",
     aurora: "ध्रुवीय ज्योति",
     disaster: "प्राकृतिक आपदाएँ",
+    browse: "ब्राउज़ करें",
+
     region: "क्षेत्र",
     tags: "टैग",
     noMarkers: "दिखाने के लिए कोई मार्कर नहीं है।",
@@ -389,6 +411,8 @@ export const messages = {
     earthquake: "ভূমিকম্প",
     aurora: "মেরুজ্যোতি",
     disaster: "প্রাকৃতিক দুর্যোগ",
+    browse: "ব্রাউজ করুন",
+
     region: "অঞ্চল",
     tags: "ট্যাগ",
     noMarkers: "দেখানোর মতো কোনো মার্কার নেই।",
@@ -423,6 +447,8 @@ export const messages = {
     earthquake: "แผ่นดินไหว",
     aurora: "แสงออโรรา",
     disaster: "ภัยธรรมชาติ",
+    browse: "เรียกดู",
+
     region: "ภูมิภาค",
     tags: "แท็ก",
     noMarkers: "ไม่มีเครื่องหมายให้แสดง",
@@ -457,6 +483,8 @@ export const messages = {
     earthquake: "Động đất",
     aurora: "Cực quang",
     disaster: "Thiên tai",
+    browse: "Duyệt",
+
     region: "Khu vực",
     tags: "Thẻ",
     noMarkers: "Không có điểm đánh dấu để hiển thị.",
@@ -491,6 +519,8 @@ export const messages = {
     earthquake: "Gempa Bumi",
     aurora: "Aurora",
     disaster: "Bencana Alam",
+    browse: "Jelajahi",
+
     region: "Wilayah",
     tags: "Tag",
     noMarkers: "Tidak ada penanda untuk ditampilkan.",
@@ -525,6 +555,8 @@ export const messages = {
     earthquake: "الزلازل",
     aurora: "الشفق القطبي",
     disaster: "الكوارث الطبيعية",
+    browse: "تصفح",
+
     region: "المناطق",
     tags: "الوسوم",
     noMarkers: "لا توجد علامات للعرض.",
@@ -559,6 +591,8 @@ export const messages = {
     earthquake: "زمین‌لرزه‌ها",
     aurora: "شفق قطبی",
     disaster: "بلایای طبیعی",
+    browse: "مرور",
+
     region: "مناطق",
     tags: "برچسب‌ها",
     noMarkers: "هیچ نشانگری برای نمایش وجود ندارد.",

@@ -58,6 +58,15 @@ body {
   transform: translateX(var(--panel-offset, 0px));
 }
 
+/* 폰(<768px)에서는 줌 +/- 버튼을 숨긴다.
+   - 상단 레이어 칩 행과 겹치고, 터치 기기에서는 핀치 줌이 자연스럽다(앱 느낌).
+   - 태블릿/데스크톱(≥768px)에서는 그대로 표시. */
+@media (max-width: 767px) {
+  .leaflet-control-zoom {
+    display: none;
+  }
+}
+
 /* ─────────────────────────────────────────────────────────────
    클릭 가능한 요소 커서 (전역)
    Tailwind v4 는 기본적으로 <button> 에 pointer 커서를 주지 않으므로,

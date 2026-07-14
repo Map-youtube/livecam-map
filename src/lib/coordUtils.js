@@ -132,6 +132,10 @@ export function panelOverlayWidth(mapWidthPx) {
   try {
     const w = Number(mapWidthPx) || 0;
     if (w <= 0) return 0;
+    // 모바일/태블릿(뷰포트 < 1024px = Tailwind lg 미만)에서는 영상 패널이
+    // 지도 왼쪽이 아니라 "하단 바텀시트"로 뜨므로, 지도를 가로로 덮지 않는다 → 보정 0.
+    // (이 기준은 MainMapView 의 lg: 반응형 클래스와 반드시 일치해야 한다)
+    if (typeof window !== "undefined" && window.innerWidth < 1024) return 0;
     return Math.max(420, Math.round(w * 0.36));
   } catch (error) {
     return 0;

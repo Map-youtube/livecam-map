@@ -25,6 +25,7 @@ import AdSlot from "@/components/AdSlot";
 import KlookWidget from "@/components/KlookWidget";
 import CjBanner from "@/components/CjBanner";
 import Footer from "@/components/Footer";
+import MobileDrawer from "@/components/MobileDrawer";
 import LanguageSelector from "@/components/i18n/LanguageSelector";
 import { useI18n } from "@/components/i18n/LanguageProvider";
 import { useAutoTranslate } from "@/components/i18n/useAutoTranslate";
@@ -116,6 +117,8 @@ export default function MainMapView({ markers, tags, liveChannels }) {
   // 선택 상태 (도시/태그는 배타적으로 하나만 활성)
   const [selectedCity, setSelectedCity] = useState(null);
   const [selectedTag, setSelectedTag] = useState(null);
+  // 모바일(lg 미만): 카테고리 트리를 하단 드로어로 연다. 데스크톱에선 사용되지 않음.
+  const [treeOpen, setTreeOpen] = useState(false);
   // 카드에서 펼쳐진(재생 중인) 마커 id
   const [expandedMarkerId, setExpandedMarkerId] = useState(null);
 
@@ -776,10 +779,12 @@ export default function MainMapView({ markers, tags, liveChannels }) {
         </div>
       </header>
 
-      {/* 콘텐츠 영역 */}
-      <div className="flex min-h-0 flex-1 overflow-x-auto">
-        {/* 왼쪽: 카테고리 트리 */}
-        <aside className="h-full w-[12%] min-w-[240px] overflow-auto border-r border-border bg-surface">
+      {/* 콘텐츠 영역
+          - 모바일(lg 미만): 지도만 전체 폭. 카테고리 트리는 하단 드로어로 연다. (가로 스크롤 금지)
+          - 데스크톱(lg 이상): 기존과 동일하게 왼쪽 트리 + 지도 */}
+      <div className="flex min-h-0 flex-1 overflow-hidden lg:overflow-x-auto">
+        {/* 왼쪽: 카테고리 트리 (데스크톱 전용 — 모바일에서는 아래 MobileDrawer 로 대체) */}
+        <aside className="hidden h-full w-[12%] min-w-[240px] overflow-auto border-r border-border bg-surface lg:block">
           <MainCategoryTree
             markers={markerList}
             tags={tagList}
@@ -794,6 +799,38 @@ export default function MainMapView({ markers, tags, liveChannels }) {
             selectedTag={selectedTag}
           />
         </aside>
+
+        {/* 모바일 전용: 카테고리 트리 하단 드로어.
+            ⚠️ 각 핸들러는 인자를 그대로 전달(...args)해 "선택한 항목 자신의 데이터"로 동작하게 하고,
+               선택 직후 드로어를 닫아 바로 지도를 볼 수 있게 한다. */}
+        <MobileDrawer
+          open={treeOpen}
+          onClose={() => setTreeOpen(false)}
+          title={t("browse")}
+        >
+          <MainCategoryTree
+            markers={markerList}
+            tags={tagList}
+            tr={tr}
+            onSelectLocation={(...args) => {
+              handleSelectLocation(...args);
+              setTreeOpen(false);
+            }}
+            onSelectTag={(...args) => {
+              handleSelectTag(...args);
+              setTreeOpen(false);
+            }}
+            liveChannels={channelList}
+            channelVideoCounts={channelVideoCounts}
+            onSelectChannelGroup={(...args) => {
+              handleSelectChannelGroup(...args);
+              setTreeOpen(false);
+            }}
+            selectedGroup={selectedGroup}
+            selectedCity={selectedCity}
+            selectedTag={selectedTag}
+          />
+        </MobileDrawer>
 
         {/* 오른쪽: 지도 (2D/3D 통합) — 영상 목록 패널은 지도 위에 반투명 오버레이로 얹는다 */}
         <main className="relative h-full flex-1">
@@ -822,7 +859,19 @@ export default function MainMapView({ markers, tags, liveChannels }) {
               카드가 나열되는 영역 배경만 반투명+블러 → 뒤 지도가 희미하게 비친다.
               (상단 제목/소분류 영역은 불투명 유지) */}
           {isPanelOpen && (
-            <section className="absolute inset-y-0 left-0 z-[500] w-[36%] min-w-[420px] overflow-hidden border-r border-border shadow-xl">
+            /* 모바일(lg 미만): 화면 하단에 붙는 바텀시트(높이 70vh, 위 모서리 둥글게).
+                 → 폭 420px 짜리 좌측 패널이 폰 화면을 넘어가던 문제 해결.
+               데스크톱(lg 이상): 기존과 동일한 좌측 오버레이 패널(36%, 최소 420px).
+               ⚠️ 이 lg 기준은 coordUtils 의 panelOverlayWidth(<1024px → 보정 0)와 반드시 일치해야 한다. */
+            <section
+              className={
+                "absolute z-[500] overflow-hidden border-border shadow-xl " +
+                // 모바일: 하단 전체 폭
+                "bottom-0 left-0 right-0 top-auto h-[70vh] rounded-t-lg border-t " +
+                // 데스크톱: 좌측 전체 높이
+                "lg:right-auto lg:top-0 lg:h-auto lg:w-[36%] lg:min-w-[420px] lg:rounded-none lg:border-r lg:border-t-0"
+              }
+            >
               {selectedGroup ? (
                 <IssVideoPanel
                   videos={selectedGroupVideos}
@@ -848,8 +897,18 @@ export default function MainMapView({ markers, tags, liveChannels }) {
             </section>
           )}
 
-          {/* 우측 상단: 2D/3D 토글 + 레이어 토글 4종 (위치·스타일 유지) */}
-          <div className="absolute right-3 top-3 z-[1000] flex flex-wrap justify-end gap-2">
+          {/* 상단: 2D/3D 토글 + 레이어 토글 4종
+              - 모바일(md 미만): 화면 폭을 넘기므로 "가로 스크롤 칩 행"으로 (버튼이 겹치지 않게 축소 금지)
+              - 데스크톱(md 이상): 기존과 동일하게 우측 상단 정렬 + 줄바꿈 */}
+          <div
+            className={
+              "absolute z-[1000] flex gap-2 [&>button]:flex-shrink-0 " +
+              // 모바일: 좌우 여백 안에서 가로 스크롤 (스크롤바는 숨김)
+              "no-scrollbar left-2 right-2 top-2 overflow-x-auto pb-1 " +
+              // 데스크톱: 우측 상단 고정 + 줄바꿈
+              "md:left-auto md:right-3 md:top-3 md:flex-wrap md:justify-end md:overflow-visible md:pb-0"
+            }
+          >
             {/* 2D/3D 전환 (버튼 하나) */}
             <button
               type="button"
@@ -892,6 +951,18 @@ export default function MainMapView({ markers, tags, liveChannels }) {
               🔥 {t("disaster")}
             </button>
           </div>
+
+          {/* 모바일 전용: 카테고리 목록(지역/방송/태그) 열기 버튼.
+              하단 중앙 = 엄지로 누르기 쉬운 위치. 영상 바텀시트가 떠 있을 땐 가려지므로 숨긴다. */}
+          {!isPanelOpen && (
+            <button
+              type="button"
+              onClick={() => setTreeOpen(true)}
+              className="tap-target absolute bottom-3 left-1/2 z-[1000] flex -translate-x-1/2 items-center gap-2 rounded-md border border-border bg-surface px-5 py-2 text-sm font-semibold text-ink shadow-card transition active:scale-95 lg:hidden"
+            >
+              ☰ {t("browse")}
+            </button>
+          )}
         </main>
 
         {/* 오른쪽 끝: 세로 배너형 광고 (Klook 120×600, 넓은 화면에서만 표시) */}
