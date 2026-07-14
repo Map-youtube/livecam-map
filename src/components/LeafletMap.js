@@ -97,36 +97,58 @@ try {
   console.error("[LeafletMap] 기본 아이콘 설정 실패:", error); // TODO: 배포 전 제거
 }
 
-// ─── 마커 아이콘 생성 함수 ─────────────────────────────────────
-// divIcon(HTML) 으로 기존 핀 이미지를 그리고, live 인 마커에는 그 위에 라이브 신호점(.live-dot)을
-// CSS 오버레이로 얹는다.
-//   - red  : 재생 중인 마커 → 빨간 핀 + 크게(강조)
-//   - glow : 현재 펼쳐진 소분류/도시 목록에 해당하는 마커 → 뒤에 녹색 형광 글로우(핀 형식 유지)
-// (클러스터링/클릭 등 기존 동작은 그대로 — 시각적 표시만 추가)
-function makeIcon(live, red, glow) {
+// ─── 마커 아이콘 생성 함수 (직접 그린 SVG — 무료, 외부 아이콘 불필요) ──
+// divIcon(HTML) 안에 물방울 핀 SVG 를 그린다. 종류/상태별로 모양·색이 다르다.
+//   - kind === "channel" (방송) : 핀 안에 TV(안테나+화면), 기본색 노랑.
+//   - 그 외 (지역 라이브캠)      : 핀 안에 재생 삼각형(▶, 유튜브 느낌), 기본색 파랑.
+//   - red  : 재생 중인 마커 → 핀 전체 빨강 + 크게(강조).
+//   - glow : 현재 펼쳐진 소분류/도시 목록에 해당하는 마커 → 뒤에 녹색 형광 글로우.
+// (클러스터링/클릭 등 기존 동작은 그대로 — 시각적 표시만 바뀜)
+function makeIcon(kind, live, red, glow) {
   try {
     // 재생 중인 마커만 크게(강조), 그 외(글로우/기본)는 기본 크기.
-    const size = red ? [37, 61] : [25, 41];
-    const anchor = red ? [18, 61] : [12, 41];
-    const w = size[0];
-    const h = size[1];
-    // 라이브면 핀 머리 부분 위에 신호점을 얹는다 (globals.css 의 .live-dot 애니메이션 사용)
+    const w = red ? 34 : 26;
+    const h = red ? 50 : 38;
+    const anchor = [Math.round(w / 2), h]; // 핀 끝(아래 중앙)이 좌표를 가리킴
+
+    // 기본색: 재생중=빨강, 방송=노랑, 지역=파랑
+    const fill = red ? "#e1483c" : kind === "channel" ? "#f5b301" : "#2e7ec1";
+
+    // 핀(물방울) 경로 — viewBox 26x38, 끝점 (13,37)
+    const pinPath =
+      "M13 1 C6.4 1 1 6.2 1 12.6 C1 21 13 37 13 37 C13 37 25 21 25 12.6 C25 6.2 19.6 1 13 1 Z";
+
+    // 핀 머리 안쪽 아이콘 (흰색)
+    const inner =
+      kind === "channel"
+        ? // TV: 안테나 두 줄 + 화면(둥근 사각형)
+          '<path d="M9 6.5 L13 10.2 M17 6.5 L13 10.2" stroke="#fff" stroke-width="1.7" fill="none" stroke-linecap="round"/>' +
+          '<rect x="7" y="10.2" width="12" height="8.4" rx="1.6" fill="#fff"/>'
+        : // 재생 삼각형(▶)
+          '<path d="M10.4 8.6 L18 13 L10.4 17.4 Z" fill="#fff"/>';
+
+    const svg =
+      `<svg width="${w}" height="${h}" viewBox="0 0 26 38" xmlns="http://www.w3.org/2000/svg">` +
+      `<path d="${pinPath}" fill="${fill}" stroke="#ffffff" stroke-width="1.6"/>` +
+      inner +
+      `</svg>`;
+
+    // 라이브면 핀 우상단에 작은 신호점(.live-dot) 오버레이
     const pulse = live ? '<span class="live-dot"></span>' : "";
     const wrapClass = "lm-marker" + (glow ? " lm-glow" : "");
-    const imgClass = red ? "lm-red" : "";
     const html =
       `<div class="${wrapClass}" style="width:${w}px;height:${h}px;">` +
       // 형광 글로우 배경(핀보다 먼저 그려져 뒤에 깔림). glow 아닐 땐 CSS 로 숨김.
       `<span class="lm-glow-bg"></span>` +
-      `<img class="${imgClass}" src="${ICON_BASE}marker-icon.png" width="${w}" height="${h}" alt="" style="display:block;width:${w}px;height:${h}px;" />` +
+      svg +
       pulse +
       `</div>`;
     return L.divIcon({
       html,
       className: "lm-divicon",
-      iconSize: size,
+      iconSize: [w, h],
       iconAnchor: anchor,
-      popupAnchor: [1, -34],
+      popupAnchor: [0, -h + 8],
     });
   } catch (error) {
     console.error("[LeafletMap] 아이콘 생성 실패:", error); // TODO: 배포 전 제거
@@ -400,8 +422,11 @@ function MarkerClusterLayer({
           m.is_active !== false &&
           m.is_live !== false;
 
+        // 방송(자동 라이브 채널) 마커는 __channel 플래그로 구분 → 노란 TV 아이콘
+        const kind = m.__channel ? "channel" : "region";
+
         const marker = L.marker([lat, lng], {
-          icon: makeIcon(isLive, isRed, isGlow),
+          icon: makeIcon(kind, isLive, isRed, isGlow),
           // 재생 중 > 글로우 > 기본 순으로 위에 오게
           zIndexOffset: isRed ? 1000 : isGlow ? 500 : 0,
         });

@@ -470,6 +470,10 @@ export default function CesiumMapView({
       const redPin = pinBuilder
         .fromColor(Cesium.Color.fromCssColorString("#e1483c"), 40)
         .toDataURL();
+      // 방송(자동 라이브 채널) 마커: 노란 핀 (2D 의 노란 TV 마커와 색 통일)
+      const yellowPin = pinBuilder
+        .fromColor(Cesium.Color.fromCssColorString("#f5b301"), 34)
+        .toDataURL();
       const glowImg = makeGlowCanvas(64);
       const glowSet =
         glowMarkerIds && typeof glowMarkerIds.has === "function"
@@ -506,7 +510,7 @@ export default function CesiumMapView({
           const ent = viewer.entities.add({
             position: toCesiumCoordRaw(Cesium, lat, lng, 0),
             billboard: {
-              image: isRed ? redPin : bluePin,
+              image: isRed ? redPin : m.__channel ? yellowPin : bluePin,
               verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
               scale: 0.8,
               // disableDepthTestDistance 미설정 → 지구 뒷면 마커는 가려짐

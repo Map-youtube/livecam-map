@@ -7,7 +7,10 @@
 //   - 로그인 안 된 상태로 접근하면 AdminGuard 가 /admin/login 으로 보냄.
 // 상단에 로그인된 관리자 이메일 표시 + 로그아웃 버튼 제공.
 //
-// 구성: 위쪽 "마커 등록" 폼 → 구분선 → 아래쪽 "등록된 마커 목록".
+// 구성(2단 레이아웃):
+//   - 왼쪽 절반 : "마커 등록" 폼 → 구분선 → "자동 라이브 채널 관리"
+//   - 오른쪽 절반 : "등록된 마커 목록"(양이 많아 별도 컬럼으로 분리, 한눈에 보기 쉽게)
+// (구 "측정 지표" 영역은 제거 — 접속자수/API 소비량 통계는 추후 별도 반영 예정)
 // 등록 폼에서 등록 성공 시 refreshSignal 을 증가시켜 목록이 자동 갱신되도록 연동한다.
 // ─────────────────────────────────────────────────────────────
 
@@ -55,9 +58,10 @@ export default function AdminPage() {
 
   return (
     <AdminGuard>
-      {/* 왼쪽 절반: 관리 콘텐츠 / 오른쪽 절반: 추후 측정 지표(접속자수·API 소비량 등) 영역 */}
-      <main className="flex min-h-screen bg-bg">
-        {/* 왼쪽 절반 (min-w-0 : 내부 표가 넘칠 때 가로 스크롤되게 함. 작은 화면에선 전체폭) */}
+      {/* 왼쪽 절반: 등록 폼 + 자동 라이브 채널 관리 / 오른쪽 절반: 등록된 마커 목록 */}
+      {/* 작은 화면에선 세로로 쌓임(flex-col), lg 이상에서 좌우 2단(flex-row) */}
+      <main className="flex min-h-screen flex-col bg-bg lg:flex-row">
+        {/* 왼쪽 절반 (min-w-0 : 내부 표/지도가 넘칠 때 가로 스크롤되게 함. 작은 화면에선 전체폭) */}
         <div className="w-full min-w-0 px-4 py-8 lg:w-1/2">
           {/* 상단 바: 관리자 이메일 + 로그아웃 */}
           <div className="mb-6 flex items-center justify-between border-b border-border pb-3">
@@ -84,16 +88,7 @@ export default function AdminPage() {
           {/* 구분선 */}
           <hr className="my-10 border-border" />
 
-          {/* 목록 영역 (표는 왼쪽 절반 폭을 넓게 사용, 넘치면 가로 스크롤) */}
-          <h2 className="mb-4 font-display text-xl font-bold text-ink">
-            등록된 마커 목록
-          </h2>
-          <MarkerList refreshSignal={refreshSignal} />
-
-          {/* 구분선 */}
-          <hr className="my-10 border-border" />
-
-          {/* 자동 라이브 채널 관리 (방송국 등 24/7 채널 — 대분류/소분류로 묶음) */}
+          {/* 자동 라이브 채널 관리 (방송국 등 24/7 채널 — 대분류/소분류로 묶음). 현위치(왼쪽) 유지 */}
           <h2 className="mb-2 font-display text-xl font-bold text-ink">
             자동 라이브 채널 관리
           </h2>
@@ -104,13 +99,14 @@ export default function AdminPage() {
           <LiveChannelSection />
         </div>
 
-        {/* 오른쪽 절반: 측정 지표 영역 (추후 구현 예정) */}
-        <aside className="hidden w-1/2 border-l border-border bg-surface p-8 lg:block">
-          <h2 className="font-display text-lg font-bold text-ink">측정 지표</h2>
-          <p className="mt-2 text-sm text-ink-muted">
-            접속자수 · API 소비량 등 통계 영역 (추후 구현 예정)
-          </p>
-        </aside>
+        {/* 오른쪽 절반: 등록된 마커 목록 (양이 많아 별도 컬럼으로 분리) */}
+        {/* min-w-0 : 표가 넘칠 때 이 컬럼 안에서 가로 스크롤되게 함 */}
+        <section className="w-full min-w-0 border-t border-border bg-surface px-4 py-8 lg:w-1/2 lg:border-l lg:border-t-0">
+          <h2 className="mb-4 font-display text-xl font-bold text-ink">
+            등록된 마커 목록
+          </h2>
+          <MarkerList refreshSignal={refreshSignal} />
+        </section>
       </main>
     </AdminGuard>
   );

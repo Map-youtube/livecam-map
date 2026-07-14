@@ -161,13 +161,14 @@ button:disabled,
 .lm-marker {
   position: relative;
 }
+/* 라이브 신호점 — 새 SVG 핀의 우상단 모서리에 작은 배지처럼 얹는다(핀 안쪽 아이콘을 가리지 않도록) */
 .lm-marker .live-dot {
   position: absolute;
-  top: 3px;
-  left: 50%;
-  width: 8px;
-  height: 8px;
-  margin-left: -4px;
+  top: 0;
+  right: 1px;
+  left: auto;
+  width: 7px;
+  height: 7px;
 }
 
 /* 사용자가 모션 최소화를 원하면 퍼지는 애니메이션을 끄고 정적인 점만 표시 */
@@ -226,7 +227,7 @@ button:disabled,
   display: block;
   position: absolute;
   left: 50%;
-  top: 42%;
+  top: 36%;
   width: 40px;
   height: 40px;
   transform: translate(-50%, -50%);
