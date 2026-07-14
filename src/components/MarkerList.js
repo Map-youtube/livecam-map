@@ -322,7 +322,7 @@ function EditModal({ marker, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-surface p-5 shadow-xl">
+      <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-lg bg-surface p-5 shadow-xl">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-lg font-bold text-ink">마커 수정</h3>
           <button
@@ -340,91 +340,130 @@ function EditModal({ marker, onClose, onSaved }) {
           </div>
         )}
 
-        <div className="space-y-3">
-          {/* 장소명 */}
-          <div>
-            <label className="block text-xs text-gray-600">장소명</label>
-            <input
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              className="w-full rounded-md border border-border px-3 py-2 text-sm"
-            />
-          </div>
+        {/* 2열 레이아웃: 왼쪽=입력 필드, 오른쪽=지도(+좌표) → 스크롤 없이 한 화면 */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {/* ── 왼쪽: 입력 필드들 ── */}
+          <div className="space-y-3">
+            {/* 장소명 */}
+            <div>
+              <label className="block text-xs text-gray-600">장소명</label>
+              <input
+                type="text"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                className="w-full rounded-md border border-border px-3 py-2 text-sm"
+              />
+            </div>
 
-          {/* 대륙 (선택 시 국가 목록이 그 대륙으로 추려짐) */}
-          <div>
-            <label className="block text-xs text-gray-600">대륙</label>
-            <select
-              value={continent}
-              onChange={(e) => {
-                const val = e.target.value;
-                setContinent(val);
-                // 대륙이 바뀌면 국가 목록이 달라지므로 기존 국가 선택을 초기화한다.
-                setCountry("");
-              }}
-              className="w-full rounded-md border border-border px-3 py-2 text-sm"
-            >
-              <option value="">대륙 선택</option>
-              {CONTINENT_ORDER.map((c) => (
-                <option key={c} value={c}>
-                  {CONTINENT_LABELS[c]}
+            {/* 대륙 (선택 시 국가 목록이 그 대륙으로 추려짐) */}
+            <div>
+              <label className="block text-xs text-gray-600">대륙</label>
+              <select
+                value={continent}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setContinent(val);
+                  // 대륙이 바뀌면 국가 목록이 달라지므로 기존 국가 선택을 초기화한다.
+                  setCountry("");
+                }}
+                className="w-full rounded-md border border-border px-3 py-2 text-sm"
+              >
+                <option value="">대륙 선택</option>
+                {CONTINENT_ORDER.map((c) => (
+                  <option key={c} value={c}>
+                    {CONTINENT_LABELS[c]}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 국가 (대륙을 먼저 골라야 활성화, 선택 시 대륙 자동 보정) */}
+            <div>
+              <label className="block text-xs text-gray-600">국가</label>
+              <select
+                value={country}
+                disabled={!continent}
+                onChange={(e) => {
+                  const code = e.target.value;
+                  setCountry(code);
+                  // 방어적으로 대륙도 국가에 맞춰 보정 (필터로 이미 일치하지만 안전하게)
+                  const c = getContinentByCountry(code);
+                  if (c) setContinent(c);
+                }}
+                className="w-full rounded-md border border-border px-3 py-2 text-sm disabled:bg-gray-100 disabled:text-gray-400"
+              >
+                <option value="">
+                  {continent ? "국가를 선택하세요" : "대륙을 먼저 선택하세요"}
                 </option>
-              ))}
-            </select>
+                {filteredCountries.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.name} ({c.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 도시 */}
+            <div>
+              <label className="block text-xs text-gray-600">도시</label>
+              <input
+                type="text"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                className="w-full rounded-md border border-border px-3 py-2 text-sm"
+              />
+            </div>
+
+            {/* 장소 특성 태그 (최대 3개) */}
+            <div>
+              <label className="block text-xs text-gray-600">
+                장소 특성 태그 (최대 3개)
+              </label>
+              <TagSelector value={tags} onChange={setTags} />
+            </div>
+
+            {/* is_live */}
+            <div className="flex items-center gap-2">
+              <input
+                id="edit_is_live"
+                type="checkbox"
+                checked={isLive}
+                onChange={(e) => setIsLive(e.target.checked)}
+                className="h-4 w-4"
+              />
+              <label htmlFor="edit_is_live" className="text-sm text-gray-700">
+                실시간 라이브 영상입니다 (is_live)
+              </label>
+            </div>
+
+            {/* youtube_url */}
+            <div>
+              <label className="block text-xs text-gray-600">유튜브 주소</label>
+              <input
+                type="text"
+                value={youtubeUrl}
+                onChange={(e) => setYoutubeUrl(e.target.value)}
+                className="w-full rounded-md border border-border px-3 py-2 text-sm"
+              />
+              {urlChanged ? (
+                <p className="mt-1 text-xs text-orange-600">
+                  유튜브 주소가 변경되어 저장 시 영상 정보를 다시 수집합니다(유튜브 API 1유닛 사용).
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-gray-500">
+                  유튜브 주소를 바꾸지 않으면 추가 비용 없이 저장됩니다.
+                </p>
+              )}
+            </div>
           </div>
 
-          {/* 국가 (대륙을 먼저 골라야 활성화, 선택 시 대륙 자동 보정) */}
-          <div>
-            <label className="block text-xs text-gray-600">국가</label>
-            <select
-              value={country}
-              disabled={!continent}
-              onChange={(e) => {
-                const code = e.target.value;
-                setCountry(code);
-                // 방어적으로 대륙도 국가에 맞춰 보정 (필터로 이미 일치하지만 안전하게)
-                const c = getContinentByCountry(code);
-                if (c) setContinent(c);
-              }}
-              className="w-full rounded-md border border-border px-3 py-2 text-sm disabled:bg-gray-100 disabled:text-gray-400"
-            >
-              <option value="">
-                {continent ? "국가를 선택하세요" : "대륙을 먼저 선택하세요"}
-              </option>
-              {filteredCountries.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.name} ({c.code})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* 도시 */}
-          <div>
-            <label className="block text-xs text-gray-600">도시</label>
-            <input
-              type="text"
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              className="w-full rounded-md border border-border px-3 py-2 text-sm"
-            />
-          </div>
-
-          {/* 장소 특성 태그 (최대 3개) */}
-          <div>
-            <label className="block text-xs text-gray-600">
-              장소 특성 태그 (최대 3개)
-            </label>
-            <TagSelector value={tags} onChange={setTags} />
-          </div>
-
-          {/* 위치 지정 지도 */}
-          <div>
+          {/* ── 오른쪽: 위치 지정 지도 + 좌표 ── */}
+          <div className="space-y-2">
             <label className="block text-xs text-gray-600">
               위치 (지도를 클릭하면 좌표가 바뀝니다)
             </label>
-            <div className="h-72 w-full overflow-hidden rounded-md border border-border">
+            {/* 왼쪽 필드 묶음 높이에 맞춰 크게 — 스크롤 없이 한 화면에 */}
+            <div className="h-[420px] w-full overflow-hidden rounded-md border border-border">
               <LeafletMapWrapper
                 markers={mapMarkers}
                 center={mapCenter}
@@ -433,7 +472,7 @@ function EditModal({ marker, onClose, onSaved }) {
                 selectedMarkerId={hasValidCoord ? "edit" : null}
               />
             </div>
-            <div className="mt-2 grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-gray-600">위도 (lat)</label>
                 <input
@@ -453,40 +492,6 @@ function EditModal({ marker, onClose, onSaved }) {
                 />
               </div>
             </div>
-          </div>
-
-          {/* is_live */}
-          <div className="flex items-center gap-2">
-            <input
-              id="edit_is_live"
-              type="checkbox"
-              checked={isLive}
-              onChange={(e) => setIsLive(e.target.checked)}
-              className="h-4 w-4"
-            />
-            <label htmlFor="edit_is_live" className="text-sm text-gray-700">
-              실시간 라이브 영상입니다 (is_live)
-            </label>
-          </div>
-
-          {/* youtube_url */}
-          <div>
-            <label className="block text-xs text-gray-600">유튜브 주소</label>
-            <input
-              type="text"
-              value={youtubeUrl}
-              onChange={(e) => setYoutubeUrl(e.target.value)}
-              className="w-full rounded-md border border-border px-3 py-2 text-sm"
-            />
-            {urlChanged ? (
-              <p className="mt-1 text-xs text-orange-600">
-                유튜브 주소가 변경되어 저장 시 영상 정보를 다시 수집합니다(유튜브 API 1유닛 사용).
-              </p>
-            ) : (
-              <p className="mt-1 text-xs text-gray-500">
-                유튜브 주소를 바꾸지 않으면 추가 비용 없이 저장됩니다.
-              </p>
-            )}
           </div>
         </div>
 
