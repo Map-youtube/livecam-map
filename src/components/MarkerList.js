@@ -668,13 +668,18 @@ export default function MarkerList({ refreshSignal }) {
         }
         setLastScanAt(now);
 
+        // 정상 마커도 '마지막 확인' 시각이 갱신되므로, 재생불가가 0개여도 목록을 다시 불러온다.
+        // (예전엔 disabled > 0 일 때만 새로고침해서, 확인을 하고도 날짜가 그대로 보였다)
+        await loadMarkers();
+
         if (data.disabled > 0) {
-          await loadMarkers();
           setScanMessage(
-            `영상 상태 확인 완료: ${data.disabled}개 재생불가로 표시됨`
+            `영상 상태 확인 완료: ${data.checked}개 확인, ${data.disabled}개 재생불가로 표시됨`
           );
         } else {
-          setScanMessage("영상 상태 확인 완료: 모두 재생 가능");
+          setScanMessage(
+            `영상 상태 확인 완료: ${data.checked}개 확인, 모두 재생 가능`
+          );
         }
       }
     } catch (error) {

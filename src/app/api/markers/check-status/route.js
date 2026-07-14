@@ -10,10 +10,13 @@
 //       · 응답에 없음(삭제/비공개) → disabled_reason:"video_unavailable"
 //       · liveStreamingDetails.actualEndTime 있음(라이브 종료) → disabled_reason:"stream_ended"
 //         (영상 ID 는 남아있어 oEmbed 로는 못 잡지만 실제로는 재생 불가/라이브 아님)
-//       · 정상(현재 라이브/재생 가능) → 그대로 둠(복원은 "재생 확인" 역할).
-//   - 이미 auto_disabled 인 마커는 재처리하지 않음(중복 방지).
+//       · 정상(현재 라이브/재생 가능) → 상태는 그대로 두고(복원은 "재생 확인" 역할),
+//         last_checked_at 만 갱신한다. 확인은 했는데 기록이 안 남으면 관리자 목록의
+//         '마지막 확인' 이 비어 있어 "점검이 안 된 것"처럼 보이기 때문.
+//   - 이미 auto_disabled 인 마커는 재처리하지 않음(중복 방지) → 그래서 '마지막 확인' 이 갱신되지 않는다.
+//     (복원하려면 관리자가 URL 수정 후 "재생 확인" 버튼을 눌러야 한다)
 //   - 하나라도 바뀌면 revalidateTag('public-markers') 로 손님 화면 캐시 무효화.
-//   - 응답: { ok:true, checked, disabled }
+//   - 응답: { ok:true, checked, disabled, stamped }
 //
 // ⚠️ 비용: videos.list 는 id 50개당 1유닛. 예) 활성 246개 → 약 5유닛(매우 저렴).
 //    "라이브 방송 종료"는 oEmbed(무료)로는 감지 불가라 videos.list 가 필요하다.
@@ -86,8 +89,14 @@ export async function POST(request) {
 
     let checked = 0;
 
-    // 비활성화할 대상만 모은다 (쓰기는 아래에서 배치로 한 번에 처리 → 속도 개선)
+    // 비활성화할 대상(toDisable) 과 "정상이라 그대로 둘 대상"(toStamp) 을 모은다.
+    //   - toStamp: 확인 결과 정상(현재 라이브)인 마커. 상태는 그대로지만 "언제 확인했는지"는 기록해야
+    //     관리자 목록의 '마지막 확인' 이 채워진다.
+    //     (예전엔 비활성화되는 마커에만 last_checked_at 을 써서, 정상 라이브 마커는 확인을 하고도
+    //      날짜가 비어 있었다 — 마치 점검을 안 한 것처럼 보이던 문제)
+    // 쓰기는 아래에서 배치로 한 번에 처리 → 속도 개선
     const toDisable = [];
+    const toStamp = [];
     for (const t of targets) {
       const status = statusMap.get(t.videoId);
       // 조회 실패(응답 자체가 없던 배치 등)면 판단 보류(오탐 방지) → 건너뜀
@@ -107,11 +116,17 @@ export async function POST(request) {
         reason = "not_live";
       }
 
-      if (reason) toDisable.push({ ref: t.ref, reason });
-      // 정상(현재 라이브/재생 가능) → 그대로 둠 (복원하지 않음)
+      // ⚠️ 각 항목은 자기 자신의 ref/사유로만 처리한다 (반복문 밖 고정값 참조 금지)
+      if (reason) {
+        toDisable.push({ ref: t.ref, reason });
+      } else {
+        // 정상(현재 라이브) → 상태는 그대로 두고 확인 시각만 갱신
+        toStamp.push({ ref: t.ref });
+      }
     }
 
     // ─── Firestore 배치 쓰기 (400개씩) ────────────────────────
+    // 1) 재생 불가로 판정된 마커: 비활성화 + 사유 + 확인 시각
     for (let i = 0; i < toDisable.length; i += 400) {
       const batch = adminDb.batch();
       for (const item of toDisable.slice(i, i + 400)) {
@@ -124,6 +139,20 @@ export async function POST(request) {
       }
       await batch.commit();
     }
+
+    // 2) 정상(라이브) 마커: 확인 시각만 갱신 (상태 필드는 건드리지 않음)
+    //    Firestore 쓰기 비용: 활성 마커 수만큼(예: 300개 → 300 writes). 무료 한도 20,000 writes/일
+    //    안에서 충분하며, YouTube 유닛은 이미 조회한 결과를 재사용하므로 추가 비용 없음.
+    for (let i = 0; i < toStamp.length; i += 400) {
+      const batch = adminDb.batch();
+      for (const item of toStamp.slice(i, i + 400)) {
+        batch.update(item.ref, {
+          last_checked_at: FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+    }
+
     const disabled = toDisable.length;
 
     // 점검 후에는 항상 공개 마커 캐시를 무효화한다.
@@ -138,7 +167,10 @@ export async function POST(request) {
       ); // TODO: 배포 전 제거
     }
 
-    return Response.json({ ok: true, checked, disabled }, { status: 200 });
+    return Response.json(
+      { ok: true, checked, disabled, stamped: toStamp.length },
+      { status: 200 }
+    );
   } catch (error) {
     console.error("[api/markers/check-status][POST] 에러:", error); // TODO: 배포 전 제거
     return Response.json(
