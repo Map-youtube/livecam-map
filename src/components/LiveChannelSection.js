@@ -21,6 +21,27 @@ export default function LiveChannelSection() {
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState("");
   const [busyId, setBusyId] = useState(null); // 삭제/토글 진행 중인 채널 id
+  // 채널별 "현재 라이브 방송 개수" { channelDocId: number }
+  const [videoCounts, setVideoCounts] = useState({});
+  // 접힌 중분류(국가) 집합 — key: `${major}||${middle}` (#7 접기/펴기)
+  const [collapsedMiddles, setCollapsedMiddles] = useState(() => new Set());
+
+  // ─── 채널별 현재 라이브 방송 개수 조회 (관리자 참고용) ───────
+  const loadCounts = useCallback(async () => {
+    try {
+      const res = await fetch("/api/live-channels/videos", { cache: "no-store" });
+      const data = await res.json();
+      const byChannel = data && data.byChannel ? data.byChannel : {};
+      const counts = {};
+      for (const [id, vids] of Object.entries(byChannel)) {
+        counts[id] = Array.isArray(vids) ? vids.length : 0;
+      }
+      setVideoCounts(counts);
+    } catch (error) {
+      // 개수는 참고용이라 실패해도 목록은 정상 표시
+      console.error("[LiveChannelSection] 라이브 개수 조회 실패:", error); // TODO: 배포 전 제거
+    }
+  }, []);
 
   // ─── 목록 조회 ───────────────────────────────────────────────
   const reload = useCallback(async () => {
@@ -44,7 +65,19 @@ export default function LiveChannelSection() {
 
   useEffect(() => {
     reload();
-  }, [reload]);
+    loadCounts();
+  }, [reload, loadCounts]);
+
+  // 중분류(국가) 접기/펴기 토글
+  function toggleMiddle(major, middle) {
+    const key = `${major}||${middle}`;
+    setCollapsedMiddles((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   // ─── 삭제 ────────────────────────────────────────────────────
   async function handleDelete(ch) {
@@ -516,6 +549,20 @@ export default function LiveChannelSection() {
                                 <span className="font-medium text-ink">
                                   {ch.channel_name || ch.channel_id}
                                 </span>
+                                {/* 현재 라이브 방송 개수 (참고용) */}
+                                {typeof videoCounts[ch.id] === "number" && (
+                                  <span
+                                    className={
+                                      "rounded px-1.5 py-0.5 text-[11px] font-semibold " +
+                                      (videoCounts[ch.id] > 0
+                                        ? "bg-live-light text-live"
+                                        : "bg-ink/10 text-ink-muted")
+                                    }
+                                    title="현재 라이브 방송 개수"
+                                  >
+                                    🔴 {videoCounts[ch.id]}
+                                  </span>
+                                )}
                                 {ch.handle && (
                                   <span className="text-xs text-ink-muted">
                                     {ch.handle}
@@ -573,11 +620,43 @@ export default function LiveChannelSection() {
                       ));
                       // 중분류 없음(우주/ISS 등 2단계): 소분류 그룹을 그대로 나열.
                       if (mid === "") return minorGroups;
-                      // 중분류(국가) 폴더로 감싼다(3단계: 방송 > 국가 > 채널명).
+                      // 중분류(국가) 폴더로 감싼다(3단계: 방송 > 국가 > 채널명). 클릭하면 접기/펴기.
+                      const midKey = `${M}||${mid}`;
+                      const collapsed = collapsedMiddles.has(midKey);
+                      // 이 국가의 채널 수 + 현재 라이브 방송 합계
+                      let chanCount = 0;
+                      let liveSum = 0;
+                      for (const mk of minorKeys) {
+                        for (const ch of minors[mk]) {
+                          chanCount += 1;
+                          const c = videoCounts[ch.id];
+                          if (typeof c === "number") liveSum += c;
+                        }
+                      }
                       return (
                         <div key={`mid-${M}-${mid}`}>
                           <div className="flex items-center gap-2 bg-surface/60 px-3 py-1.5 text-xs font-bold text-ink">
-                            <span>📂 {mid}</span>
+                            {/* 국가명 클릭 → 이 국가의 채널 목록 접기/펴기 */}
+                            <button
+                              type="button"
+                              onClick={() => toggleMiddle(M, mid)}
+                              className="flex items-center gap-1 hover:text-brand"
+                              title="접기/펴기"
+                            >
+                              <span className="w-3 text-ink-muted">
+                                {collapsed ? "▸" : "▾"}
+                              </span>
+                              <span>📂 {mid}</span>
+                              <span className="font-normal text-ink-muted">
+                                (채널 {chanCount})
+                              </span>
+                            </button>
+                            <span
+                              className="rounded bg-live-light px-1.5 py-0.5 text-[11px] font-semibold text-live"
+                              title="이 국가의 현재 라이브 방송 합계"
+                            >
+                              🔴 {liveSum}
+                            </span>
                             <button
                               type="button"
                               onClick={() => handleRename("middle", M, mid)}
@@ -586,9 +665,11 @@ export default function LiveChannelSection() {
                               중분류명 변경
                             </button>
                           </div>
-                          <div className="divide-y divide-border border-l-2 border-border/50 pl-2">
-                            {minorGroups}
-                          </div>
+                          {!collapsed && (
+                            <div className="divide-y divide-border border-l-2 border-border/50 pl-2">
+                              {minorGroups}
+                            </div>
+                          )}
                         </div>
                       );
                     })}

@@ -942,6 +942,57 @@ export default function MarkerList({ refreshSignal }) {
     filterStatus,
   ]);
 
+  // ─── 필터 옵션별 개수(파셋 카운트) ──────────────────────────
+  // 각 드롭다운 옵션 옆에 표시할 개수. 자기 차원은 빼고 나머지 필터를 적용해 센다.
+  // (예: 대륙=아시아 선택 시, 국가 드롭다운은 아시아 안에서의 각 국가 개수를 보여준다)
+  const optionCounts = useMemo(() => {
+    const q = filterText.trim().toLowerCase();
+    const textOk = (m) => {
+      if (!q) return true;
+      const loc = (m.location || "").toLowerCase();
+      const city = (m.city || "").toLowerCase();
+      const cc = (m.country || "").toLowerCase();
+      const cn = (COUNTRY_NAME_BY_CODE[m.country] || "").toLowerCase();
+      return loc.includes(q) || city.includes(q) || cc.includes(q) || cn.includes(q);
+    };
+    const pass = (m, except) => {
+      if (except !== "text" && !textOk(m)) return false;
+      if (except !== "continent" && filterContinent !== "all" && m.continent !== filterContinent) return false;
+      if (except !== "country" && filterCountry !== "all" && m.country !== filterCountry) return false;
+      if (except !== "city" && filterCity !== "all" && (m.city || "") !== filterCity) return false;
+      if (except !== "status" && filterStatus !== "all" && getStatusKey(m) !== filterStatus) return false;
+      return true;
+    };
+    const cont = {};
+    const country = {};
+    const city = {};
+    const status = {};
+    let contAll = 0;
+    let countryAll = 0;
+    let cityAll = 0;
+    let statusAll = 0;
+    for (const m of markers) {
+      if (pass(m, "continent")) {
+        contAll += 1;
+        if (m.continent) cont[m.continent] = (cont[m.continent] || 0) + 1;
+      }
+      if (pass(m, "country")) {
+        countryAll += 1;
+        if (m.country) country[m.country] = (country[m.country] || 0) + 1;
+      }
+      if (pass(m, "city")) {
+        cityAll += 1;
+        if (m.city) city[m.city] = (city[m.city] || 0) + 1;
+      }
+      if (pass(m, "status")) {
+        statusAll += 1;
+        const k = getStatusKey(m);
+        status[k] = (status[k] || 0) + 1;
+      }
+    }
+    return { cont, country, city, status, contAll, countryAll, cityAll, statusAll };
+  }, [markers, filterText, filterContinent, filterCountry, filterCity, filterStatus]);
+
   // ─── 필터 초기화 (모두 "전체"로) ─────────────────────────────
   function resetFilters() {
     setFilterText("");
@@ -976,10 +1027,10 @@ export default function MarkerList({ refreshSignal }) {
             }}
             className="rounded-md border border-border px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
           >
-            <option value="all">대륙 전체</option>
+            <option value="all">대륙 전체 ({optionCounts.contAll})</option>
             {availableContinents.map((cont) => (
               <option key={cont} value={cont}>
-                {CONTINENT_LABELS[cont] || cont}
+                {CONTINENT_LABELS[cont] || cont} ({optionCounts.cont[cont] || 0})
               </option>
             ))}
           </select>
@@ -993,10 +1044,11 @@ export default function MarkerList({ refreshSignal }) {
             }}
             className="rounded-md border border-border px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
           >
-            <option value="all">국가 전체</option>
+            <option value="all">국가 전체 ({optionCounts.countryAll})</option>
             {availableCountries.map((code) => (
               <option key={code} value={code}>
-                {(COUNTRY_NAME_BY_CODE[code] || code) + ` (${code})`}
+                {(COUNTRY_NAME_BY_CODE[code] || code) + ` (${code})`} ·{" "}
+                {optionCounts.country[code] || 0}
               </option>
             ))}
           </select>
@@ -1007,10 +1059,10 @@ export default function MarkerList({ refreshSignal }) {
             onChange={(e) => setFilterCity(e.target.value)}
             className="rounded-md border border-border px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
           >
-            <option value="all">도시 전체</option>
+            <option value="all">도시 전체 ({optionCounts.cityAll})</option>
             {availableCities.map((city) => (
               <option key={city} value={city}>
-                {city}
+                {city} ({optionCounts.city[city] || 0})
               </option>
             ))}
           </select>
@@ -1021,10 +1073,10 @@ export default function MarkerList({ refreshSignal }) {
             onChange={(e) => setFilterStatus(e.target.value)}
             className="rounded-md border border-border px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
           >
-            <option value="all">상태 전체</option>
+            <option value="all">상태 전체 ({optionCounts.statusAll})</option>
             {STATUS_OPTIONS.map((s) => (
               <option key={s.value} value={s.value}>
-                {s.label}
+                {s.label} ({optionCounts.status[s.value] || 0})
               </option>
             ))}
           </select>
@@ -1053,6 +1105,17 @@ export default function MarkerList({ refreshSignal }) {
           >
             필터 초기화
           </button>
+
+          {/* 전체 개수 + 필터 결과 개수 */}
+          <span className="ml-auto text-sm text-ink-muted">
+            전체 <strong className="text-ink">{markers.length}</strong>개
+            {filteredMarkers.length !== markers.length && (
+              <>
+                {" "}· 필터 결과{" "}
+                <strong className="text-brand">{filteredMarkers.length}</strong>개
+              </>
+            )}
+          </span>
         </div>
       </div>
 

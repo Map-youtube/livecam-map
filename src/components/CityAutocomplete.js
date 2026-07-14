@@ -165,9 +165,9 @@ export default function CityAutocomplete({
         className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
       />
 
-      {/* 자동완성 드롭다운 */}
+      {/* 자동완성 드롭다운 (아래 Leaflet 지도보다 위에 뜨도록 높은 z-index) */}
       {open && suggestions.length > 0 && (
-        <ul className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-border bg-surface shadow-card">
+        <ul className="absolute z-[1200] mt-1 max-h-60 w-full overflow-auto rounded-md border border-border bg-surface shadow-card">
           {suggestions.map((c, idx) => (
             <li key={`${c.city}||${c.country}`}>
               <button

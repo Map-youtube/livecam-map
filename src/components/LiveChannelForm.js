@@ -280,38 +280,22 @@ export default function LiveChannelForm({ onRegistered, existingChannels }) {
           이전에 쓴 분류는 자동완성으로 다시 선택할 수 있습니다.
         </p>
         <div className="grid grid-cols-3 gap-3">
-          <div>
-            <label className="block text-xs text-gray-600">대분류</label>
-            <input
-              type="text"
-              list="lc-major-options"
-              value={major}
-              onChange={(e) => setMajor(e.target.value)}
-              placeholder="예: 방송"
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
-            />
-            <datalist id="lc-major-options">
-              {majorOptions.map((m) => (
-                <option key={m} value={m} />
-              ))}
-            </datalist>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-600">중분류 (국가)</label>
-            <input
-              type="text"
-              list="lc-middle-options"
-              value={middle}
-              onChange={(e) => setMiddle(e.target.value)}
-              placeholder="예: 한국 / 미국"
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
-            />
-            <datalist id="lc-middle-options">
-              {middleOptions.map((m) => (
-                <option key={m} value={m} />
-              ))}
-            </datalist>
-          </div>
+          {/* 대분류: 기존 분류명 드롭다운 + 직접 입력 */}
+          <CategoryField
+            label="대분류"
+            value={major}
+            onChange={setMajor}
+            options={majorOptions}
+            placeholder="예: 방송"
+          />
+          {/* 중분류(국가): 기존 분류명 드롭다운 + 직접 입력 */}
+          <CategoryField
+            label="중분류 (국가)"
+            value={middle}
+            onChange={setMiddle}
+            options={middleOptions}
+            placeholder="예: 한국 / 미국"
+          />
           <div>
             <label className="block text-xs text-gray-600">소분류 (채널명)</label>
             <input
@@ -456,6 +440,70 @@ export default function LiveChannelForm({ onRegistered, existingChannels }) {
           </p>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── 분류 입력 필드 (기존 분류명 드롭다운 + "직접 입력") ──────────
+// 마커 등록의 국가처럼 드롭다운으로 기존에 등록된 분류명을 보여준다.
+// 목록에 없는 새 분류는 "+ 직접 입력"을 골라 텍스트로 입력한다.
+function CategoryField({ label, value, onChange, options, placeholder }) {
+  const opts = Array.isArray(options) ? options : [];
+  const hasOptions = opts.length > 0;
+  // 현재 값이 기존 목록에 없고 비어있지 않으면(새 분류) 입력 모드로 시작.
+  const [mode, setMode] = useState(
+    value && !opts.includes(value) ? "input" : "select"
+  );
+
+  return (
+    <div>
+      <label className="block text-xs text-gray-600">{label}</label>
+      {mode === "select" ? (
+        <select
+          value={opts.includes(value) ? value : ""}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === "__new__") {
+              setMode("input");
+              onChange("");
+            } else {
+              onChange(v);
+            }
+          }}
+          className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
+        >
+          <option value="">선택하세요</option>
+          {opts.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+          <option value="__new__">+ 직접 입력</option>
+        </select>
+      ) : (
+        <div className="flex items-stretch gap-1">
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            className="min-w-0 flex-1 rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
+          />
+          {hasOptions && (
+            <button
+              type="button"
+              onClick={() => {
+                setMode("select");
+                onChange("");
+              }}
+              title="목록에서 선택"
+              className="flex-none rounded-md border border-border px-2 text-sm text-gray-600 hover:bg-gray-100"
+            >
+              ▾
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
