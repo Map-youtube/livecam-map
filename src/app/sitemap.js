@@ -13,6 +13,7 @@ import {
   getNormalizedPublicMarkers,
   citySlug,
 } from "@/lib/seoData";
+import { getLiveChannels } from "@/lib/getLiveChannels";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL || "https://www.tripbyclip.com";
@@ -89,5 +90,24 @@ export default async function sitemap() {
     console.error("[sitemap] 동적 경로 생성 실패:", error); // TODO: 배포 전 제거
   }
 
-  return [...staticRoutes, ...dynamicRoutes];
+  // 라이브 채널 상세 페이지 (/channel/[id]) — 채널 등록/삭제 시 자동 반영(tag:"live-channels")
+  const channelRoutes = [];
+  try {
+    const channels = await getLiveChannels();
+    for (const ch of Array.isArray(channels) ? channels : []) {
+      if (!ch || !ch.id) continue;
+      const updatedAt =
+        typeof ch.updated_at === "number" ? new Date(ch.updated_at) : now;
+      channelRoutes.push({
+        url: `${SITE_URL}/channel/${ch.id}`,
+        lastModified: updatedAt,
+        changeFrequency: "daily",
+        priority: 0.5,
+      });
+    }
+  } catch (error) {
+    console.error("[sitemap] 채널 경로 생성 실패:", error); // TODO: 배포 전 제거
+  }
+
+  return [...staticRoutes, ...dynamicRoutes, ...channelRoutes];
 }
