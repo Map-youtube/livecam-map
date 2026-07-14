@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import LiveChannelForm from "@/components/LiveChannelForm";
 import LeafletMapWrapper from "@/components/LeafletMapWrapper";
 import { getAdminIdToken } from "@/lib/clientAuth";
+import { Separator } from "@/components/ui/separator";
 
 const EDIT_MAP_CENTER = { lat: 20, lng: 0 };
 
@@ -301,20 +302,31 @@ export default function LiveChannelSection() {
         <LiveChannelForm onRegistered={reload} existingChannels={channels} />
       </div>
 
-      <hr className="border-border" />
+      <Separator />
 
       {/* 목록 */}
       <div>
         <h3 className="mb-3 font-display text-lg font-bold text-ink">
-          등록된 채널 ({channels.length})
+          등록된 채널{" "}
+          <span className="font-mono tabular-nums text-ink-muted">
+            ({channels.length})
+          </span>
         </h3>
 
         {loading ? (
-          <p className="text-sm text-ink-muted">불러오는 중...</p>
+          <p className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-6 text-sm text-ink-muted">
+            <span
+              className="inline-block h-4 w-4 flex-none animate-spin rounded-full border-2 border-border border-t-brand"
+              aria-hidden="true"
+            />
+            불러오는 중...
+          </p>
         ) : listError ? (
-          <p className="text-sm text-red-600">{listError}</p>
+          <p className="rounded-md border border-live/30 bg-live-light px-3 py-3 text-sm text-live">
+            {listError}
+          </p>
         ) : channels.length === 0 ? (
-          <p className="text-sm text-ink-muted">
+          <p className="rounded-md border border-border bg-surface px-3 py-6 text-center text-sm text-ink-muted">
             아직 등록된 채널이 없습니다. 위 폼에서 채널을 추가하세요.
           </p>
         ) : (
@@ -323,13 +335,17 @@ export default function LiveChannelSection() {
               const middles = tree[M];
               const middleKeys = sortMiddleKeys(middles);
               return (
-                <div key={M} className="rounded-md border border-border">
-                  <div className="flex items-center gap-2 border-b border-border bg-surface px-3 py-2 text-sm font-bold text-ink">
+                <div
+                  key={M}
+                  className="overflow-hidden rounded-md border border-border bg-surface"
+                >
+                  {/* 대분류 헤더 */}
+                  <div className="flex items-center gap-2 border-b border-border bg-secondary px-3 py-2 text-sm font-bold text-ink">
                     <span>📁 {M}</span>
                     <button
                       type="button"
                       onClick={() => handleRename("major", M)}
-                      className="rounded border border-border px-1.5 py-0.5 text-[11px] font-normal text-gray-600 hover:bg-gray-100"
+                      className="rounded-sm border border-border bg-surface px-1.5 py-0.5 text-[11px] font-normal text-ink-muted transition hover:bg-secondary hover:text-ink"
                     >
                       대분류명 변경
                     </button>
@@ -341,20 +357,31 @@ export default function LiveChannelSection() {
                         a.localeCompare(b, "ko")
                       );
                       // 각 소분류(채널명) 그룹 렌더. 중분류가 있으면 아래에서 폴더로 감싼다.
-                      const minorGroups = minorKeys.map((m) => (
+                      const minorGroups = minorKeys.map((m) => {
+                        const chansInMinor = minors[m];
+                        // 소분류명이 그 안의 유일한 채널명과 같으면(대부분의 경우) 헤더는
+                        // 같은 글자를 한 번 더 보여줄 뿐이라 목록만 두 배로 길어진다 → 숨긴다.
+                        // 대신 아래 채널 행 옆에 ✏️(소분류명 변경)를 둬서 기능은 그대로 유지한다.
+                        const headerIsRedundant =
+                          chansInMinor.length === 1 &&
+                          (chansInMinor[0].channel_name || "") === m;
+
+                        return (
                       <div key={`${mid}-${m}`} className="px-3 py-2">
-                        <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-ink-muted">
-                          <span>{m}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleRename("minor", M, mid, m)}
-                            className="rounded border border-border px-1.5 py-0.5 text-[11px] font-normal text-gray-600 hover:bg-gray-100"
-                          >
-                            소분류명 변경
-                          </button>
-                        </div>
+                        {!headerIsRedundant && (
+                          <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-ink-muted">
+                            <span>{m}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRename("minor", M, mid, m)}
+                              className="rounded-sm border border-border bg-surface px-1.5 py-0.5 text-[11px] font-normal text-ink-muted transition hover:bg-secondary hover:text-ink"
+                            >
+                              소분류명 변경
+                            </button>
+                          </div>
+                        )}
                         <ul className="space-y-1">
-                          {minors[m].map((ch) => {
+                          {chansInMinor.map((ch) => {
                             const isIss = ch.channel_type === "iss";
                             const inactive = ch.is_active === false;
                             const editing = editingId === ch.id;
@@ -371,7 +398,7 @@ export default function LiveChannelSection() {
                                     {ch.channel_name || ch.channel_id}
                                   </div>
                                   <div className="grid grid-cols-2 gap-2">
-                                    <label className="text-[11px] text-gray-600">
+                                    <label className="text-[11px] font-medium text-ink-muted">
                                       채널 표시명
                                       <input
                                         type="text"
@@ -382,11 +409,11 @@ export default function LiveChannelSection() {
                                             channel_name: e.target.value,
                                           }))
                                         }
-                                        className="mt-0.5 w-full rounded border border-border px-2 py-1 text-xs"
+                                        className="mt-0.5 h-8 w-full rounded-md border border-input bg-transparent px-2 py-1 text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                                       />
                                     </label>
                                     <div />
-                                    <label className="text-[11px] text-gray-600">
+                                    <label className="text-[11px] font-medium text-ink-muted">
                                       대분류
                                       <input
                                         type="text"
@@ -397,10 +424,10 @@ export default function LiveChannelSection() {
                                             major_category: e.target.value,
                                           }))
                                         }
-                                        className="mt-0.5 w-full rounded border border-border px-2 py-1 text-xs"
+                                        className="mt-0.5 h-8 w-full rounded-md border border-input bg-transparent px-2 py-1 text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                                       />
                                     </label>
-                                    <label className="text-[11px] text-gray-600">
+                                    <label className="text-[11px] font-medium text-ink-muted">
                                       중분류 (국가)
                                       <input
                                         type="text"
@@ -412,10 +439,10 @@ export default function LiveChannelSection() {
                                           }))
                                         }
                                         placeholder="비우면 2단계"
-                                        className="mt-0.5 w-full rounded border border-border px-2 py-1 text-xs"
+                                        className="mt-0.5 h-8 w-full rounded-md border border-input bg-transparent px-2 py-1 text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                                       />
                                     </label>
-                                    <label className="text-[11px] text-gray-600">
+                                    <label className="text-[11px] font-medium text-ink-muted">
                                       소분류 (채널명)
                                       <input
                                         type="text"
@@ -426,11 +453,11 @@ export default function LiveChannelSection() {
                                             minor_category: e.target.value,
                                           }))
                                         }
-                                        className="mt-0.5 w-full rounded border border-border px-2 py-1 text-xs"
+                                        className="mt-0.5 h-8 w-full rounded-md border border-input bg-transparent px-2 py-1 text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                                       />
                                     </label>
                                     {/* 채널 링크 변경 (선택) — 전체 폭 */}
-                                    <label className="col-span-2 text-[11px] text-gray-600">
+                                    <label className="col-span-2 text-[11px] font-medium text-ink-muted">
                                       채널 링크 변경 (선택 — 비우면 기존 채널 유지)
                                       <input
                                         type="text"
@@ -442,12 +469,12 @@ export default function LiveChannelSection() {
                                           }))
                                         }
                                         placeholder={`현재: ${ch.handle || ch.channel_id}  ·  새 채널 URL/@핸들/UC-id 붙여넣기`}
-                                        className="mt-0.5 w-full rounded border border-border px-2 py-1 text-xs"
+                                        className="mt-0.5 h-8 w-full rounded-md border border-input bg-transparent px-2 py-1 text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                                       />
                                     </label>
                                     {!isIss && (
                                       <>
-                                        <label className="text-[11px] text-gray-600">
+                                        <label className="text-[11px] font-medium text-ink-muted">
                                           위도(lat)
                                           <input
                                             type="text"
@@ -458,10 +485,10 @@ export default function LiveChannelSection() {
                                                 lat: e.target.value,
                                               }))
                                             }
-                                            className="mt-0.5 w-full rounded border border-border px-2 py-1 text-xs"
+                                            className="mt-0.5 h-8 w-full rounded-md border border-input bg-transparent px-2 py-1 text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                                           />
                                         </label>
-                                        <label className="text-[11px] text-gray-600">
+                                        <label className="text-[11px] font-medium text-ink-muted">
                                           경도(lng)
                                           <input
                                             type="text"
@@ -472,7 +499,7 @@ export default function LiveChannelSection() {
                                                 lng: e.target.value,
                                               }))
                                             }
-                                            className="mt-0.5 w-full rounded border border-border px-2 py-1 text-xs"
+                                            className="mt-0.5 h-8 w-full rounded-md border border-input bg-transparent px-2 py-1 text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                                           />
                                         </label>
                                       </>
@@ -482,7 +509,7 @@ export default function LiveChannelSection() {
                                   {/* 위치 수정: 등록 폼과 동일하게 지도를 클릭해 마커 위치 변경 */}
                                   {!isIss && (
                                     <div className="mt-2">
-                                      <div className="mb-1 text-[11px] text-gray-600">
+                                      <div className="mb-1 text-[11px] text-ink-muted">
                                         지도를 클릭해 위치를 수정하세요.
                                       </div>
                                       <div className="h-64 w-full overflow-hidden rounded-md border border-border">
@@ -525,14 +552,14 @@ export default function LiveChannelSection() {
                                       type="button"
                                       disabled={busyId === ch.id}
                                       onClick={() => saveEdit(ch)}
-                                      className="rounded bg-brand px-3 py-1 text-xs font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
+                                      className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-hover disabled:opacity-50"
                                     >
                                       저장
                                     </button>
                                     <button
                                       type="button"
                                       onClick={cancelEdit}
-                                      className="rounded border border-border px-3 py-1 text-xs text-gray-700 hover:bg-gray-100"
+                                      className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-ink transition hover:bg-secondary"
                                     >
                                       취소
                                     </button>
@@ -549,6 +576,19 @@ export default function LiveChannelSection() {
                                 <span className="font-medium text-ink">
                                   {ch.channel_name || ch.channel_id}
                                 </span>
+                                {/* 소분류 헤더를 숨긴 경우, 소분류명 변경 기능을 여기서 제공 */}
+                                {headerIsRedundant && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleRename("minor", M, mid, m)
+                                    }
+                                    title={`소분류명 변경 (${m})`}
+                                    className="rounded-sm px-1 text-[11px] text-ink-muted transition hover:bg-secondary hover:text-ink"
+                                  >
+                                    ✏️
+                                  </button>
+                                )}
                                 {/* 현재 라이브 방송 개수 (참고용) */}
                                 {typeof videoCounts[ch.id] === "number" && (
                                   <span
@@ -591,7 +631,7 @@ export default function LiveChannelSection() {
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     title={`SEO 페이지 열기 (채널ID: ${ch.id})`}
-                                    className="rounded border border-border px-2 py-0.5 text-xs text-brand hover:bg-brand-light"
+                                    className="rounded-sm border border-border px-2 py-0.5 text-xs font-medium text-brand transition hover:bg-brand-light"
                                   >
                                     🔗 페이지
                                   </a>
@@ -599,7 +639,7 @@ export default function LiveChannelSection() {
                                     type="button"
                                     disabled={busyId === ch.id}
                                     onClick={() => startEdit(ch)}
-                                    className="rounded border border-border px-2 py-0.5 text-xs text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                                    className="rounded-sm border border-border px-2 py-0.5 text-xs font-medium text-ink transition hover:bg-secondary disabled:opacity-50"
                                   >
                                     수정
                                   </button>
@@ -607,7 +647,7 @@ export default function LiveChannelSection() {
                                     type="button"
                                     disabled={busyId === ch.id}
                                     onClick={() => handleToggleActive(ch)}
-                                    className="rounded border border-border px-2 py-0.5 text-xs text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                                    className="rounded-sm border border-border px-2 py-0.5 text-xs font-medium text-ink transition hover:bg-secondary disabled:opacity-50"
                                   >
                                     {inactive ? "활성화" : "비활성화"}
                                   </button>
@@ -616,7 +656,7 @@ export default function LiveChannelSection() {
                                       type="button"
                                       disabled={busyId === ch.id}
                                       onClick={() => handleDelete(ch)}
-                                      className="rounded border border-red-300 px-2 py-0.5 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50"
+                                      className="rounded-sm border border-live/40 px-2 py-0.5 text-xs font-medium text-live transition hover:bg-live-light disabled:opacity-50"
                                     >
                                       삭제
                                     </button>
@@ -627,7 +667,8 @@ export default function LiveChannelSection() {
                           })}
                         </ul>
                       </div>
-                      ));
+                        );
+                      });
                       // 중분류 없음(우주/ISS 등 2단계): 소분류 그룹을 그대로 나열.
                       if (mid === "") return minorGroups;
                       // 중분류(국가) 폴더로 감싼다(3단계: 방송 > 국가 > 채널명). 클릭하면 접기/펴기.
@@ -670,7 +711,7 @@ export default function LiveChannelSection() {
                             <button
                               type="button"
                               onClick={() => handleRename("middle", M, mid)}
-                              className="rounded border border-border px-1.5 py-0.5 text-[11px] font-normal text-gray-600 hover:bg-gray-100"
+                              className="rounded-sm border border-border bg-surface px-1.5 py-0.5 text-[11px] font-normal text-ink-muted transition hover:bg-secondary hover:text-ink"
                             >
                               중분류명 변경
                             </button>

@@ -15,6 +15,12 @@
 import { useEffect, useMemo, useState } from "react";
 import LeafletMapWrapper from "@/components/LeafletMapWrapper";
 import { getAdminIdToken } from "@/lib/clientAuth";
+import { SELECT_CLASS } from "@/lib/uiClasses";
+import StepHeader from "@/components/admin/StepHeader";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
 
 const DEFAULT_CENTER = { lat: 20, lng: 0 };
 
@@ -256,187 +262,191 @@ export default function LiveChannelForm({ onRegistered, existingChannels }) {
     }
   }
 
+  // ⚠️ 화면(JSX)만 재설계했고, 위의 상태/핸들러 로직은 그대로다.
+  //    마커 등록 폼(MarkerForm)과 같은 "단계 카드" 형식으로 통일한다.
   return (
     <div className="w-full space-y-5">
       {message && (
-        <div className="rounded-md border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-800">
+        <div className="rounded-md border border-brand/30 bg-brand-light px-4 py-3 text-sm font-medium text-brand-hover">
           ✅ {message}
         </div>
       )}
       {error && (
-        <div className="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
+        <div className="rounded-md border border-live/30 bg-live-light px-4 py-3 text-sm font-medium text-live">
           ⚠️ {error}
         </div>
       )}
 
-      {/* 분류 (대/소) */}
-      <section className="space-y-2">
-        <label className="block text-sm font-semibold text-gray-800">
-          1. 분류 <span className="text-red-500">*</span>
-        </label>
-        <p className="text-xs text-gray-500">
-          방송 채널은 <strong>대분류 방송 / 중분류 국가 / 소분류 채널명</strong> 3단계로 등록합니다.
-          소분류(채널명)는 채널을 확인하면 자동으로 채워지며 수정할 수 있습니다.
-          이전에 쓴 분류는 자동완성으로 다시 선택할 수 있습니다.
-        </p>
-        <div className="grid grid-cols-3 gap-3">
-          {/* 대분류: 기존 분류명 드롭다운 + 직접 입력 */}
-          <CategoryField
-            label="대분류"
-            value={major}
-            onChange={setMajor}
-            options={majorOptions}
-            placeholder="예: 방송"
+      {/* ── 1단계: 분류 ───────────────────────────────────────── */}
+      <Card>
+        <StepHeader step={1} title="분류" required>
+          방송 채널은 <strong>대분류 방송 / 중분류 국가 / 소분류 채널명</strong> 3단계로
+          등록합니다. 소분류(채널명)는 채널을 확인하면 자동으로 채워지며 수정할 수
+          있습니다. 이전에 쓴 분류는 자동완성으로 다시 선택할 수 있습니다.
+        </StepHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {/* 대분류: 기존 분류명 드롭다운 + 직접 입력 */}
+            <CategoryField
+              label="대분류"
+              value={major}
+              onChange={setMajor}
+              options={majorOptions}
+              placeholder="예: 방송"
+            />
+            {/* 중분류(국가): 기존 분류명 드롭다운 + 직접 입력 */}
+            <CategoryField
+              label="중분류 (국가)"
+              value={middle}
+              onChange={setMiddle}
+              options={middleOptions}
+              placeholder="예: 한국 / 미국"
+            />
+            <div className="space-y-1.5">
+              <Label htmlFor="lc-minor">소분류 (채널명)</Label>
+              <Input
+                id="lc-minor"
+                type="text"
+                list="lc-minor-options"
+                value={minor}
+                onChange={(e) => setMinor(e.target.value)}
+                placeholder="채널 확인 시 자동 입력"
+              />
+              <datalist id="lc-minor-options">
+                {minorOptions.map((m) => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── 2단계: 채널 ───────────────────────────────────────── */}
+      <Card>
+        <StepHeader step={2} title="채널" required>
+          유튜브 <strong>채널 홈 주소</strong> · <strong>@핸들</strong> ·{" "}
+          <strong>UC 채널 ID</strong>, 또는 그 채널의{" "}
+          <strong>영상/라이브 링크</strong> 어느 것이든 붙여넣으세요. 입력하는 즉시
+          등록 가능 여부를 확인합니다.
+        </StepHeader>
+        <CardContent className="space-y-3">
+          <Input
+            type="text"
+            value={channelInput}
+            onChange={(e) => setChannelInput(e.target.value)}
+            placeholder="예: https://www.youtube.com/@NASA  또는  @NASA  또는  UCLA_DiR1FfKNvjuUpBHmylQ"
           />
-          {/* 중분류(국가): 기존 분류명 드롭다운 + 직접 입력 */}
-          <CategoryField
-            label="중분류 (국가)"
-            value={middle}
-            onChange={setMiddle}
-            options={middleOptions}
-            placeholder="예: 한국 / 미국"
-          />
-          <div>
-            <label className="block text-xs text-gray-600">소분류 (채널명)</label>
-            <input
-              type="text"
-              list="lc-minor-options"
-              value={minor}
-              onChange={(e) => setMinor(e.target.value)}
-              placeholder="채널 확인 시 자동 입력"
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
-            />
-            <datalist id="lc-minor-options">
-              {minorOptions.map((m) => (
-                <option key={m} value={m} />
-              ))}
-            </datalist>
-          </div>
-        </div>
-      </section>
 
-      {/* 채널 */}
-      <section className="space-y-2">
-        <label className="block text-sm font-semibold text-gray-800">
-          2. 채널 <span className="text-red-500">*</span>
-        </label>
-        <p className="text-xs text-gray-500">
-          유튜브 <strong>채널 홈 주소</strong>·<strong>@핸들</strong>·<strong>UC 채널 ID</strong>,
-          또는 그 채널의 <strong>영상/라이브 링크</strong> 어느 것이든 붙여넣으세요. 입력하는 즉시 등록 가능 여부를 확인합니다.
-        </p>
-        <input
-          type="text"
-          value={channelInput}
-          onChange={(e) => setChannelInput(e.target.value)}
-          placeholder="예: https://www.youtube.com/@NASA  또는  @NASA  또는  UCLA_DiR1FfKNvjuUpBHmylQ"
-          className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
-        />
+          {/* 즉시확인 상태 안내 (마커 등록과 동일한 방식) */}
+          {channelStatus === "checking" && (
+            <p className="flex items-center gap-2 text-sm text-ink-muted">
+              <span
+                className="inline-block h-3 w-3 flex-none animate-spin rounded-full border-2 border-border border-t-brand"
+                aria-hidden="true"
+              />
+              채널 확인 중...
+            </p>
+          )}
+          {channelStatus === "available" && (
+            <p className="text-sm font-medium text-brand">
+              ✓ 등록 가능한 채널입니다{resolvedName ? `: ${resolvedName}` : ""}.
+            </p>
+          )}
+          {channelStatus === "invalid" && (
+            <p className="text-sm text-live">
+              {checkError ||
+                "채널을 찾을 수 없습니다. 채널 주소/@핸들/영상 링크를 확인하세요."}
+            </p>
+          )}
+          {channelStatus === "error" && (
+            <p className="text-sm text-live">{checkError}</p>
+          )}
+          {channelStatus === "duplicate" && (
+            <div className="rounded-md border border-live bg-live-light px-4 py-3 text-sm text-live">
+              <p className="font-bold">⛔ 이미 등록된 채널입니다.</p>
+              {resolvedName && <p className="mt-1">채널: {resolvedName}</p>}
+              {existingChannel && (
+                <p className="mt-1">
+                  기존 등록 위치:{" "}
+                  {[
+                    existingChannel.major_category,
+                    existingChannel.middle_category,
+                    existingChannel.minor_category,
+                  ]
+                    .filter(Boolean)
+                    .join(" > ") || "-"}
+                </p>
+              )}
+              <p className="mt-1">중복 등록을 막기 위해 등록 버튼이 비활성화됩니다.</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-        {/* 즉시확인 상태 안내 (마커 등록과 동일한 방식) */}
-        {channelStatus === "checking" && (
-          <p className="flex items-center gap-2 text-sm text-gray-500">
-            <span
-              className="inline-block h-3 w-3 flex-none animate-spin rounded-full border-2 border-gray-300 border-t-brand"
-              aria-hidden="true"
-            />
-            채널 확인 중...
-          </p>
-        )}
-        {channelStatus === "available" && (
-          <p className="text-sm text-green-600">
-            ✅ 등록 가능한 채널입니다{resolvedName ? `: ${resolvedName}` : ""}.
-          </p>
-        )}
-        {channelStatus === "invalid" && (
-          <p className="text-sm text-red-600">
-            {checkError || "채널을 찾을 수 없습니다. 채널 주소/@핸들/영상 링크를 확인하세요."}
-          </p>
-        )}
-        {channelStatus === "error" && (
-          <p className="text-sm text-red-600">{checkError}</p>
-        )}
-        {channelStatus === "duplicate" && (
-          <div className="rounded-md border-2 border-red-400 bg-red-50 px-4 py-3 text-sm text-red-800">
-            <p className="font-bold">⛔ 이미 등록된 채널입니다.</p>
-            {resolvedName && <p className="mt-1">채널: {resolvedName}</p>}
-            {existingChannel && (
-              <p className="mt-1">
-                기존 등록 위치:{" "}
-                {[
-                  existingChannel.major_category,
-                  existingChannel.middle_category,
-                  existingChannel.minor_category,
-                ]
-                  .filter(Boolean)
-                  .join(" > ") || "-"}
-              </p>
-            )}
-            <p className="mt-1">중복 등록을 막기 위해 등록 버튼이 비활성화됩니다.</p>
-          </div>
-        )}
-      </section>
-
-      {/* 위치 (지도) */}
-      <section className="space-y-2">
-        <label className="block text-sm font-semibold text-gray-800">
-          3. 위치 <span className="text-red-500">*</span>
-        </label>
-        <p className="text-xs text-gray-500">
-          지도를 클릭해 이 채널을 표시할 마커 위치를 지정하세요. (예: 해당 방송국이 있는 도시)
-        </p>
-        <div className="h-[440px] w-full overflow-hidden rounded-md border border-border">
-          <LeafletMapWrapper
-            markers={mapMarkers}
-            center={DEFAULT_CENTER}
-            zoom={2}
-            onMapClick={handleMapClick}
-            selectedMarkerId={hasValidCoord ? "selected" : null}
-            initialWorldFit={true}
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs text-gray-600">위도 (lat)</label>
-            <input
-              type="text"
-              value={lat}
-              onChange={(e) => setLat(e.target.value)}
-              placeholder="지도 클릭 또는 직접 입력"
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
+      {/* ── 3단계: 위치 (지도) ────────────────────────────────── */}
+      <Card>
+        <StepHeader step={3} title="위치" required>
+          지도를 클릭해 이 채널을 표시할 마커 위치를 지정하세요. (예: 해당 방송국이
+          있는 도시)
+        </StepHeader>
+        <CardContent className="space-y-3">
+          <div className="h-[360px] w-full overflow-hidden rounded-md border border-border sm:h-[440px]">
+            <LeafletMapWrapper
+              markers={mapMarkers}
+              center={DEFAULT_CENTER}
+              zoom={2}
+              onMapClick={handleMapClick}
+              selectedMarkerId={hasValidCoord ? "selected" : null}
+              initialWorldFit={true}
             />
           </div>
-          <div>
-            <label className="block text-xs text-gray-600">경도 (lng)</label>
-            <input
-              type="text"
-              value={lng}
-              onChange={(e) => setLng(e.target.value)}
-              placeholder="지도 클릭 또는 직접 입력"
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
-            />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="lc-lat">위도 (lat)</Label>
+              <Input
+                id="lc-lat"
+                type="text"
+                inputMode="decimal"
+                value={lat}
+                onChange={(e) => setLat(e.target.value)}
+                placeholder="지도 클릭 또는 직접 입력"
+                className="font-mono"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="lc-lng">경도 (lng)</Label>
+              <Input
+                id="lc-lng"
+                type="text"
+                inputMode="decimal"
+                value={lng}
+                onChange={(e) => setLng(e.target.value)}
+                placeholder="지도 클릭 또는 직접 입력"
+                className="font-mono"
+              />
+            </div>
           </div>
-        </div>
-        {!hasValidCoord && (lat !== "" || lng !== "") && (
-          <p className="text-sm text-red-600">위도/경도는 숫자로 입력해 주세요.</p>
-        )}
-      </section>
+          {!hasValidCoord && (lat !== "" || lng !== "") && (
+            <p className="text-sm text-live">위도/경도는 숫자로 입력해 주세요.</p>
+          )}
+        </CardContent>
+      </Card>
 
-      {/* 등록 버튼 */}
-      <div className="pt-1">
-        <button
+      {/* ── 등록 버튼 ─────────────────────────────────────────── */}
+      <div className="space-y-2">
+        <Button
           type="button"
           onClick={handleSubmit}
           disabled={!canSubmit}
-          className={
-            "w-full rounded-md px-4 py-3 text-sm font-semibold text-white transition " +
-            (canSubmit ? "bg-brand hover:bg-brand-hover" : "cursor-not-allowed bg-gray-300")
-          }
+          className="h-11 w-full text-sm font-semibold"
         >
           {submitting ? "등록 중... (채널 확인)" : "채널 등록"}
-        </button>
+        </Button>
         {!canSubmit && !submitting && (
-          <p className="mt-2 text-xs text-gray-500">
-            대분류·소분류·채널·위치를 모두 채우면 등록할 수 있습니다. (중분류는 선택)
+          <p className="text-center text-xs text-ink-muted">
+            대분류 · 소분류 · 채널 · 위치를 모두 채우면 등록할 수 있습니다. (중분류는
+            선택)
           </p>
         )}
       </div>
@@ -456,10 +466,11 @@ function CategoryField({ label, value, onChange, options, placeholder }) {
   );
 
   return (
-    <div>
-      <label className="block text-xs text-gray-600">{label}</label>
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
       {mode === "select" ? (
         <select
+          aria-label={label}
           value={opts.includes(value) ? value : ""}
           onChange={(e) => {
             const v = e.target.value;
@@ -470,7 +481,7 @@ function CategoryField({ label, value, onChange, options, placeholder }) {
               onChange(v);
             }
           }}
-          className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
+          className={SELECT_CLASS}
         >
           <option value="">선택하세요</option>
           {opts.map((o) => (
@@ -482,12 +493,12 @@ function CategoryField({ label, value, onChange, options, placeholder }) {
         </select>
       ) : (
         <div className="flex items-stretch gap-1">
-          <input
+          <Input
             type="text"
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
-            className="min-w-0 flex-1 rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
+            className="min-w-0 flex-1"
           />
           {hasOptions && (
             <button
@@ -497,7 +508,7 @@ function CategoryField({ label, value, onChange, options, placeholder }) {
                 onChange("");
               }}
               title="목록에서 선택"
-              className="flex-none rounded-md border border-border px-2 text-sm text-gray-600 hover:bg-gray-100"
+              className="flex-none rounded-md border border-border px-2 text-sm text-ink-muted transition hover:bg-secondary hover:text-ink"
             >
               ▾
             </button>

@@ -30,34 +30,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-
-// ─── 폼 단계 카드 헤더 (번호 뱃지 + 제목 + 필수 표시) ──────────
-// 각 단계를 카드로 감싸 시각적 그룹을 만들고, 번호로 진행 순서를 명확히 한다.
-function StepHeader({ step, title, required, children }) {
-  return (
-    <CardHeader>
-      <CardTitle className="flex items-center gap-2 text-base">
-        <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-brand text-xs font-bold text-white">
-          {step}
-        </span>
-        <span>{title}</span>
-        {required && (
-          <span className="text-sm font-normal text-live" aria-label="필수">
-            *
-          </span>
-        )}
-      </CardTitle>
-      {children && <CardDescription>{children}</CardDescription>}
-    </CardHeader>
-  );
-}
+import { Card, CardContent } from "@/components/ui/card";
+// 단계 카드 헤더(번호 뱃지+제목+설명) — 채널 등록 폼과 같은 형식을 쓰도록 공용 컴포넌트로 분리
+import StepHeader from "@/components/admin/StepHeader";
 
 
 // ─── 대륙 코드 → 한국어 라벨 ───────────────────────────────────
