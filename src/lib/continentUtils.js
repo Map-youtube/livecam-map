@@ -190,6 +190,89 @@ const COUNTRY_TO_CONTINENT = {
   LB: "middleeast", // 레바논
   IL: "middleeast", // 이스라엘
   PS: "middleeast", // 팔레스타인
+
+  // ─── 추가: 소규모 국가/영토 (위치 기반 대륙) ─────────────────
+  // 아프리카
+  BF: "africa", // 부르키나파소
+  BI: "africa", // 부룬디
+  BJ: "africa", // 베냉
+  CF: "africa", // 중앙아프리카공화국
+  CV: "africa", // 카보베르데
+  DJ: "africa", // 지부티
+  ER: "africa", // 에리트레아
+  GA: "africa", // 가봉
+  GM: "africa", // 감비아
+  GN: "africa", // 기니
+  GQ: "africa", // 적도기니
+  GW: "africa", // 기니비사우
+  KM: "africa", // 코모로
+  LR: "africa", // 라이베리아
+  LS: "africa", // 레소토
+  MR: "africa", // 모리타니
+  MW: "africa", // 말라위
+  NE: "africa", // 니제르
+  SL: "africa", // 시에라리온
+  SO: "africa", // 소말리아
+  SS: "africa", // 남수단
+  ST: "africa", // 상투메프린시페
+  SZ: "africa", // 에스와티니
+  TD: "africa", // 차드
+  TG: "africa", // 토고
+  EH: "africa", // 서사하라
+  RE: "africa", // 레위니옹(프랑스령)
+  YT: "africa", // 마요트(프랑스령)
+  // 유럽
+  AD: "europe", // 안도라
+  LI: "europe", // 리히텐슈타인
+  MC: "europe", // 모나코
+  SM: "europe", // 산마리노
+  VA: "europe", // 바티칸
+  XK: "europe", // 코소보
+  GI: "europe", // 지브롤터
+  FO: "europe", // 페로제도
+  IM: "europe", // 맨섬
+  JE: "europe", // 저지
+  GG: "europe", // 건지
+  AX: "europe", // 올란드제도
+  // 북아메리카 (카리브해 포함)
+  SX: "north_america", // 신트마르턴
+  BB: "north_america", // 바베이도스
+  AG: "north_america", // 앤티가바부다
+  DM: "north_america", // 도미니카연방
+  KN: "north_america", // 세인트키츠네비스
+  LC: "north_america", // 세인트루시아
+  VC: "north_america", // 세인트빈센트그레나딘
+  GD: "north_america", // 그레나다
+  MQ: "north_america", // 마르티니크
+  GP: "north_america", // 과들루프
+  BL: "north_america", // 생바르텔레미
+  MF: "north_america", // 생마르탱
+  AI: "north_america", // 앵귈라
+  VG: "north_america", // 영국령 버진아일랜드
+  VI: "north_america", // 미국령 버진아일랜드
+  KY: "north_america", // 케이맨제도
+  TC: "north_america", // 터크스케이커스제도
+  BM: "north_america", // 버뮤다
+  GL: "north_america", // 그린란드(지리적으로 북미)
+  PM: "north_america", // 생피에르미클롱
+  // 남아메리카 (베네수엘라 앞바다 ABC 제도·대륙붕 = 위치 기반 남미)
+  CW: "south_america", // 퀴라소(네덜란드령이나 위치상 남미)
+  AW: "south_america", // 아루바
+  BQ: "south_america", // 보네르
+  TT: "south_america", // 트리니다드토바고
+  FK: "south_america", // 포클랜드제도
+  GF: "south_america", // 프랑스령 기아나
+  // 오세아니아
+  CK: "oceania", // 쿡제도
+  NU: "oceania", // 니우에
+  TK: "oceania", // 토켈라우
+  TV: "oceania", // 투발루
+  NR: "oceania", // 나우루
+  MP: "oceania", // 북마리아나제도
+  AS: "oceania", // 미국령 사모아
+  PN: "oceania", // 핏케언제도
+  WF: "oceania", // 왈리스푸투나
+  NF: "oceania", // 노퍽섬
 };
 
 // ─── 국가코드 → 대륙 조회 함수 ─────────────────────────────────

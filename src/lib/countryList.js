@@ -186,6 +186,89 @@ export const COUNTRIES = [
   { code: "LB", name: "레바논" },
   { code: "IL", name: "이스라엘" },
   { code: "PS", name: "팔레스타인" },
+
+  // ─── 추가: 소규모 국가/영토 (위치 기반 대륙) ─────────────────
+  // 아프리카
+  { code: "BF", name: "부르키나파소" },
+  { code: "BI", name: "부룬디" },
+  { code: "BJ", name: "베냉" },
+  { code: "CF", name: "중앙아프리카공화국" },
+  { code: "CV", name: "카보베르데" },
+  { code: "DJ", name: "지부티" },
+  { code: "ER", name: "에리트레아" },
+  { code: "GA", name: "가봉" },
+  { code: "GM", name: "감비아" },
+  { code: "GN", name: "기니" },
+  { code: "GQ", name: "적도기니" },
+  { code: "GW", name: "기니비사우" },
+  { code: "KM", name: "코모로" },
+  { code: "LR", name: "라이베리아" },
+  { code: "LS", name: "레소토" },
+  { code: "MR", name: "모리타니" },
+  { code: "MW", name: "말라위" },
+  { code: "NE", name: "니제르" },
+  { code: "SL", name: "시에라리온" },
+  { code: "SO", name: "소말리아" },
+  { code: "SS", name: "남수단" },
+  { code: "ST", name: "상투메프린시페" },
+  { code: "SZ", name: "에스와티니" },
+  { code: "TD", name: "차드" },
+  { code: "TG", name: "토고" },
+  { code: "EH", name: "서사하라" },
+  { code: "RE", name: "레위니옹" },
+  { code: "YT", name: "마요트" },
+  // 유럽
+  { code: "AD", name: "안도라" },
+  { code: "LI", name: "리히텐슈타인" },
+  { code: "MC", name: "모나코" },
+  { code: "SM", name: "산마리노" },
+  { code: "VA", name: "바티칸" },
+  { code: "XK", name: "코소보" },
+  { code: "GI", name: "지브롤터" },
+  { code: "FO", name: "페로제도" },
+  { code: "IM", name: "맨섬" },
+  { code: "JE", name: "저지" },
+  { code: "GG", name: "건지" },
+  { code: "AX", name: "올란드제도" },
+  // 북아메리카 (카리브해 포함)
+  { code: "SX", name: "신트마르턴" },
+  { code: "BB", name: "바베이도스" },
+  { code: "AG", name: "앤티가바부다" },
+  { code: "DM", name: "도미니카연방" },
+  { code: "KN", name: "세인트키츠네비스" },
+  { code: "LC", name: "세인트루시아" },
+  { code: "VC", name: "세인트빈센트그레나딘" },
+  { code: "GD", name: "그레나다" },
+  { code: "MQ", name: "마르티니크" },
+  { code: "GP", name: "과들루프" },
+  { code: "BL", name: "생바르텔레미" },
+  { code: "MF", name: "생마르탱" },
+  { code: "AI", name: "앵귈라" },
+  { code: "VG", name: "영국령버진아일랜드" },
+  { code: "VI", name: "미국령버진아일랜드" },
+  { code: "KY", name: "케이맨제도" },
+  { code: "TC", name: "터크스케이커스제도" },
+  { code: "BM", name: "버뮤다" },
+  { code: "GL", name: "그린란드" },
+  { code: "PM", name: "생피에르미클롱" },
+  // 남아메리카 (베네수엘라 앞바다 ABC 제도·대륙붕 = 위치 기반 남미)
+  { code: "CW", name: "퀴라소" },
+  { code: "AW", name: "아루바" },
+  { code: "BQ", name: "보네르" },
+  { code: "TT", name: "트리니다드토바고" },
+  { code: "FK", name: "포클랜드제도" },
+  { code: "GF", name: "프랑스령기아나" },
+  // 오세아니아
+  { code: "CK", name: "쿡제도" },
+  { code: "NU", name: "니우에" },
+  { code: "TK", name: "토켈라우" },
+  { code: "TV", name: "투발루" },
+  { code: "NR", name: "나우루" },
+  { code: "MP", name: "북마리아나제도" },
+  { code: "AS", name: "미국령사모아" },
+  { code: "PN", name: "핏케언제도" },
+  { code: "WF", name: "왈리스푸투나" },
+  { code: "NF", name: "노퍽섬" },
 ];
 
 // 코드 → 한국어명 빠른 조회 맵
@@ -236,4 +319,24 @@ export const COUNTRY_GEO = {
   TR: { lat: 39.0, lng: 35.0, zoom: 6, west: 26, south: 36, east: 45, north: 42 }, // 튀르키예
   EG: { lat: 26.8, lng: 30.8, zoom: 6, west: 25, south: 22, east: 37, north: 32 }, // 이집트
   ZA: { lat: -30.6, lng: 22.9, zoom: 5, west: 16, south: -35, east: 33, north: -22 }, // 남아프리카공화국
+
+  // ─── 추가한 소규모 국가/영토 중 자주 쓰는 곳(선택 시 지도 자동 이동) ──
+  CW: { lat: 12.17, lng: -68.99, zoom: 11 }, // 퀴라소
+  AW: { lat: 12.52, lng: -69.97, zoom: 11 }, // 아루바
+  BQ: { lat: 12.18, lng: -68.25, zoom: 11 }, // 보네르
+  TT: { lat: 10.69, lng: -61.22, zoom: 9 }, // 트리니다드토바고
+  GF: { lat: 3.93, lng: -53.13, zoom: 7 }, // 프랑스령 기아나
+  FK: { lat: -51.8, lng: -59.5, zoom: 7 }, // 포클랜드제도
+  GL: { lat: 72.0, lng: -40.0, zoom: 3 }, // 그린란드
+  BB: { lat: 13.19, lng: -59.54, zoom: 10 }, // 바베이도스
+  MQ: { lat: 14.64, lng: -61.02, zoom: 10 }, // 마르티니크
+  GP: { lat: 16.24, lng: -61.55, zoom: 10 }, // 과들루프
+  GD: { lat: 12.12, lng: -61.68, zoom: 11 }, // 그레나다
+  LC: { lat: 13.9, lng: -60.98, zoom: 11 }, // 세인트루시아
+  BM: { lat: 32.31, lng: -64.75, zoom: 11 }, // 버뮤다
+  KY: { lat: 19.32, lng: -81.24, zoom: 10 }, // 케이맨제도
+  MC: { lat: 43.74, lng: 7.42, zoom: 13 }, // 모나코
+  AD: { lat: 42.55, lng: 1.6, zoom: 11 }, // 안도라
+  MT: { lat: 35.9, lng: 14.4, zoom: 11 }, // 몰타(참고)
+  RE: { lat: -21.11, lng: 55.53, zoom: 9 }, // 레위니옹
 };
