@@ -10,6 +10,19 @@
 // ⚠️ 비용: 마커 등록당 이 함수 1회 호출(정상 응답 시 API 호출 1회). 재시도는 파싱 실패 시에만.
 // ─────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────
+// ⛔ AI 자동 생성 스위치 (현재: 꺼짐)
+//
+// 장소 설명은 관리자가 직접 작성해서 넣는다. AI 는 개입하지 않는다.
+//   - false 이면 generatePlaceDescription 이 OpenAI 를 "호출하지 않고" 즉시 { ko:"", en:"" } 를 반환
+//     → 마커 등록 시 AI 비용 0원. 등록 자체는 정상 진행(설명만 빈 값으로 저장).
+//   - 관리자 페이지의 "AI 장소 설명" 편집창(직접 입력 + 확정 저장)은 그대로 동작한다.
+//   - ⚠️ 환경변수 AI_API_KEY 가 설정돼 있어도 이 스위치가 false 면 호출하지 않는다(키와 무관하게 확실히 차단).
+//
+// 다시 켜려면: 아래 값을 true 로 바꾸기만 하면 된다 (생성 코드는 아래에 그대로 보존돼 있음).
+// ─────────────────────────────────────────────────────────────
+const AI_DESCRIPTION_ENABLED = false;
+
 // 사용할 모델 (지침: gpt-4.1-mini). 비밀값이 아니므로 상수로 둔다.
 const AI_MODEL = "gpt-4.1-mini";
 const OPENAI_ENDPOINT = "https://api.openai.com/v1/chat/completions";
@@ -86,6 +99,12 @@ export async function generatePlaceDescription({
   tags,
 } = {}) {
   try {
+    // ⛔ AI 자동 생성이 꺼져 있으면 OpenAI 를 호출하지 않고 빈 설명을 반환한다 (비용 0).
+    //    관리자가 편집창에서 직접 입력해 확정 저장하는 흐름은 그대로 유지된다.
+    if (!AI_DESCRIPTION_ENABLED) {
+      return { ko: "", en: "" };
+    }
+
     // 서버 전용 키
     const apiKey = process.env.AI_API_KEY;
     if (!apiKey) {

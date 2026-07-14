@@ -34,6 +34,14 @@ export const dynamic = "force-dynamic";
 
 const COLLECTION = "markers";
 
+// 정상(라이브) 마커의 last_checked_at 을 다시 기록하기까지의 최소 간격.
+// 관리자 페이지가 열려 있으면 이 점검이 10분마다 자동 실행되므로(MarkerList 의 SCAN_COOLDOWN_MS),
+// 매번 전 마커에 쓰면 Firestore 쓰기가 폭증한다.
+//   예) 활성 300개 × 6회/시간 × 24시간 = 43,200 writes/일 → 무료 한도(20,000/일) 초과
+// 1시간에 한 번만 기록하면 300 × 24 = 7,200 writes/일 로 한도 안에 들어온다.
+// (재생불가로 "판정이 바뀌는" 마커는 이 제한과 무관하게 즉시 기록된다 — 아래 toDisable)
+const STAMP_MIN_INTERVAL_MS = 60 * 60 * 1000; // 1시간
+
 export async function POST(request) {
   try {
     // ─── 로그인 관리자 검증 ────────────────────────────────────
@@ -75,12 +83,24 @@ export async function POST(request) {
     }
 
     // ─── 검사 대상 추리기 (이미 재생불가/video_id 없음 제외) ───
+    // 각 마커의 기존 last_checked_at(ms)도 함께 들고 온다 → 정상 마커의 시각 갱신 주기 제한에 사용.
     const targets = [];
     for (const doc of docs) {
       const data = doc.data() || {};
       if (data.auto_disabled === true) continue; // 이미 재생불가 → 재처리 안 함
       if (!data.youtube_video_id) continue; // video_id 없으면 확인 불가
-      targets.push({ ref: doc.ref, videoId: data.youtube_video_id });
+
+      // Firestore Timestamp → ms (없으면 0 = "한 번도 확인 안 됨")
+      const prev = data.last_checked_at;
+      const prevMs =
+        prev && typeof prev.toMillis === "function" ? prev.toMillis() : 0;
+
+      // ⚠️ 각 마커의 고유 ref/videoId/이전 확인시각을 담는다 (반복문 밖 고정값 참조 금지)
+      targets.push({
+        ref: doc.ref,
+        videoId: data.youtube_video_id,
+        lastCheckedMs: prevMs,
+      });
     }
 
     // ─── videos.list 로 일괄 상태 조회 (50개당 1유닛) ─────────
@@ -88,6 +108,7 @@ export async function POST(request) {
     const statusMap = await getVideosLiveStatus(videoIds);
 
     let checked = 0;
+    const now = Date.now();
 
     // 비활성화할 대상(toDisable) 과 "정상이라 그대로 둘 대상"(toStamp) 을 모은다.
     //   - toStamp: 확인 결과 정상(현재 라이브)인 마커. 상태는 그대로지만 "언제 확인했는지"는 기록해야
@@ -116,13 +137,15 @@ export async function POST(request) {
         reason = "not_live";
       }
 
-      // ⚠️ 각 항목은 자기 자신의 ref/사유로만 처리한다 (반복문 밖 고정값 참조 금지)
+      // ⚠️ 각 항목은 자기 자신의 ref/사유/이전 확인시각으로만 처리한다 (반복문 밖 고정값 참조 금지)
       if (reason) {
         toDisable.push({ ref: t.ref, reason });
-      } else {
-        // 정상(현재 라이브) → 상태는 그대로 두고 확인 시각만 갱신
+      } else if (now - t.lastCheckedMs >= STAMP_MIN_INTERVAL_MS) {
+        // 정상(현재 라이브) → 상태는 그대로 두고 확인 시각만 갱신.
+        // 단, 최근(1시간 이내)에 이미 기록했다면 건너뛴다 → 불필요한 Firestore 쓰기 방지.
         toStamp.push({ ref: t.ref });
       }
+      // 정상이고 최근에 기록도 했다면: 아무것도 쓰지 않음 (검사는 이미 끝났고 결과는 '정상')
     }
 
     // ─── Firestore 배치 쓰기 (400개씩) ────────────────────────
@@ -141,8 +164,8 @@ export async function POST(request) {
     }
 
     // 2) 정상(라이브) 마커: 확인 시각만 갱신 (상태 필드는 건드리지 않음)
-    //    Firestore 쓰기 비용: 활성 마커 수만큼(예: 300개 → 300 writes). 무료 한도 20,000 writes/일
-    //    안에서 충분하며, YouTube 유닛은 이미 조회한 결과를 재사용하므로 추가 비용 없음.
+    //    위 STAMP_MIN_INTERVAL_MS(1시간) 제한 덕분에 10분마다 자동 점검이 돌아도
+    //    마커당 하루 최대 24회만 기록된다. YouTube 유닛은 이미 조회한 결과를 재사용 → 추가 비용 없음.
     for (let i = 0; i < toStamp.length; i += 400) {
       const batch = adminDb.batch();
       for (const item of toStamp.slice(i, i + 400)) {

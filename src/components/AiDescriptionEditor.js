@@ -111,10 +111,11 @@ export default function AiDescriptionEditor({ marker, onSaved, onClose }) {
           </button>
         </div>
 
-        {/* AI 생성 실패 안내 */}
+        {/* 설명이 비어있을 때 안내 (AI 자동 생성은 현재 꺼져 있음 — aiUtils 의 AI_DESCRIPTION_ENABLED) */}
         {aiEmpty && (
           <div className="mb-3 rounded border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm text-yellow-800">
-            AI 설명 생성에 실패했습니다. 직접 입력해주세요.
+            AI 자동 생성은 꺼져 있습니다. 설명을 직접 입력한 뒤 &quot;확정
+            저장&quot;을 누르면 마커 상세 페이지(SEO)에 표시됩니다.
           </div>
         )}
 
