@@ -25,6 +25,8 @@
 
 import { useEffect, useState } from "react";
 import { getAdminIdToken } from "@/lib/clientAuth";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 const MAX_TAGS = 3;
 
@@ -152,11 +154,11 @@ export default function TagSelector({ value, onChange }) {
     <div className="space-y-2">
       {/* 선택 개수 표시 */}
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-gray-600">
+        <span className="text-xs font-medium text-ink-muted">
           {selected.length}/{MAX_TAGS}개 선택됨
         </span>
         {isFull && (
-          <span className="text-xs text-orange-600">
+          <span className="text-xs font-medium text-live">
             최대 3개까지 선택할 수 있습니다.
           </span>
         )}
@@ -164,14 +166,14 @@ export default function TagSelector({ value, onChange }) {
 
       {/* 체크박스 목록 (스크롤 영역) */}
       {loading ? (
-        <p className="text-xs text-gray-500">태그 불러오는 중...</p>
+        <p className="text-xs text-ink-muted">태그 불러오는 중...</p>
       ) : loadError ? (
-        <p className="text-xs text-red-600">{loadError}</p>
+        <p className="text-xs text-live">{loadError}</p>
       ) : allTags.length === 0 ? (
-        <p className="text-xs text-gray-500">등록된 태그가 없습니다.</p>
+        <p className="text-xs text-ink-muted">등록된 태그가 없습니다.</p>
       ) : (
-        <div className="rounded-md border border-border p-2">
-          <div className="grid grid-cols-3 gap-x-3 gap-y-1 sm:grid-cols-5">
+        <div className="rounded-md border border-border bg-bg p-2.5">
+          <div className="grid grid-cols-3 gap-x-3 gap-y-1.5 sm:grid-cols-5">
             {allTags.map((t) => {
               // 각 체크박스는 이 태그의 고유 id/이름만 참조한다.
               const checked = selected.includes(t.name);
@@ -181,8 +183,12 @@ export default function TagSelector({ value, onChange }) {
                 <label
                   key={t.id}
                   className={
-                    "flex cursor-pointer items-center gap-1.5 text-sm " +
-                    (disabled ? "cursor-not-allowed text-gray-300" : "text-gray-700")
+                    "flex cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 text-sm transition " +
+                    (disabled
+                      ? "cursor-not-allowed text-ink-muted/50"
+                      : checked
+                        ? "font-medium text-brand"
+                        : "text-ink hover:bg-brand-light")
                   }
                 >
                   <input
@@ -190,7 +196,8 @@ export default function TagSelector({ value, onChange }) {
                     checked={checked}
                     disabled={disabled}
                     onChange={() => toggleTag(t.name)}
-                    className="h-4 w-4"
+                    // accent-brand: 네이티브 체크박스의 체크 색을 브랜드 청록으로
+                    className="h-4 w-4 flex-none accent-brand"
                   />
                   <span className="truncate">{t.name}</span>
                 </label>
@@ -202,30 +209,25 @@ export default function TagSelector({ value, onChange }) {
 
       {/* 새 태그 추가 */}
       <div className="flex flex-wrap items-center gap-2">
-        <input
+        <Input
           type="text"
           value={newTagName}
           onChange={(e) => setNewTagName(e.target.value)}
           placeholder="새 태그 이름"
           disabled={isFull}
-          className="rounded-md border border-border px-2 py-1.5 text-sm focus:border-brand focus:outline-none disabled:bg-gray-100"
+          className="w-44 flex-none"
         />
-        <button
+        <Button
           type="button"
+          variant="outline"
           onClick={handleAddNewTag}
           disabled={isFull || adding}
-          className={
-            "rounded-md px-3 py-1.5 text-sm font-medium text-white " +
-            (isFull || adding
-              ? "cursor-not-allowed bg-gray-300"
-              : "bg-gray-700 hover:bg-gray-800")
-          }
         >
-          {adding ? "추가 중..." : "새 태그 추가"}
-        </button>
+          {adding ? "추가 중..." : "+ 새 태그 추가"}
+        </Button>
       </div>
 
-      {addError && <p className="text-xs text-red-600">{addError}</p>}
+      {addError && <p className="text-xs text-live">{addError}</p>}
     </div>
   );
 }

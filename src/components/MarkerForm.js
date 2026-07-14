@@ -24,6 +24,49 @@ import { getAdminIdToken } from "@/lib/clientAuth";
 import TagSelector from "@/components/TagSelector";
 import CityAutocomplete from "@/components/CityAutocomplete";
 import { COUNTRIES, COUNTRY_GEO } from "@/lib/countryList";
+// shadcn/ui 프리미티브 (디자인 토큰이 브랜드 청록에 매핑되어 있어 자동으로 사이트 톤을 따른다)
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+
+// ─── 폼 단계 카드 헤더 (번호 뱃지 + 제목 + 필수 표시) ──────────
+// 각 단계를 카드로 감싸 시각적 그룹을 만들고, 번호로 진행 순서를 명확히 한다.
+function StepHeader({ step, title, required, children }) {
+  return (
+    <CardHeader>
+      <CardTitle className="flex items-center gap-2 text-base">
+        <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-brand text-xs font-bold text-white">
+          {step}
+        </span>
+        <span>{title}</span>
+        {required && (
+          <span className="text-sm font-normal text-live" aria-label="필수">
+            *
+          </span>
+        )}
+      </CardTitle>
+      {children && <CardDescription>{children}</CardDescription>}
+    </CardHeader>
+  );
+}
+
+// ─── 네이티브 select 공통 스타일 ───────────────────────────────
+// shadcn Select 대신 네이티브 <select> 를 유지한다:
+//   - 모바일에서 OS 기본 피커가 떠서 터치 사용성이 더 좋고(앱 전환 대비),
+//   - 기존 onChange 로직을 그대로 쓸 수 있어 동작이 바뀔 위험이 없다.
+// 대신 shadcn Input 과 시각적으로 동일해 보이도록 스타일만 맞춘다.
+const SELECT_CLASS =
+  "h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none " +
+  "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 " +
+  "disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground";
 
 // ─── 대륙 코드 → 한국어 라벨 ───────────────────────────────────
 const CONTINENT_LABELS = {
@@ -393,289 +436,300 @@ export default function MarkerForm({ onRegistered }) {
   }
 
   // ─── 렌더 ────────────────────────────────────────────────────
+  // ⚠️ 아래는 화면(JSX)만 재설계한 것으로, 위의 상태/핸들러 로직은 그대로다.
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-5">
       {/* 등록 성공/실패 안내 (상단 고정 영역) */}
       {submitMessage && (
-        <div className="rounded-md border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-800">
+        <div className="rounded-md border border-brand/30 bg-brand-light px-4 py-3 text-sm font-medium text-brand-hover">
           ✅ {submitMessage}
         </div>
       )}
       {submitError && (
-        <div className="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
+        <div className="rounded-md border border-live/30 bg-live-light px-4 py-3 text-sm font-medium text-live">
           ⚠️ {submitError}
         </div>
       )}
 
       {/* ── 1단계: 유튜브 링크 ───────────────────────────────── */}
-      <section className="space-y-2">
-        <label className="block text-sm font-semibold text-gray-800">
-          1. 유튜브 링크 <span className="text-red-500">*</span>
-        </label>
-        <p className="text-xs text-gray-500">
-          라이브 스트림 영상의 유튜브 주소를 붙여넣으세요. (watch, youtu.be, /live 등 어떤 형태든 가능)
-        </p>
-        <input
-          type="text"
-          value={youtubeUrl}
-          onChange={(e) => setYoutubeUrl(e.target.value)}
-          placeholder="https://www.youtube.com/watch?v=..."
-          className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
-        />
+      <Card>
+        <StepHeader step={1} title="유튜브 링크" required>
+          라이브 스트림 영상의 유튜브 주소를 붙여넣으세요. (watch, youtu.be,
+          /live 등 어떤 형태든 가능)
+        </StepHeader>
+        <CardContent className="space-y-3">
+          <Input
+            type="text"
+            value={youtubeUrl}
+            onChange={(e) => setYoutubeUrl(e.target.value)}
+            placeholder="https://www.youtube.com/watch?v=..."
+          />
 
-        {/* URL 상태 안내 */}
-        {urlStatus === "invalid" && (
-          <p className="text-sm text-red-600">올바른 유튜브 링크가 아닙니다.</p>
-        )}
-        {urlStatus === "checking" && (
-          <p className="text-sm text-gray-500">중복 여부 확인 중...</p>
-        )}
-        {urlStatus === "available" && (
-          <p className="text-sm text-green-600">
-            등록 가능한 영상입니다. 아래 정보를 마저 입력하세요.
-          </p>
-        )}
-        {urlStatus === "error" && (
-          <p className="text-sm text-red-600">{checkErrorMsg}</p>
-        )}
+          {/* URL 상태 안내 */}
+          {urlStatus === "invalid" && (
+            <p className="text-sm text-live">올바른 유튜브 링크가 아닙니다.</p>
+          )}
+          {urlStatus === "checking" && (
+            <p className="flex items-center gap-2 text-sm text-ink-muted">
+              <span
+                className="inline-block h-3 w-3 flex-none animate-spin rounded-full border-2 border-border border-t-brand"
+                aria-hidden="true"
+              />
+              중복 여부 확인 중...
+            </p>
+          )}
+          {urlStatus === "available" && (
+            <p className="text-sm font-medium text-brand">
+              ✓ 등록 가능한 영상입니다. 아래 정보를 마저 입력하세요.
+            </p>
+          )}
+          {urlStatus === "error" && (
+            <p className="text-sm text-live">{checkErrorMsg}</p>
+          )}
 
-        {/* 중복 경고 박스 */}
-        {urlStatus === "duplicate" && (
-          <div className="rounded-md border-2 border-red-400 bg-red-50 px-4 py-3 text-sm text-red-800">
-            <p className="font-bold">⛔ 이미 등록된 영상입니다.</p>
-            {duplicateMarker && (
+          {/* 중복 경고 박스 */}
+          {urlStatus === "duplicate" && (
+            <div className="rounded-md border border-live bg-live-light px-4 py-3 text-sm text-live">
+              <p className="font-bold">⛔ 이미 등록된 영상입니다.</p>
+              {duplicateMarker && (
+                <p className="mt-1">
+                  기존 등록:{" "}
+                  <strong>{duplicateMarker.location || "(장소명 없음)"}</strong>
+                  {" · "}
+                  {duplicateMarker.city || "-"} / {duplicateMarker.country || "-"}
+                  {duplicateMarker.youtube_title
+                    ? ` · ${duplicateMarker.youtube_title}`
+                    : ""}
+                </p>
+              )}
               <p className="mt-1">
-                기존 등록: <strong>{duplicateMarker.location || "(장소명 없음)"}</strong>
-                {" · "}
-                {duplicateMarker.city || "-"} / {duplicateMarker.country || "-"}
-                {duplicateMarker.youtube_title
-                  ? ` · ${duplicateMarker.youtube_title}`
-                  : ""}
+                중복 등록을 방지하기 위해 등록 버튼이 비활성화됩니다.
               </p>
-            )}
-            <p className="mt-1">중복 등록을 방지하기 위해 등록 버튼이 비활성화됩니다.</p>
-          </div>
-        )}
+            </div>
+          )}
 
-        {/* 썸네일 미리보기 */}
-        {thumbnailUrl && (
-          <div className="mt-2">
-            <p className="mb-1 text-xs text-gray-500">썸네일 미리보기</p>
-            {/* 로딩 실패(깨진 URL 등) 시 기본 이미지로 대체 */}
-            <Thumbnail
-              src={thumbnailUrl}
-              alt="유튜브 썸네일 미리보기"
-              className="w-64 rounded-md border border-border"
-            />
-          </div>
-        )}
-      </section>
+          {/* 썸네일 미리보기 */}
+          {thumbnailUrl && (
+            <div>
+              <p className="mb-1.5 text-xs font-medium text-ink-muted">
+                썸네일 미리보기
+              </p>
+              {/* 로딩 실패(깨진 URL 등) 시 기본 이미지로 대체 */}
+              <Thumbnail
+                src={thumbnailUrl}
+                alt="유튜브 썸네일 미리보기"
+                className="w-64 max-w-full rounded-md border border-border"
+              />
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* ── 2단계: 장소 정보 ──────────────────────────────────── */}
-      <section className="space-y-4">
-        <label className="block text-sm font-semibold text-gray-800">
-          2. 장소 정보 <span className="text-red-500">*</span>
-        </label>
-        <p className="text-xs text-gray-500">
-          장소명 입력 → 대륙 선택 → (대륙에 맞는) 국가 선택 → 도시 입력 순서로 진행하세요.
-          국가를 선택하면 아래 지도가 그 국가로 자동 이동합니다.
-        </p>
+      <Card>
+        <StepHeader step={2} title="장소 정보" required>
+          장소명 → 대륙 → (대륙에 맞는) 국가 → 도시 순서로 입력하세요. 국가를
+          선택하면 아래 지도가 그 국가로 자동 이동합니다.
+        </StepHeader>
+        <CardContent>
+          {/* 좁은 화면에선 1열, 넓어질수록 2열 → 4열 (관리자 왼쪽 컬럼이 화면의 절반이라 4열은 넓을 때만) */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {/* 장소명 */}
+            <div className="space-y-1.5">
+              <Label htmlFor="mf-location">장소명</Label>
+              <Input
+                id="mf-location"
+                type="text"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="예: 도쿄 시부야 교차로"
+              />
+            </div>
 
-        {/* 장소명 · 대륙 · 국가 · 도시 (한 줄) */}
-        <div className="grid grid-cols-4 gap-3">
-          {/* 장소명 */}
-          <div>
-            <label className="block text-xs text-gray-600">장소명</label>
-            <input
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="예: 도쿄 시부야 교차로"
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
-            />
-          </div>
+            {/* 대륙 드롭다운 (선택 시 국가 목록이 그 대륙으로 추려짐) */}
+            <div className="space-y-1.5">
+              <Label htmlFor="mf-continent">대륙</Label>
+              <select
+                id="mf-continent"
+                value={continent}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setContinent(val);
+                  // 대륙이 바뀌면 국가 목록이 달라지므로 기존 국가 선택을 초기화한다.
+                  setCountry("");
+                }}
+                className={SELECT_CLASS}
+              >
+                <option value="">대륙 선택</option>
+                {CONTINENT_ORDER.map((c) => (
+                  <option key={c} value={c}>
+                    {CONTINENT_LABELS[c]}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          {/* 대륙 드롭다운 (선택 시 국가 목록이 그 대륙으로 추려짐) */}
-          <div>
-            <label className="block text-xs text-gray-600">대륙</label>
-            <select
-              value={continent}
-              onChange={(e) => {
-                const val = e.target.value;
-                setContinent(val);
-                // 대륙이 바뀌면 국가 목록이 달라지므로 기존 국가 선택을 초기화한다.
-                setCountry("");
-              }}
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
-            >
-              <option value="">대륙 선택</option>
-              {CONTINENT_ORDER.map((c) => (
-                <option key={c} value={c}>
-                  {CONTINENT_LABELS[c]}
+            {/* 국가 드롭다운 (대륙을 먼저 골라야 활성화, 선택 시 지도 이동) */}
+            <div className="space-y-1.5">
+              <Label htmlFor="mf-country">국가</Label>
+              <select
+                id="mf-country"
+                value={country}
+                disabled={!continent}
+                onChange={(e) => {
+                  const code = e.target.value;
+                  setCountry(code);
+                  // 방어적으로 대륙도 국가에 맞춰 보정 (필터로 이미 일치하지만 안전하게)
+                  const c = getContinentByCountry(code);
+                  if (c) setContinent(c);
+                  // 국가를 고르면 그 국가 전체가 보이도록 지도를 이동/확대한다.
+                  const geo = COUNTRY_GEO[code];
+                  if (geo) {
+                    setMapView({
+                      center: { lat: geo.lat, lng: geo.lng },
+                      zoom: geo.zoom,
+                    });
+                  }
+                }}
+                className={SELECT_CLASS}
+              >
+                <option value="">
+                  {continent ? "국가를 선택하세요" : "대륙을 먼저 선택하세요"}
                 </option>
-              ))}
-            </select>
-          </div>
+                {filteredCountries.map((c) => (
+                  // 각 옵션은 자신의 고유 코드(c.code)를 value 로 사용한다.
+                  <option key={c.code} value={c.code}>
+                    {c.name} ({c.code})
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          {/* 국가 드롭다운 (대륙을 먼저 골라야 활성화, 선택 시 지도 이동) */}
-          <div>
-            <label className="block text-xs text-gray-600">국가</label>
-            <select
-              value={country}
-              disabled={!continent}
-              onChange={(e) => {
-                const code = e.target.value;
-                setCountry(code);
-                // 방어적으로 대륙도 국가에 맞춰 보정 (필터로 이미 일치하지만 안전하게)
-                const c = getContinentByCountry(code);
-                if (c) setContinent(c);
-                // 국가를 고르면 그 국가 전체가 보이도록 지도를 이동/확대한다.
-                const geo = COUNTRY_GEO[code];
-                if (geo) {
-                  setMapView({
-                    center: { lat: geo.lat, lng: geo.lng },
-                    zoom: geo.zoom,
-                  });
-                }
-              }}
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none disabled:bg-gray-100 disabled:text-gray-400"
-            >
-              <option value="">
-                {continent ? "국가를 선택하세요" : "대륙을 먼저 선택하세요"}
-              </option>
-              {filteredCountries.map((c) => (
-                // 각 옵션은 자신의 고유 코드(c.code)를 value 로 사용한다.
-                <option key={c.code} value={c.code}>
-                  {c.name} ({c.code})
-                </option>
-              ))}
-            </select>
+            {/* 도시 (자동완성 — 기존 도시명 추천 + 중복 표기 방지) */}
+            <div className="space-y-1.5">
+              <Label htmlFor="mf-city">도시</Label>
+              <CityAutocomplete
+                value={city}
+                onChange={setCity}
+                country={country}
+                placeholder="예: Tokyo"
+                reloadSignal={cityReload}
+              />
+            </div>
           </div>
-
-          {/* 도시 (자동완성 — 기존 도시명 추천 + 중복 표기 방지) */}
-          <div>
-            <label className="block text-xs text-gray-600">도시</label>
-            <CityAutocomplete
-              value={city}
-              onChange={setCity}
-              country={country}
-              placeholder="예: Tokyo"
-              reloadSignal={cityReload}
-            />
-          </div>
-        </div>
-      </section>
+        </CardContent>
+      </Card>
 
       {/* ── 3단계: 지도에서 위치 지정 ─────────────────────────── */}
-      <section className="space-y-2">
-        <label className="block text-sm font-semibold text-gray-800">
-          3. 위치 지정 <span className="text-red-500">*</span>
-        </label>
-        <p className="text-xs text-gray-500">
-          지도를 클릭하면 그 지점의 좌표와 함께 <strong>도시·국가·대륙이 자동으로 채워집니다</strong>
-          (부정확하면 직접 수정). 위에서 국가를 선택하면 지도가 그 국가로 이동하니, 클릭으로 정확한 위치를 지정하세요.
-        </p>
-
-        {/* 지도 (크게 — 왼쪽 절반 폭을 거의 채움) */}
-        <div className="h-[560px] w-full overflow-hidden rounded-md border border-border">
-          <LeafletMapWrapper
-            markers={mapMarkers}
-            center={mapView.center}
-            zoom={mapView.zoom}
-            onMapClick={handleMapClick}
-            selectedMarkerId={hasValidCoord ? "selected" : null}
-          />
-        </div>
-
-        {/* 역지오코딩(자동입력) 진행/결과 안내 */}
-        {geocoding && (
-          <p className="flex items-center gap-2 text-xs text-gray-500">
-            <span
-              className="inline-block h-3 w-3 flex-none animate-spin rounded-full border-2 border-gray-300 border-t-brand"
-              aria-hidden="true"
-            />
-            📍 클릭한 위치의 도시·국가를 불러오는 중...
-          </p>
-        )}
-        {!geocoding && geocodeNote && (
-          <p className="text-xs text-gray-500">{geocodeNote}</p>
-        )}
-
-        {/* 위도/경도 입력 (직접 수정 가능) */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs text-gray-600">위도 (lat)</label>
-            <input
-              type="text"
-              value={lat}
-              onChange={(e) => setLat(e.target.value)}
-              placeholder="예: 35.6595"
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
+      <Card>
+        <StepHeader step={3} title="위치 지정" required>
+          지도를 클릭하면 그 지점의 좌표와 함께{" "}
+          <strong className="font-semibold text-ink">
+            도시·국가·대륙이 자동으로 채워집니다
+          </strong>{" "}
+          (부정확하면 직접 수정). 위에서 국가를 선택하면 지도가 그 국가로
+          이동합니다.
+        </StepHeader>
+        <CardContent className="space-y-3">
+          {/* 지도 — 좁은 화면에선 낮게, 넓어질수록 크게 */}
+          <div className="h-[380px] w-full overflow-hidden rounded-md border border-border sm:h-[480px] xl:h-[560px]">
+            <LeafletMapWrapper
+              markers={mapMarkers}
+              center={mapView.center}
+              zoom={mapView.zoom}
+              onMapClick={handleMapClick}
+              selectedMarkerId={hasValidCoord ? "selected" : null}
             />
           </div>
-          <div>
-            <label className="block text-xs text-gray-600">경도 (lng)</label>
-            <input
-              type="text"
-              value={lng}
-              onChange={(e) => setLng(e.target.value)}
-              placeholder="예: 139.7004"
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
-            />
+
+          {/* 역지오코딩(자동입력) 진행/결과 안내 */}
+          {geocoding && (
+            <p className="flex items-center gap-2 text-xs text-ink-muted">
+              <span
+                className="inline-block h-3 w-3 flex-none animate-spin rounded-full border-2 border-border border-t-brand"
+                aria-hidden="true"
+              />
+              📍 클릭한 위치의 도시·국가를 불러오는 중...
+            </p>
+          )}
+          {!geocoding && geocodeNote && (
+            <p className="text-xs text-ink-muted">{geocodeNote}</p>
+          )}
+
+          {/* 위도/경도 입력 (직접 수정 가능) */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="mf-lat">위도 (lat)</Label>
+              <Input
+                id="mf-lat"
+                type="text"
+                inputMode="decimal"
+                value={lat}
+                onChange={(e) => setLat(e.target.value)}
+                placeholder="예: 35.6595"
+                className="font-mono"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="mf-lng">경도 (lng)</Label>
+              <Input
+                id="mf-lng"
+                type="text"
+                inputMode="decimal"
+                value={lng}
+                onChange={(e) => setLng(e.target.value)}
+                placeholder="예: 139.7004"
+                className="font-mono"
+              />
+            </div>
           </div>
-        </div>
-        {!hasValidCoord && (lat !== "" || lng !== "") && (
-          <p className="text-sm text-red-600">위도/경도는 숫자로 입력해 주세요.</p>
-        )}
-      </section>
+          {!hasValidCoord && (lat !== "" || lng !== "") && (
+            <p className="text-sm text-live">
+              위도/경도는 숫자로 입력해 주세요.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* ── 4단계: 장소 특성 태그 ─────────────────────────────── */}
-      <section className="space-y-4">
-        <label className="block text-sm font-semibold text-gray-800">
-          4. 장소 특성 태그
-        </label>
-
-        {/* 장소 특성 태그 (지역 분류와 별개, 최대 3개) */}
-        <div>
-          <label className="block text-xs text-gray-600">
-            장소 특성 태그 (최대 3개)
-          </label>
+      <Card>
+        <StepHeader step={4} title="장소 특성 태그">
+          지역 분류와 별개인 특성 태그입니다 (최대 3개, 선택 사항).
+        </StepHeader>
+        <CardContent className="space-y-4">
           <TagSelector value={tags} onChange={setTags} />
-        </div>
 
-        {/* 실시간 여부 토글 */}
-        <div className="flex items-center gap-2">
-          <input
-            id="is_live"
-            type="checkbox"
-            checked={isLive}
-            onChange={(e) => setIsLive(e.target.checked)}
-            className="h-4 w-4"
-          />
-          <label htmlFor="is_live" className="text-sm text-gray-700">
-            실시간 라이브 영상입니다 (is_live)
-          </label>
-        </div>
-      </section>
+          {/* 실시간 여부 토글 (base-ui Checkbox → onCheckedChange 로 값 수신) */}
+          <div className="flex items-center gap-2.5 rounded-md border border-border bg-bg px-3 py-2.5">
+            <Checkbox
+              id="is_live"
+              checked={isLive}
+              onCheckedChange={(checked) => setIsLive(checked === true)}
+            />
+            <Label htmlFor="is_live" className="cursor-pointer font-normal">
+              실시간 라이브 영상입니다{" "}
+              <span className="font-mono text-xs text-ink-muted">
+                (is_live)
+              </span>
+            </Label>
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* ── 등록 버튼 ─────────────────────────────────────────── */}
-      <div className="pt-2">
-        <button
+      {/* ── 등록 버튼 (하단 고정 영역) ────────────────────────── */}
+      <div className="space-y-2">
+        <Button
           type="button"
           onClick={handleSubmit}
           disabled={!canSubmit}
-          className={
-            "w-full rounded-md px-4 py-3 text-sm font-semibold text-white transition " +
-            (canSubmit
-              ? "bg-brand hover:bg-brand-hover"
-              : "cursor-not-allowed bg-gray-300")
-          }
+          className="h-11 w-full text-sm font-semibold"
         >
           {submitting ? "등록 중..." : "마커 등록"}
-        </button>
+        </Button>
         {!canSubmit && !submitting && (
-          <p className="mt-2 text-xs text-gray-500">
-            필수 항목(유튜브 링크·위치·장소명·대륙·국가·도시)을 모두 채우고, 중복이 아니어야 등록할 수 있습니다.
+          <p className="text-center text-xs text-ink-muted">
+            필수 항목(유튜브 링크 · 위치 · 장소명 · 대륙 · 국가 · 도시)을 모두
+            채우고, 중복이 아니어야 등록할 수 있습니다.
           </p>
         )}
       </div>
