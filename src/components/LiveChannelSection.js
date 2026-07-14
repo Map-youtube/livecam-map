@@ -585,6 +585,16 @@ export default function LiveChannelSection() {
                                     : ""}
                                 </span>
                                 <span className="ml-auto flex items-center gap-2">
+                                  {/* 이 채널의 SEO 페이지(/channel/[id]) 열기 (채널ID 몰라도 바로 이동) */}
+                                  <a
+                                    href={`/channel/${ch.id}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title={`SEO 페이지 열기 (채널ID: ${ch.id})`}
+                                    className="rounded border border-border px-2 py-0.5 text-xs text-brand hover:bg-brand-light"
+                                  >
+                                    🔗 페이지
+                                  </a>
                                   <button
                                     type="button"
                                     disabled={busyId === ch.id}
