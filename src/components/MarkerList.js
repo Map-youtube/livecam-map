@@ -422,12 +422,13 @@ function EditModal({ marker, onClose, onSaved }) {
           </div>
 
           {/* ── 오른쪽: 위치 지정 지도 + 좌표 ── */}
-          <div className="space-y-2">
+          {/* flex 컬럼 — 지도가 왼쪽 필드 묶음 높이만큼 늘어나 아래 빈 공간을 채운다(크게 본다) */}
+          <div className="flex flex-col gap-2">
             <label className="block text-xs text-gray-600">
               위치 (지도를 클릭하면 좌표가 바뀝니다)
             </label>
-            {/* 왼쪽 필드 묶음 높이에 맞춰 크게 — 스크롤 없이 한 화면에 */}
-            <div className="h-[420px] w-full overflow-hidden rounded-md border border-border">
+            {/* flex-1 로 남는 세로 공간을 지도가 모두 차지. 너무 작아지지 않게 최소 높이 지정 */}
+            <div className="min-h-[420px] w-full flex-1 overflow-hidden rounded-md border border-border">
               <LeafletMapWrapper
                 markers={mapMarkers}
                 center={mapCenter}

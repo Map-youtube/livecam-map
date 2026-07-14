@@ -23,6 +23,76 @@ import { getContinentByCountry } from "@/lib/continentUtils";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// ─── 영토(자치령) 이름 → 실제 ISO alpha-2 코드 보정 ─────────────
+// Nominatim 은 퀴라소/아루바/프랑스령 등 자치령의 country_code 를 "부모국"(nl/fr 등)으로
+// 돌려주면서 country 이름에는 실제 영토명("Curacao" 등)을 넣는다. 그 이름을 실제 코드로 보정한다.
+// (국가 이름은 accept-language=en 기준 영문. 소문자/공백 정규화 후 비교)
+const TERRITORY_NAME_TO_CODE = {
+  // 네덜란드령 (위치상 남미 ABC / 북미 카리브)
+  curacao: "CW",
+  aruba: "AW",
+  bonaire: "BQ",
+  "sint eustatius": "BQ",
+  saba: "BQ",
+  "sint maarten": "SX",
+  // 프랑스령
+  martinique: "MQ",
+  guadeloupe: "GP",
+  reunion: "RE",
+  mayotte: "YT",
+  "french guiana": "GF",
+  guyane: "GF",
+  "french polynesia": "PF",
+  "new caledonia": "NC",
+  "saint barthelemy": "BL",
+  "saint martin": "MF",
+  "wallis and futuna": "WF",
+  // 영국령
+  bermuda: "BM",
+  "cayman islands": "KY",
+  "british virgin islands": "VG",
+  "turks and caicos islands": "TC",
+  anguilla: "AI",
+  gibraltar: "GI",
+  "isle of man": "IM",
+  jersey: "JE",
+  guernsey: "GG",
+  "falkland islands": "FK",
+  "pitcairn islands": "PN",
+  pitcairn: "PN",
+  // 미국령
+  "puerto rico": "PR",
+  guam: "GU",
+  "united states virgin islands": "VI",
+  "u.s. virgin islands": "VI",
+  "american samoa": "AS",
+  "northern mariana islands": "MP",
+  // 덴마크령
+  greenland: "GL",
+  "faroe islands": "FO",
+  // 뉴질랜드령
+  "cook islands": "CK",
+  niue: "NU",
+  tokelau: "TK",
+  // 호주령
+  "norfolk island": "NF",
+  // 기타
+  "western sahara": "EH",
+  "hong kong": "HK",
+  macau: "MO",
+  macao: "MO",
+};
+
+// 영토 이름 정규화(소문자 + 공백 축약 + 흔한 발음부호 제거)
+function normTerritory(name) {
+  return String(name || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // 발음부호 제거(é→e, ç→c 등)
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // ─── Nominatim address 객체에서 도시명 후보 추출 ──────────────
 // 나라마다 city/town/village 등 다른 필드에 들어오므로 우선순위대로 고른다.
 function pickCity(address) {
@@ -94,11 +164,18 @@ export async function GET(request) {
     const address = data && data.address ? data.address : null;
 
     const city = pickCity(address);
-    const countryCode =
+    let countryCode =
       address && address.country_code
         ? String(address.country_code).toUpperCase()
         : "";
-    // 대륙은 continentUtils 매핑으로 계산(약 150개국 지원). 없으면 빈 문자열.
+    // ★ 영토 보정: Nominatim 이 자치령(퀴라소/아루바/프랑스령 등)의 country_code 를 부모국으로
+    //   돌려주는 경우, country 이름으로 실제 영토 코드를 찾아 덮어쓴다(위치 기반 대륙이 되도록).
+    const territoryCode =
+      address && address.country
+        ? TERRITORY_NAME_TO_CODE[normTerritory(address.country)]
+        : null;
+    if (territoryCode) countryCode = territoryCode;
+    // 대륙은 continentUtils 매핑으로 계산. 없으면 빈 문자열.
     const continent = countryCode ? getContinentByCountry(countryCode) : null;
 
     return Response.json(
