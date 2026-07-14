@@ -21,6 +21,8 @@ import {
 import SeoPageShell from "@/components/seo/SeoPageShell";
 import Breadcrumb from "@/components/seo/Breadcrumb";
 import YouTubeEmbed from "@/components/seo/YouTubeEmbed";
+import RegionCard from "@/components/seo/RegionCard";
+import { getRelatedMarkers } from "@/lib/relatedMarkers";
 
 export const revalidate = 86400;
 export const dynamicParams = true;
@@ -92,6 +94,9 @@ export default async function MarkerPage({ params }) {
   if (!marker) {
     notFound();
   }
+
+  // 관련 영상 (같은 도시 → 같은 국가 → 같은 대륙). 공개 마커 캐시를 재사용하므로 추가 비용 없음.
+  const related = await getRelatedMarkers(marker, 8);
 
   const continent = marker.continent || "";
   const continentLabel = continent ? getContinentLabel(continent, "ko") : "";
@@ -232,6 +237,23 @@ export default async function MarkerPage({ params }) {
             <p className="text-sm leading-relaxed text-ink-muted/80">{descEn}</p>
           )}
         </div>
+      )}
+
+      {/* 관련 영상 — 같은 도시 → 같은 국가 → 같은 대륙의 다른 라이브캠.
+          영상을 다 본 방문자가 이어서 볼 콘텐츠를 붙여 연속 탐색을 유도한다(이탈률 전략).
+          관련 마커가 하나도 없으면 섹션 자체를 렌더하지 않는다(빈 공간 금지 — CLAUDE.md 14절). */}
+      {related.length > 0 && (
+        <section className="mt-10">
+          <h2 className="mb-3 font-display text-lg font-bold text-ink">
+            주변의 다른 라이브캠
+          </h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {related.map((rm) => (
+              // ⚠️ 각 카드는 자기 마커(rm)의 id 로만 링크한다.
+              <RegionCard key={rm.id} marker={rm} href={`/marker/${rm.id}`} />
+            ))}
+          </div>
+        </section>
       )}
 
       {/* 좌표 */}
