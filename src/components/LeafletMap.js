@@ -406,8 +406,20 @@ function MarkerClusterLayer({
           zIndexOffset: isRed ? 1000 : isGlow ? 500 : 0,
         });
 
-        // 간단한 팝업 (장소명). 미지정 시 언어별 대체 문구.
-        marker.bindPopup(m.location || ts("unnamedPlace"));
+        // hover(마우스 오버) 툴팁: 장소명(크게) + 대륙/국가/도시 + 태그 (MainMapView 에서 미리 만든 HTML).
+        //   클릭은 아래 on("click") 에서 패널 열기로 처리(팝업 대신 툴팁만).
+        const tipHtml =
+          typeof m.tooltip === "string" && m.tooltip
+            ? m.tooltip
+            : `<div class="mk-tip-title">${(m.location || ts("unnamedPlace"))
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")}</div>`;
+        marker.bindTooltip(tipHtml, {
+          direction: "top",
+          offset: [0, isRed ? -60 : -42], // 핀 위쪽에 뜨도록(재생 중 마커는 더 큼)
+          opacity: 1,
+          className: "marker-tip",
+        });
 
         // 클릭: 상위 콜백 호출 + 해당 마커 좌표로 이동
         // (각 marker 는 자신의 m/lat/lng 를 클로저로 갖는다 → 엉뚱한 마커로 이동하지 않음)

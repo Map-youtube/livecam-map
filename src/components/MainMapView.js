@@ -56,7 +56,7 @@ function toggleBtnClass(on) {
 
 export default function MainMapView({ markers, tags, liveChannels }) {
   // 다국어: 정적 문자열(t) + 현재 언어(locale)
-  const { t, locale } = useI18n();
+  const { t, locale, tContinent, countryName } = useI18n();
 
   // 자동 라이브 채널(방송/우주 등) — 지역 마커와 별개 데이터
   const channelList = useMemo(
@@ -554,11 +554,59 @@ export default function MainMapView({ markers, tags, liveChannels }) {
     return out;
   }, [channelList, channelVideoCounts]);
 
-  // 지도에 넘길 전체 마커(지역 + 고정 채널)
-  const allMapMarkers = useMemo(
-    () => [...markerList, ...channelMapMarkers],
-    [markerList, channelMapMarkers]
-  );
+  // 지도에 넘길 전체 마커(지역 + 고정 채널).
+  // 각 마커에 hover 툴팁용 HTML(tooltip)을 현재 언어로 미리 만들어 붙인다(2D/3D 공용).
+  //   - 장소명(크고 굵게) + 아래 작은 글씨로 대륙/국가/도시 + 태그(없으면 생략).
+  //   - 채널 마커는 채널명 + 대/중/소분류.
+  const allMapMarkers = useMemo(() => {
+    const esc = (s) =>
+      String(s == null ? "" : s).replace(
+        /[&<>"]/g,
+        (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])
+      );
+    const build = (m) => {
+      try {
+        if (m.__channel) {
+          const ch = m.__channel;
+          const title = esc(m.location || ch.channel_name || "");
+          const sub = [ch.major_category, ch.middle_category, ch.minor_category]
+            .filter(Boolean)
+            .map((x) => esc(tr(x)))
+            .join(" / ");
+          return (
+            `<div class="mk-tip-title">${title}</div>` +
+            (sub ? `<div class="mk-tip-sub">${sub}</div>` : "")
+          );
+        }
+        const title = esc(m.location ? tr(m.location) : t("noName"));
+        const region = [
+          m.continent ? tContinent(m.continent) : "",
+          m.country ? countryName(m.country) : "",
+          m.city ? tr(m.city) : "",
+        ]
+          .filter(Boolean)
+          .map(esc)
+          .join(" / ");
+        const tags = Array.isArray(m.tags)
+          ? m.tags
+              .filter(Boolean)
+              .map((tg) => "#" + esc(tr(tg)))
+              .join(" ")
+          : "";
+        return (
+          `<div class="mk-tip-title">${title}</div>` +
+          (region ? `<div class="mk-tip-sub">${region}</div>` : "") +
+          (tags ? `<div class="mk-tip-tags">${tags}</div>` : "")
+        );
+      } catch (error) {
+        return `<div class="mk-tip-title">${esc(m.location || "")}</div>`;
+      }
+    };
+    return [...markerList, ...channelMapMarkers].map((m) => ({
+      ...m,
+      tooltip: build(m),
+    }));
+  }, [markerList, channelMapMarkers, tr, t, tContinent, countryName]);
 
   // ─── 선택된 소분류(그룹)의 합쳐진 영상 + 패널 정보 ──────────
   // 그 소분류에 속한 모든 채널의 라이브 영상을 하나의 목록으로 합친다.

@@ -95,6 +95,31 @@ function loadCesium() {
   return cesiumLoadPromise;
 }
 
+// ─── 녹색 형광 글로우 캔버스 (현재 목록 마커 뒤 후광, billboard 이미지용) ──
+// 렌더 순서와 무관하게 핀을 가리지 않도록 "가운데가 비고 바깥이 은은한 링" 형태로 그린다.
+function makeGlowCanvas(size = 64) {
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    const c = size / 2;
+    const g = ctx.createRadialGradient(c, c, 0, c, c, c);
+    g.addColorStop(0, "rgba(74, 255, 120, 0)");
+    g.addColorStop(0.32, "rgba(74, 255, 120, 0)");
+    g.addColorStop(0.55, "rgba(74, 255, 120, 0.85)");
+    g.addColorStop(1, "rgba(74, 255, 120, 0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(c, c, c, 0, Math.PI * 2);
+    ctx.fill();
+    return canvas;
+  } catch (error) {
+    console.error("[CesiumMapView] 글로우 캔버스 생성 실패:", error); // TODO: 배포 전 제거
+    return null;
+  }
+}
+
 // ─── 이모지 → 캔버스 텍스처 (billboard 이미지용) ──────────────
 function makeEmojiCanvas(emoji, size = 44) {
   try {
@@ -128,6 +153,11 @@ export default function CesiumMapView({
   disasterEnabled = false,
   // 영상 패널이 지도 왼쪽을 덮고 있는지(현재값) — 카메라 수평 보정 여부 판단.
   panelOpenRef,
+  // 2D 와 동일한 마커 상태 표시용:
+  //   selectedMarkerId : 재생 중(빨강) 마커 id
+  //   glowMarkerIds    : 현재 목록에 해당해 녹색 형광으로 표시할 마커 id 집합(Set)
+  selectedMarkerId,
+  glowMarkerIds,
 }) {
   // 다국어: 팝업/오버레이 문자열(t) + 날짜 로케일(locale)
   const { t, locale } = useI18n();
@@ -150,6 +180,9 @@ export default function CesiumMapView({
   const [ready, setReady] = useState(false);
   // 지진/자연재해 클릭 시 뜨는 간단 정보 오버레이 (2D의 지도 팝업에 해당)
   const [info, setInfo] = useState(null); // { kind:'earthquake'|'event', data } | null
+  // 마커 hover 툴팁 (2D의 hover 툴팁과 동일 컨셉) { x, y, html } | null
+  const [hoverTip, setHoverTip] = useState(null);
+  const hoveredMarkerIdRef = useRef(null); // 현재 hover 중인 마커 id(중복 setState 방지)
 
   // ─── 성능: requestRenderMode 에서 화면을 갱신하려면 명시적으로 호출 ──
   // (매 프레임 그리기를 끈 상태라, 데이터가 바뀌면 이 함수로 1회 다시 그리도록 요청한다)
@@ -365,6 +398,39 @@ export default function CesiumMapView({
             }
           }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
+          // 마우스 오버(hover) → 라이브캠 마커면 2D 와 같은 툴팁(장소명 + 대륙/국가/도시 + 태그)을
+          // HTML 오버레이로 띄운다. (같은 마커 안에서 움직일 땐 재설정하지 않아 리렌더 최소화)
+          handler.setInputAction((movement) => {
+            try {
+              const pos = movement && movement.endPosition;
+              if (!pos) return;
+              const picked = viewer.scene.pick(pos);
+              const payload =
+                picked && picked.id ? payloadRef.current.get(picked.id) : null;
+              if (
+                payload &&
+                payload.kind === "livecam" &&
+                payload.data &&
+                payload.data.tooltip
+              ) {
+                const mid = payload.data.id;
+                if (hoveredMarkerIdRef.current !== mid) {
+                  hoveredMarkerIdRef.current = mid;
+                  setHoverTip({
+                    x: pos.x,
+                    y: pos.y,
+                    html: payload.data.tooltip,
+                  });
+                }
+              } else if (hoveredMarkerIdRef.current !== null) {
+                hoveredMarkerIdRef.current = null;
+                setHoverTip(null);
+              }
+            } catch (error) {
+              // hover 툴팁 실패는 무시
+            }
+          }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
           setReady(true);
         } catch (error) {
           console.error("[CesiumMapView] 뷰어 생성 실패:", error); // TODO: 배포 전 제거
@@ -397,9 +463,18 @@ export default function CesiumMapView({
     try {
       removeEntities(livecamEntsRef);
       const pinBuilder = new Cesium.PinBuilder();
-      const pin = pinBuilder
-        .fromColor(Cesium.Color.fromCssColorString("#e1483c"), 34)
+      // 2D 와 동일: 기본은 파란 핀, 재생 중은 빨간 핀(조금 크게).
+      const bluePin = pinBuilder
+        .fromColor(Cesium.Color.fromCssColorString("#2e7ec1"), 34)
         .toDataURL();
+      const redPin = pinBuilder
+        .fromColor(Cesium.Color.fromCssColorString("#e1483c"), 40)
+        .toDataURL();
+      const glowImg = makeGlowCanvas(64);
+      const glowSet =
+        glowMarkerIds && typeof glowMarkerIds.has === "function"
+          ? glowMarkerIds
+          : null;
 
       const list = Array.isArray(markers) ? markers : [];
       for (const m of list) {
@@ -407,27 +482,34 @@ export default function CesiumMapView({
           const lat = Number(m.lat);
           const lng = Number(m.lng);
           if (Number.isNaN(lat) || Number.isNaN(lng)) continue;
+
+          const isRed = selectedMarkerId != null && m.id === selectedMarkerId;
+          const isGlow = !isRed && glowSet && glowSet.has(m.id);
+
+          // 현재 목록 마커: 핀 뒤(먼저 추가)에 녹색 형광 링을 얹는다. (핀은 가운데라 안 가려짐)
+          if (isGlow && glowImg) {
+            const glowEnt = viewer.entities.add({
+              position: toCesiumCoordRaw(Cesium, lat, lng, 0),
+              billboard: {
+                image: glowImg,
+                verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+                scale: 0.9,
+              },
+            });
+            // 글로우도 클릭 시 같은 마커로 동작하도록 동일 payload
+            payloadRef.current.set(glowEnt, { kind: "livecam", data: m });
+            livecamEntsRef.current.push(glowEnt);
+          }
+
           // ⚠️ 반복문 안에서 각 마커의 고유 좌표/데이터를 참조 (클로저 고정값 아님)
+          // 라벨(상시 표시)은 제거 → 아래 hover 툴팁으로 대체(2D 와 동일 컨셉).
           const ent = viewer.entities.add({
             position: toCesiumCoordRaw(Cesium, lat, lng, 0),
             billboard: {
-              image: pin,
+              image: isRed ? redPin : bluePin,
               verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
               scale: 0.8,
               // disableDepthTestDistance 미설정 → 지구 뒷면 마커는 가려짐
-            },
-            label: {
-              text: m.location || "",
-              font: "12px sans-serif",
-              fillColor: Cesium.Color.WHITE,
-              showBackground: true,
-              backgroundColor: Cesium.Color.BLACK.withAlpha(0.5),
-              pixelOffset: new Cesium.Cartesian2(0, -40),
-              verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-              distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
-                0,
-                2_000_000
-              ),
             },
           });
           payloadRef.current.set(ent, { kind: "livecam", data: m });
@@ -442,7 +524,7 @@ export default function CesiumMapView({
     }
 
     return () => removeEntities(livecamEntsRef);
-  }, [ready, markers]);
+  }, [ready, markers, selectedMarkerId, glowMarkerIds]);
 
   // ─── 3) ISS 마커 + 궤적 (고도 반영) ──────────────────────────
   useEffect(() => {
@@ -805,6 +887,15 @@ export default function CesiumMapView({
   return (
     <div className="relative h-full w-full bg-black">
       <div ref={containerRef} className="absolute inset-0" />
+
+      {/* 마커 hover 툴팁 (2D 와 동일 컨셉: 장소명 + 대륙/국가/도시 + 태그) */}
+      {hoverTip && (
+        <div
+          className="cesium-marker-tip"
+          style={{ left: `${hoverTip.x}px`, top: `${hoverTip.y - 14}px` }}
+          dangerouslySetInnerHTML={{ __html: hoverTip.html }}
+        />
+      )}
 
       {/* 로딩 안내 (Cesium 자산 다운로드 동안) */}
       {!ready && (

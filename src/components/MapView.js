@@ -262,6 +262,8 @@ function MapView(
         <CesiumMapView
           apiRef={cesiumApiRef}
           markers={markerList}
+          selectedMarkerId={selectedMarkerId}
+          glowMarkerIds={glowMarkerIds}
           onMarkerClick={onMarkerClick}
           onIssClick={onIssClick}
           onIssPosition={onIssPosition}
