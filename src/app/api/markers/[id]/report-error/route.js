@@ -55,9 +55,17 @@ export async function POST(request, context) {
       reason = "unknown";
     }
 
-    // 대상 문서 조회
-    const docRef = adminDb.collection(COLLECTION).doc(id);
-    const snap = await docRef.get();
+    // 대상 문서 조회.
+    //   먼저 수동 마커(markers)에서 찾고, 없으면 자동 마커(auto_markers)에서 찾는다.
+    //   (자동 마커는 문서 id = youtube_video_id. 클라이언트는 같은 신고 URL 을 쓴다.)
+    let docRef = adminDb.collection(COLLECTION).doc(id);
+    let snap = await docRef.get();
+    let isAuto = false;
+    if (!snap.exists) {
+      docRef = adminDb.collection("auto_markers").doc(id);
+      snap = await docRef.get();
+      isAuto = true;
+    }
     if (!snap.exists) {
       return Response.json(
         { ok: false, error: "해당 id의 마커를 찾을 수 없습니다." },
@@ -72,7 +80,7 @@ export async function POST(request, context) {
       return Response.json({ ok: true, already: true }, { status: 200 });
     }
 
-    // 자동 비활성화 처리
+    // 자동 비활성화 처리 (auto_disabled:true 라 다음 스캔에서도 다시 켜지지 않는다)
     await docRef.update({
       auto_disabled: true,
       is_active: false,
@@ -80,9 +88,11 @@ export async function POST(request, context) {
       last_checked_at: FieldValue.serverTimestamp(),
     });
 
-    // 공개 마커 캐시 즉시 무효화 → 손님 화면에서 바로 제외
+    // 공개 캐시 즉시 무효화 → 손님 화면에서 바로 제외
+    //   자동 마커면 auto-markers 태그도 함께 무효화한다.
     try {
       revalidateTag("public-markers");
+      if (isAuto) revalidateTag("auto-markers");
     } catch (revalidateError) {
       console.error(
         "[api/markers/[id]/report-error] 캐시 무효화 실패:",
