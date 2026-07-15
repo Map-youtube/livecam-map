@@ -245,6 +245,7 @@ export async function scanChannels(channelDocs, opts = {}) {
           await ref.set({
             location: ai.location || v.title || "",
             description: ai.description || { ko: "", en: "" },
+            description_confirmed: true,
             youtube_video_id: v.videoId,
             youtube_url: `https://www.youtube.com/watch?v=${v.videoId}`,
             youtube_title: v.title || "",
@@ -277,6 +278,9 @@ export async function scanChannels(channelDocs, opts = {}) {
           continent: ai.continent || "",
           tags: Array.isArray(ai.tags) ? ai.tags : [],
           description: ai.description || { ko: "", en: "" },
+          // 자동 마커는 수동 검토 단계가 없으므로 AI 설명을 확정으로 본다
+          //   → 상세 SEO 페이지가 설명을 렌더(SEO/애드센스). 관리자가 목록에서 수정 가능.
+          description_confirmed: true,
           // 유튜브 정보
           youtube_video_id: v.videoId,
           youtube_url: `https://www.youtube.com/watch?v=${v.videoId}`,
