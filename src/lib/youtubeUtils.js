@@ -89,14 +89,22 @@ export function getThumbnailUrl(videoId) {
 //   - 평소(기본 키 정상)엔 백업 키를 호출하지 않는다 → 추가 호출/비용 0 (순수 보험용).
 //   - 할당량 초과 응답(403)은 유닛을 소모하지 않으므로, 백업 전환에 따른 추가 유닛도 없다.
 //   - quota 외의 403(키 무효 등)은 같은 이유로 또 실패하므로 재시도하지 않는다.
-//   ⚠️ 백업 키는 "다른 GCP 프로젝트"에서 발급해야 별도 할당량으로 의미가 있다
-//      (같은 프로젝트 키는 같은 10,000 한도를 공유해 백업 효과가 없다).
+//   ⚠️ 백업 키(YOUTUBE_API_KEY_TEST)는 "개발/테스트 환경에서만" 쓴다(getYoutubeApiKeys 참고).
+//      운영(NODE_ENV=production)에서는 절대 사용하지 않는다:
+//      여러 프로젝트 키로 운영 할당량을 늘리는 것("샤딩")은 YouTube API 약관 위반이며,
+//      적발 시 정상 키까지 정지될 수 있다. 운영 할당량이 부족하면 정식 증액 신청(Audit)이 유일한 안전한 길.
+//      → 그래서 이 백업은 순전히 "로컬 개발 중 기본 키가 소진됐을 때 테스트를 이어가기 위한" 장치다.
 //   ⚠️ 이 함수들은 채널 라이브 영상·마커 영상 등 모든 videos.list 호출에 공통 적용된다.
 
 // 설정된 YouTube 키들을 [기본, 백업] 순서로(빈 값 제외) 반환.
 function getYoutubeApiKeys() {
   const primary = (process.env.YOUTUBE_API_KEY || "").trim();
-  const backup = (process.env.YOUTUBE_API_KEY_TEST || "").trim();
+  // 백업 키는 개발/테스트 환경에서만 사용한다. 운영(production)에서는 절대 쓰지 않는다.
+  // (여러 프로젝트 키로 운영 할당량을 늘리는 "샤딩"은 YouTube API 약관 위반 → 정상 키까지 정지 위험)
+  const backup =
+    process.env.NODE_ENV === "production"
+      ? ""
+      : (process.env.YOUTUBE_API_KEY_TEST || "").trim();
   return [primary, backup].filter(Boolean);
 }
 
