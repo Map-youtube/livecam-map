@@ -394,7 +394,11 @@ function AutoMarkerRow({ marker, onDelete, onSaved, authHeaders }) {
             <span className="truncate text-sm font-medium text-ink">
               {marker.location || marker.youtube_title || marker.id}
             </span>
-            {marker.is_live === true ? (
+            {marker.is_active === false ? (
+              <span className="flex-none rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-ink-muted">
+                숨김(위치미상)
+              </span>
+            ) : marker.is_live === true ? (
               <span className="flex-none rounded-full bg-live-light px-1.5 py-0.5 text-[10px] font-semibold text-live">
                 ● LIVE
               </span>

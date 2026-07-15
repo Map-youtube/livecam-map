@@ -102,6 +102,7 @@ export async function scanChannels(channelDocs, opts = {}) {
     newEnriched: 0,
     enrichFailed: 0,
     reused: 0, // 이미 있던 영상 재활용(AI 재호출 없음)
+    skippedNoLocation: 0, // AI가 위치를 특정 못한 영상(월드 모음 등) — 숨김 캐시
     markedEnded: 0,
     aiCapReached: false,
   };
@@ -194,7 +195,12 @@ export async function scanChannels(channelDocs, opts = {}) {
           const data = existing.data() || {};
           const patch = { last_checked_at: FieldValue.serverTimestamp() };
           if (data.is_live !== true) patch.is_live = true;
-          if (data.is_active !== true && data.auto_disabled !== true)
+          // 위치를 못 찾아 숨겨둔(ai_unlocatable) 영상은 다시 켜지 않는다.
+          if (
+            data.ai_unlocatable !== true &&
+            data.is_active !== true &&
+            data.auto_disabled !== true
+          )
             patch.is_active = true;
           await ref.update(patch);
           report.reused += 1;
@@ -220,10 +226,47 @@ export async function scanChannels(channelDocs, opts = {}) {
 
         if (!ai.ok) {
           report.enrichFailed += 1;
-          continue; // 위치를 못 채우면 마커를 만들지 않는다(빈 마커 방지). 다음 스캔 재시도.
+          continue; // AI 호출 자체 실패 → 마커 안 만듦(빈 마커 방지). 다음 스캔 재시도.
         }
 
         const now = FieldValue.serverTimestamp();
+
+        // 위치 특정 여부: 국가·좌표가 유효하고 (0,0) "널섬"이 아니어야 지도에 올린다.
+        // (월드 모음/여러 장소 편집본 등은 AI 가 위치를 안 주므로 여기서 걸러진다.)
+        const located =
+          !!ai.country &&
+          typeof ai.lat === "number" &&
+          typeof ai.lng === "number" &&
+          !(ai.lat === 0 && ai.lng === 0);
+
+        if (!located) {
+          // 위치 미상 → 숨김 상태로 "캐시"만 한다(is_active:false).
+          //   → 지도/목록엔 안 뜨고, 다음 스캔에서 다시 AI 를 부르지도 않는다(비용 0).
+          await ref.set({
+            location: ai.location || v.title || "",
+            description: ai.description || { ko: "", en: "" },
+            youtube_video_id: v.videoId,
+            youtube_url: `https://www.youtube.com/watch?v=${v.videoId}`,
+            youtube_title: v.title || "",
+            youtube_channel_name: v.channelName || ch.channel_name || "",
+            youtube_thumbnail_url: v.thumbnailUrl || getThumbnailUrl(v.videoId),
+            is_live: true,
+            is_active: false, // 숨김
+            auto_disabled: false,
+            ai_unlocatable: true, // 위치 미상 표식(재호출 방지)
+            source_channel_id: ch.id,
+            source_channel_youtube_id: ch.channel_id,
+            ai_enriched: true,
+            ai_model: ai.model || "",
+            ai_enriched_at: now,
+            last_checked_at: now,
+            created_at: now,
+            updated_at: now,
+          });
+          report.skippedNoLocation += 1;
+          continue;
+        }
+
         await ref.set({
           // 위치/분류 (AI)
           lat: ai.lat,
