@@ -31,6 +31,51 @@ const CONTINENT_ORDER = [
   "middleeast",
 ];
 
+// ─── 트리 앞 컬러 아이콘 (대륙/대분류별) ──────────────────────
+// "톡톡 튀는" 앱아이콘풍 장식용 아이콘. 브랜드색과 무관한 다색 팔레트라
+// 의도적으로 인라인 색(그라디언트)을 쓴다. (디자인 시스템 예외 — 장식용 아이콘)
+const CONTINENT_ICON = {
+  asia: { e: "⛩️", g: "from-[#FF8A5B] to-[#FF5478]" },
+  europe: { e: "🏛️", g: "from-[#5B93FF] to-[#6AB6FF]" },
+  north_america: { e: "🗽", g: "from-[#3ACB84] to-[#22A866]" },
+  south_america: { e: "🌴", g: "from-[#FCC23C] to-[#F59E0B]" },
+  africa: { e: "🦁", g: "from-[#FCA94D] to-[#F97316]" },
+  oceania: { e: "🏝️", g: "from-[#33DCC6] to-[#12B5A6]" },
+  middleeast: { e: "🕌", g: "from-[#C084FC] to-[#A855F7]" },
+};
+// 채널 대분류(방송/우주 등)는 이름으로 매핑, 없으면 기본 아이콘.
+const CHANNEL_MAJOR_ICON = {
+  방송: { e: "📺", g: "from-[#FB7793] to-[#F43F5E]" },
+  우주: { e: "🛰️", g: "from-[#9C8CF8] to-[#6D5EF0]" },
+};
+const DEFAULT_MAJOR_ICON = { e: "📡", g: "from-[#94A3B8] to-[#64748B]" };
+// 태그 앞 컬러 점 팔레트 (index 순환)
+const TAG_DOT = [
+  "#4F8BFF",
+  "#34C77B",
+  "#F59E0B",
+  "#14B8A6",
+  "#F43F5E",
+  "#A855F7",
+  "#FB923C",
+];
+
+// 대륙/대분류 앞 아이콘 칩 (없으면 렌더 안 함)
+function CatIcon({ icon }) {
+  if (!icon) return null;
+  return (
+    <span
+      aria-hidden="true"
+      className={
+        "flex h-[22px] w-[22px] flex-none items-center justify-center rounded-[7px] bg-gradient-to-br text-[12px] leading-none shadow-sm " +
+        icon.g
+      }
+    >
+      {icon.e}
+    </span>
+  );
+}
+
 // ─── 접기/펼치기 그룹 (내부 헬퍼) ─────────────────────────────
 // 캐럿으로 펼치고, 라벨 클릭 시 onSelect 콜백 호출.
 function CollapsibleRow({
@@ -43,6 +88,8 @@ function CollapsibleRow({
   children,
   // ancestorActive: 이 노드의 하위(자식 도시/ISS)가 선택되어 있으면 약하게 강조
   ancestorActive,
+  // icon: 최상위(대륙/대분류)에만 붙는 컬러 아이콘 {e,g} (없으면 미표시)
+  icon,
 }) {
   const [open, setOpen] = useState(!!defaultOpen);
   const hasChildren = Boolean(children);
@@ -86,6 +133,7 @@ function CollapsibleRow({
         <span className="w-3 text-ink-muted">
           {hasChildren ? (open ? "▾" : "▸") : ""}
         </span>
+        <CatIcon icon={icon} />
         <span className="truncate">{label}</span>
         <span className="ml-auto font-mono text-[11px] tabular-nums text-ink-muted">
           {count}
@@ -307,7 +355,8 @@ export default function MainCategoryTree({
   }
 
   return (
-    <div className="flex h-full flex-col bg-surface">
+    // 소프트 하늘빛 워시(상단만 은은히 → 흰색). 트리 폭/구조는 그대로.
+    <div className="flex h-full flex-col bg-[linear-gradient(180deg,#EAF2FB_0%,#F4F8FD_26%,#ffffff_62%)]">
       {/* ── 지역 섹션 ─────────────────────────────────────────── */}
       <div className="border-b border-border px-2 py-3">
         <h2 className="mb-2 px-1 font-display text-[11px] font-bold uppercase tracking-wide text-ink-muted">
@@ -326,6 +375,7 @@ export default function MainCategoryTree({
                   label={continentLabel}
                   count={countContinent(continentObj)}
                   depth={0}
+                  icon={CONTINENT_ICON[continent]}
                   defaultOpen={false}
                   // 선택된 도시가 이 대륙에 속하면 자동으로 펼친다 + 조상 강조
                   forceOpen={Boolean(
@@ -436,6 +486,7 @@ export default function MainCategoryTree({
                 label={capitalizeWords(trFn(M))}
                 count={sumChannelCounts(allInMajor)}
                 depth={0}
+                icon={CHANNEL_MAJOR_ICON[M] || DEFAULT_MAJOR_ICON}
                 defaultOpen={false}
                 forceOpen={majorHasSelected(M)}
                 ancestorActive={majorHasSelected(M)}
@@ -488,7 +539,7 @@ export default function MainCategoryTree({
           <p className="px-1 text-xs text-ink-muted">{t("noTags")}</p>
         ) : (
           <div className="flex flex-col">
-            {visibleTags.map((tag) => {
+            {visibleTags.map((tag, i) => {
               // 각 태그는 자신의 고유 id 를 key 로, 자신의 name 을 콜백에 넘긴다.
               const active = selectedTag === tag.name;
               return (
@@ -499,12 +550,18 @@ export default function MainCategoryTree({
                     typeof onSelectTag === "function" && onSelectTag(tag.name)
                   }
                   className={
-                    "flex w-full items-center gap-1 rounded-md px-2 py-1 text-left text-xs transition hover:bg-brand-light " +
+                    "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs transition hover:bg-brand-light " +
                     (active
                       ? "bg-brand-light font-semibold text-brand"
-                      : "text-brand")
+                      : "text-ink")
                   }
                 >
+                  {/* 태그 앞 컬러 점 (index 순환 팔레트) */}
+                  <span
+                    aria-hidden="true"
+                    className="h-2 w-2 flex-none rounded-full"
+                    style={{ backgroundColor: TAG_DOT[i % TAG_DOT.length] }}
+                  />
                   <span className="truncate">#{trFn(tag.name)}</span>
                   <span className="ml-auto font-mono text-[11px] tabular-nums text-ink-muted">
                     {tag.count}
