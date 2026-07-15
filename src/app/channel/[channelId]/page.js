@@ -14,6 +14,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getLiveChannels } from "@/lib/getLiveChannels";
 import { getLiveChannelVideosCached } from "@/lib/getLiveChannelVideos";
+import { getRelatedChannels } from "@/lib/relatedChannels";
 import { capitalizeWords } from "@/lib/textCase";
 import SeoPageShell from "@/components/seo/SeoPageShell";
 import Breadcrumb from "@/components/seo/Breadcrumb";
@@ -97,14 +98,20 @@ export default async function ChannelPage({ params }) {
   const path = categoryPath(ch);
 
   // 이 채널의 현재 라이브 영상 (공유 30분 캐시 → 추가 비용 없음)
+  // byChannel(채널별 라이브 영상 맵)은 관련 채널의 라이브 개수 표시에도 재사용한다.
+  let byChannel = {};
   let videos = [];
   try {
-    const byChannel = await getLiveChannelVideosCached();
+    byChannel = await getLiveChannelVideosCached();
     videos = Array.isArray(byChannel[ch.id]) ? byChannel[ch.id] : [];
   } catch (error) {
     console.error("[channel] 라이브 영상 조회 실패:", error); // TODO: 배포 전 제거
   }
   const firstVideo = videos[0] || null;
+  const isLiveNow = !!firstVideo; // 지금 실제로 방송 중인가
+
+  // 같은 분류의 다른 채널 (라이브 없을 때 페이지가 비지 않도록 + 연속 탐색). 추가 비용 없음.
+  const related = await getRelatedChannels(ch, byChannel, 8);
 
   // breadcrumb: 홈 > (대분류) > (중분류) > 채널명
   const crumbs = [{ label: "홈", href: "/" }];
@@ -144,11 +151,17 @@ export default async function ChannelPage({ params }) {
 
       <Breadcrumb items={crumbs} />
 
-      {/* 제목 + 분류 + LIVE 배지 */}
+      {/* 제목 + 분류 + 상태 배지 (실제 라이브 여부에 따라 표시) */}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center gap-1 rounded-full bg-live-light px-2 py-0.5 text-xs font-semibold text-live">
-          🔴 LIVE
-        </span>
+        {isLiveNow ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-live-light px-2 py-0.5 text-xs font-semibold text-live">
+            🔴 LIVE
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-ink-muted">
+            ⚫ 방송 대기 중
+          </span>
+        )}
         {path.length > 0 && (
           <span className="text-sm text-ink-muted">{path.join(" · ")}</span>
         )}
@@ -219,6 +232,52 @@ export default async function ChannelPage({ params }) {
             ))}
           </ul>
         </div>
+      )}
+
+      {/* 같은 분류의 다른 채널 — 라이브가 없어도 페이지가 비지 않게 + 연속 탐색 유도.
+          관련 채널이 없으면 섹션 자체를 렌더하지 않는다(빈 공간 금지 — CLAUDE.md 14절). */}
+      {related.length > 0 && (
+        <section className="mt-10">
+          <h2 className="mb-3 font-display text-lg font-bold text-ink">
+            같은 분류의 다른 채널
+          </h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {related.map((rc) => {
+              // ⚠️ 각 카드는 자기 채널(rc)의 id/분류/라이브수만 참조한다.
+              const rcPath = categoryPath(rc).join(" · ");
+              return (
+                <Link
+                  key={rc.id}
+                  href={`/channel/${rc.id}`}
+                  className="group block rounded-lg border border-border bg-surface p-3 shadow-card transition duration-150 hover:-translate-y-0.5"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="line-clamp-2 text-sm font-semibold leading-snug text-ink">
+                      {rc.channel_name || rc.minor_category || "(채널)"}
+                    </span>
+                    {rc.liveCount > 0 ? (
+                      <span
+                        className="flex-none rounded-full bg-live-light px-1.5 py-0.5 text-[11px] font-semibold text-live"
+                        title="현재 라이브 방송 수"
+                      >
+                        🔴 {rc.liveCount}
+                      </span>
+                    ) : (
+                      <span className="flex-none rounded-full bg-secondary px-1.5 py-0.5 text-[11px] font-medium text-ink-muted">
+                        대기
+                      </span>
+                    )}
+                  </div>
+                  {rcPath && (
+                    <p className="mt-1 truncate text-xs text-ink-muted">
+                      {rcPath}
+                    </p>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        </section>
       )}
     </SeoPageShell>
   );
