@@ -83,6 +83,70 @@ export function getThumbnailUrl(videoId) {
   }
 }
 
+// ─── YouTube Data API 키 (기본 + 백업 자동 전환) ──────────────
+// 기본 키(YOUTUBE_API_KEY)가 "할당량 초과(403 quotaExceeded/dailyLimitExceeded)"일 때만
+// 백업 키(YOUTUBE_API_KEY_TEST)로 자동 재시도한다.
+//   - 평소(기본 키 정상)엔 백업 키를 호출하지 않는다 → 추가 호출/비용 0 (순수 보험용).
+//   - 할당량 초과 응답(403)은 유닛을 소모하지 않으므로, 백업 전환에 따른 추가 유닛도 없다.
+//   - quota 외의 403(키 무효 등)은 같은 이유로 또 실패하므로 재시도하지 않는다.
+//   ⚠️ 백업 키는 "다른 GCP 프로젝트"에서 발급해야 별도 할당량으로 의미가 있다
+//      (같은 프로젝트 키는 같은 10,000 한도를 공유해 백업 효과가 없다).
+//   ⚠️ 이 함수들은 채널 라이브 영상·마커 영상 등 모든 videos.list 호출에 공통 적용된다.
+
+// 설정된 YouTube 키들을 [기본, 백업] 순서로(빈 값 제외) 반환.
+function getYoutubeApiKeys() {
+  const primary = (process.env.YOUTUBE_API_KEY || "").trim();
+  const backup = (process.env.YOUTUBE_API_KEY_TEST || "").trim();
+  return [primary, backup].filter(Boolean);
+}
+
+// 응답이 "할당량 초과 403"인지 판별 (본문은 clone 으로 읽어 원본 소비 안 함).
+async function isQuotaExceeded(res) {
+  if (!res || res.status !== 403) return false;
+  try {
+    const body = await res.clone().json();
+    const reasons = ((body.error && body.error.errors) || []).map(
+      (e) => e.reason
+    );
+    return (
+      reasons.includes("quotaExceeded") ||
+      reasons.includes("dailyLimitExceeded")
+    );
+  } catch (error) {
+    return false;
+  }
+}
+
+// videos.list 등 YouTube Data API 호출 공통 래퍼.
+//   endpoint: URL 객체 (key 파라미터는 붙이지 않은 상태로 넘긴다 — 여기서 키를 붙인다)
+//   기본 키로 호출 → 할당량 초과면 백업 키로 1회 재시도. 반환: fetch Response.
+async function youtubeFetch(endpoint) {
+  const keys = getYoutubeApiKeys();
+  if (keys.length === 0) {
+    throw new Error(
+      "환경변수 YOUTUBE_API_KEY 가 설정되지 않았습니다. (.env.local 확인)"
+    );
+  }
+  let lastRes = null;
+  for (let i = 0; i < keys.length; i += 1) {
+    const url = new URL(endpoint.toString());
+    url.searchParams.set("key", keys[i]);
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      cache: "no-store",
+    });
+    if (res.ok) return res;
+    lastRes = res;
+    // 마지막 키였거나, 할당량 초과가 아닌 다른 에러면 그대로 반환(재시도 무의미)
+    const quota = await isQuotaExceeded(res);
+    if (!quota || i === keys.length - 1) return res;
+    console.error(
+      "[youtubeUtils] 기본 YouTube 키 할당량 초과 → 백업 키(YOUTUBE_API_KEY_TEST)로 재시도"
+    ); // TODO: 배포 전 제거
+  }
+  return lastRes;
+}
+
 // ─── 영상 메타데이터 수집 (videos.list, 1유닛) ─────────────────
 // part=snippet 만 요청하여 1유닛만 소모한다.
 // 반환: { title, description, channelName, thumbnailUrl, channelId, channelUrl }
@@ -93,27 +157,14 @@ export async function getYoutubeInfo(videoId) {
       throw new Error("유효한 videoId가 필요합니다.");
     }
 
-    // 서버 전용 API 키
-    const apiKey = process.env.YOUTUBE_API_KEY;
-    if (!apiKey) {
-      throw new Error(
-        "환경변수 YOUTUBE_API_KEY 가 설정되지 않았습니다. (.env.local 확인)"
-      );
-    }
-
     // videos.list 엔드포인트 (part=snippet,liveStreamingDetails → 여전히 1유닛)
     // liveStreamingDetails.actualEndTime 로 "라이브 방송 종료" 여부를 판별한다.
     const endpoint = new URL("https://www.googleapis.com/youtube/v3/videos");
     endpoint.searchParams.set("part", "snippet,liveStreamingDetails");
     endpoint.searchParams.set("id", videoId);
-    endpoint.searchParams.set("key", apiKey);
 
-    // API 호출
-    const res = await fetch(endpoint.toString(), {
-      method: "GET",
-      // 라이브 상태/제목은 수시로 바뀔 수 있으므로 캐시하지 않는다.
-      cache: "no-store",
-    });
+    // API 호출 (기본 키 할당량 초과 시 백업 키로 자동 재시도)
+    const res = await youtubeFetch(endpoint);
 
     // HTTP 레벨 에러 처리
     if (!res.ok) {
@@ -189,10 +240,9 @@ export async function getYoutubeInfo(videoId) {
 export async function getVideosLiveStatus(videoIds) {
   const result = new Map();
   try {
-    const apiKey = process.env.YOUTUBE_API_KEY;
-    if (!apiKey) {
+    if (getYoutubeApiKeys().length === 0) {
       console.error(
-        "[youtubeUtils] 환경변수 YOUTUBE_API_KEY 가 없어 라이브 상태 조회를 건너뜁니다."
+        "[youtubeUtils] YouTube 키(YOUTUBE_API_KEY)가 없어 라이브 상태 조회를 건너뜁니다."
       ); // TODO: 배포 전 제거
       return result;
     }
@@ -207,12 +257,9 @@ export async function getVideosLiveStatus(videoIds) {
       const endpoint = new URL("https://www.googleapis.com/youtube/v3/videos");
       endpoint.searchParams.set("part", "snippet,liveStreamingDetails");
       endpoint.searchParams.set("id", chunk.join(","));
-      endpoint.searchParams.set("key", apiKey);
 
-      const res = await fetch(endpoint.toString(), {
-        method: "GET",
-        cache: "no-store",
-      });
+      // 기본 키 할당량 초과 시 백업 키로 자동 재시도
+      const res = await youtubeFetch(endpoint);
       if (!res.ok) {
         // 이 배치는 판단 보류(결과에 넣지 않음)
         console.error(
@@ -261,10 +308,9 @@ export async function getVideosLiveStatus(videoIds) {
 export async function getLiveVideos(videoIds) {
   const liveVideos = [];
   try {
-    const apiKey = process.env.YOUTUBE_API_KEY;
-    if (!apiKey) {
+    if (getYoutubeApiKeys().length === 0) {
       console.error(
-        "[youtubeUtils] 환경변수 YOUTUBE_API_KEY 가 없어 라이브 영상 조회를 건너뜁니다."
+        "[youtubeUtils] YouTube 키(YOUTUBE_API_KEY)가 없어 라이브 영상 조회를 건너뜁니다."
       ); // TODO: 배포 전 제거
       return liveVideos;
     }
@@ -279,12 +325,9 @@ export async function getLiveVideos(videoIds) {
       const endpoint = new URL("https://www.googleapis.com/youtube/v3/videos");
       endpoint.searchParams.set("part", "snippet");
       endpoint.searchParams.set("id", chunk.join(","));
-      endpoint.searchParams.set("key", apiKey);
 
-      const res = await fetch(endpoint.toString(), {
-        method: "GET",
-        cache: "no-store",
-      });
+      // 기본 키 할당량 초과 시 백업 키로 자동 재시도
+      const res = await youtubeFetch(endpoint);
       if (!res.ok) {
         // 이 배치는 건너뛴다 (전체 실패로 보지 않음)
         console.error(
