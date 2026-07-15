@@ -1,0 +1,492 @@
+"use client";
+
+// ─────────────────────────────────────────────────────────────
+// AutoChannelList — 관리자 "지역 자동 채널" 목록/관리 (클라이언트)
+//
+// 구조(item 7): 채널명 → 그 채널에서 현재 사이트에 보여지는 영상들(하위 목록).
+//   각 영상 행: 썸네일 / 장소명(제목) / 대륙·국가·도시 / 태그 / 라이브 배지 / [수정][삭제]
+//   - 수정: 기존 수동 마커와 같은 필드(장소명·좌표·도시·국가·대륙·태그·설명).
+//           단 '재생확인'은 자동 채널 방식에선 의미가 없어 제공하지 않는다.
+//   - 채널 [삭제] 시 그 채널의 자동 마커도 함께 삭제.
+// 상단 도구: [지금 스캔] · [기존 마커에서 채널 가져오기] · [새로고침]
+//
+// 데이터: GET /api/auto-channels(채널) + GET /api/auto-channels/markers(영상).
+// ─────────────────────────────────────────────────────────────
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { getAdminIdToken } from "@/lib/clientAuth";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
+// 대륙 코드 → 한글 라벨(표시용)
+const CONTINENT_KO = {
+  asia: "아시아",
+  europe: "유럽",
+  north_america: "북아메리카",
+  south_america: "남아메리카",
+  africa: "아프리카",
+  oceania: "오세아니아",
+  middleeast: "중동",
+};
+
+export default function AutoChannelList({ refreshSignal }) {
+  const [channels, setChannels] = useState([]);
+  const [markers, setMarkers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(""); // 진행 중 작업 라벨
+  const [notice, setNotice] = useState("");
+  const [openIds, setOpenIds] = useState(() => new Set()); // 펼쳐진 채널
+
+  // 목록 로드
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const [chRes, mkRes] = await Promise.all([
+        fetch("/api/auto-channels", { cache: "no-store" }),
+        fetch("/api/auto-channels/markers", { cache: "no-store" }),
+      ]);
+      const chData = await chRes.json();
+      const mkData = await mkRes.json();
+      setChannels(Array.isArray(chData.channels) ? chData.channels : []);
+      setMarkers(Array.isArray(mkData.markers) ? mkData.markers : []);
+    } catch (e) {
+      console.error("[AutoChannelList] 로드 실패:", e); // TODO: 배포 전 제거
+      setError("목록을 불러오지 못했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load, refreshSignal]);
+
+  // 채널별 영상 그룹핑 (라이브 먼저)
+  const markersByChannel = useMemo(() => {
+    const map = new Map();
+    for (const m of markers) {
+      const key = m.source_channel_id || "(미상)";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(m);
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => (b.is_live === true ? 1 : 0) - (a.is_live === true ? 1 : 0));
+    }
+    return map;
+  }, [markers]);
+
+  function toggleOpen(id) {
+    setOpenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  // 인증 토큰 헬퍼
+  async function authHeaders() {
+    const token = await getAdminIdToken();
+    if (!token) {
+      window.alert("로그인이 만료되었습니다. 다시 로그인해주세요");
+      window.location.href = "/admin/login";
+      return null;
+    }
+    return { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
+  }
+
+  // 지금 스캔 (전체)
+  async function handleScanNow() {
+    setBusy("scan");
+    setNotice("");
+    try {
+      const headers = await authHeaders();
+      if (!headers) return;
+      const res = await fetch("/api/auto-channels/scan", { method: "POST", headers });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        const s = data.scan || {};
+        setNotice(
+          `스캔 완료: 새 영상 ${s.newEnriched || 0}개 추가, 재활용 ${s.reused || 0}개, 종료 ${s.markedEnded || 0}개, videos.list ${s.videosListUnits || 0}유닛` +
+            (s.aiCapReached ? " (일일 AI 상한 도달 — 나머지는 다음 스캔)" : "")
+        );
+        await load();
+      } else {
+        setNotice(data.error || "스캔에 실패했습니다.");
+      }
+    } catch (e) {
+      setNotice("스캔 중 오류가 발생했습니다.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  // 기존 마커에서 채널 가져오기
+  async function handleImport() {
+    if (!window.confirm("기존 '등록된 마커 목록'에서 유튜브 채널을 추출해 자동 채널로 등록합니다. 계속할까요?"))
+      return;
+    setBusy("import");
+    setNotice("");
+    try {
+      const headers = await authHeaders();
+      if (!headers) return;
+      const res = await fetch("/api/auto-channels/import-from-markers", {
+        method: "POST",
+        headers,
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setNotice(
+          `${data.created}개 채널 등록(중복 ${data.skippedExisting}, 채널ID 없음 ${data.skippedNoChannelId}). "지금 스캔"으로 영상을 채우세요.`
+        );
+        await load();
+      } else {
+        setNotice(data.error || "가져오기에 실패했습니다.");
+      }
+    } catch (e) {
+      setNotice("가져오기 중 오류가 발생했습니다.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  // 채널 삭제 (+마커)
+  async function handleDeleteChannel(ch) {
+    if (
+      !window.confirm(
+        `채널 "${ch.channel_name || ch.channel_id}" 과 이 채널이 만든 지도 마커를 모두 삭제합니다. 계속할까요?`
+      )
+    )
+      return;
+    try {
+      const headers = await authHeaders();
+      if (!headers) return;
+      const res = await fetch(`/api/auto-channels/${ch.id}`, {
+        method: "DELETE",
+        headers,
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setNotice(`삭제됨: ${ch.channel_name || ch.channel_id} (마커 ${data.deletedMarkers || 0}개)`);
+        await load();
+      } else {
+        setNotice(data.error || "삭제에 실패했습니다.");
+      }
+    } catch (e) {
+      setNotice("삭제 중 오류가 발생했습니다.");
+    }
+  }
+
+  // 마커(영상) 삭제
+  async function handleDeleteMarker(m) {
+    if (!window.confirm(`영상 "${m.location || m.youtube_title || m.id}" 마커를 삭제합니다. 계속할까요?`))
+      return;
+    try {
+      const headers = await authHeaders();
+      if (!headers) return;
+      const res = await fetch(`/api/auto-channels/markers/${m.id}`, {
+        method: "DELETE",
+        headers,
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        await load();
+      } else {
+        setNotice(data.error || "삭제에 실패했습니다.");
+      }
+    } catch (e) {
+      setNotice("삭제 중 오류가 발생했습니다.");
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* 도구 모음 */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" onClick={handleScanNow} disabled={busy !== ""}>
+          {busy === "scan" ? "스캔 중..." : "지금 스캔"}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleImport}
+          disabled={busy !== ""}
+        >
+          {busy === "import" ? "가져오는 중..." : "기존 마커에서 채널 가져오기"}
+        </Button>
+        <Button type="button" variant="outline" onClick={load} disabled={busy !== ""}>
+          새로고침
+        </Button>
+        <span className="text-xs text-ink-muted">
+          채널 {channels.length}개 · 영상 {markers.length}개
+        </span>
+      </div>
+
+      {notice && (
+        <div className="rounded-md border border-brand/30 bg-brand-light px-3 py-2 text-sm text-brand-hover">
+          {notice}
+        </div>
+      )}
+      {error && (
+        <div className="rounded-md border border-live/30 bg-live-light px-3 py-2 text-sm text-live">
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <p className="text-sm text-ink-muted">불러오는 중...</p>
+      ) : channels.length === 0 ? (
+        <p className="text-sm text-ink-muted">
+          등록된 자동 채널이 없습니다. 왼쪽 "지역 자동 채널 등록"에서 채널을 추가하거나,
+          위 "기존 마커에서 채널 가져오기"를 이용하세요.
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {channels.map((ch) => {
+            const vids = markersByChannel.get(ch.id) || [];
+            const liveCount = vids.filter((v) => v.is_live === true).length;
+            const open = openIds.has(ch.id);
+            return (
+              <li
+                key={ch.id}
+                className="overflow-hidden rounded-lg border border-border bg-surface"
+              >
+                {/* 채널 헤더 */}
+                <div className="flex items-center gap-2 px-3 py-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleOpen(ch.id)}
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                  >
+                    <span className="text-ink-muted">{open ? "▾" : "▸"}</span>
+                    <span className="truncate font-semibold text-ink">
+                      {ch.channel_name || ch.channel_id}
+                    </span>
+                    <span className="flex-none rounded-full bg-secondary px-2 py-0.5 text-xs text-ink-muted">
+                      라이브 {liveCount} / 전체 {vids.length}
+                    </span>
+                    {ch.source === "imported" && (
+                      <span className="flex-none rounded-full bg-brand-light px-2 py-0.5 text-xs text-brand-hover">
+                        가져옴
+                      </span>
+                    )}
+                    {ch.is_active === false && (
+                      <span className="flex-none rounded-full bg-live-light px-2 py-0.5 text-xs text-live">
+                        비활성
+                      </span>
+                    )}
+                  </button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleDeleteChannel(ch)}
+                    className="h-8 flex-none px-2 text-xs"
+                  >
+                    채널 삭제
+                  </Button>
+                </div>
+
+                {/* 영상 하위 목록 */}
+                {open && (
+                  <div className="border-t border-border">
+                    {vids.length === 0 ? (
+                      <p className="px-3 py-3 text-xs text-ink-muted">
+                        아직 이 채널에서 수집된 영상이 없습니다. "지금 스캔"을 눌러보세요.
+                      </p>
+                    ) : (
+                      <ul className="divide-y divide-border">
+                        {vids.map((m) => (
+                          <AutoMarkerRow
+                            key={m.id}
+                            marker={m}
+                            onDelete={() => handleDeleteMarker(m)}
+                            onSaved={load}
+                            authHeaders={authHeaders}
+                          />
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ─── 영상(자동 마커) 한 줄 + 수정 폼 ─────────────────────────
+function AutoMarkerRow({ marker, onDelete, onSaved, authHeaders }) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    location: marker.location || "",
+    city: marker.city || "",
+    country: marker.country || "",
+    lat: marker.lat ?? "",
+    lng: marker.lng ?? "",
+    tags: Array.isArray(marker.tags) ? marker.tags.join(", ") : "",
+    ko: (marker.description && marker.description.ko) || "",
+    en: (marker.description && marker.description.en) || "",
+  });
+
+  const thumb =
+    marker.youtube_thumbnail_url ||
+    (marker.youtube_video_id
+      ? `https://i.ytimg.com/vi/${marker.youtube_video_id}/hqdefault.jpg`
+      : null);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const headers = await authHeaders();
+      if (!headers) return;
+      const res = await fetch(`/api/auto-channels/markers/${marker.id}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({
+          location: form.location,
+          city: form.city,
+          country: form.country,
+          lat: form.lat === "" ? undefined : Number(form.lat),
+          lng: form.lng === "" ? undefined : Number(form.lng),
+          tags: form.tags
+            .split(",")
+            .map((t) => t.trim())
+            .filter(Boolean),
+          description: { ko: form.ko, en: form.en },
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setEditing(false);
+        if (typeof onSaved === "function") await onSaved();
+      } else {
+        window.alert(data.error || "수정에 실패했습니다.");
+      }
+    } catch (e) {
+      window.alert("수정 중 오류가 발생했습니다.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <li className="px-3 py-2">
+      <div className="flex items-start gap-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {thumb ? (
+          <img
+            src={thumb}
+            alt=""
+            className="h-12 w-20 flex-none rounded object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div className="h-12 w-20 flex-none rounded bg-secondary" />
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-sm font-medium text-ink">
+              {marker.location || marker.youtube_title || marker.id}
+            </span>
+            {marker.is_live === true ? (
+              <span className="flex-none rounded-full bg-live-light px-1.5 py-0.5 text-[10px] font-semibold text-live">
+                ● LIVE
+              </span>
+            ) : (
+              <span className="flex-none rounded-full bg-secondary px-1.5 py-0.5 text-[10px] text-ink-muted">
+                종료
+              </span>
+            )}
+          </div>
+          <p className="mt-0.5 truncate text-xs text-ink-muted">
+            {[CONTINENT_KO[marker.continent] || marker.continent, marker.country, marker.city]
+              .filter(Boolean)
+              .join(" · ") || "위치 미상"}
+            {Array.isArray(marker.tags) && marker.tags.length > 0
+              ? ` · ${marker.tags.join(", ")}`
+              : ""}
+          </p>
+        </div>
+        <div className="flex flex-none gap-1">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setEditing((v) => !v)}
+            className="h-8 px-2 text-xs"
+          >
+            {editing ? "닫기" : "수정"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onDelete}
+            className="h-8 px-2 text-xs"
+          >
+            삭제
+          </Button>
+        </div>
+      </div>
+
+      {editing && (
+        <div className="mt-3 space-y-2 rounded-md border border-border bg-bg/50 p-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <LabeledInput label="장소명" value={form.location} onChange={(v) => setForm((f) => ({ ...f, location: v }))} />
+            <LabeledInput label="도시" value={form.city} onChange={(v) => setForm((f) => ({ ...f, city: v }))} />
+            <LabeledInput label="국가(ISO2)" value={form.country} onChange={(v) => setForm((f) => ({ ...f, country: v }))} />
+            <LabeledInput label="태그(쉼표)" value={form.tags} onChange={(v) => setForm((f) => ({ ...f, tags: v }))} />
+            <LabeledInput label="위도(lat)" value={form.lat} onChange={(v) => setForm((f) => ({ ...f, lat: v }))} />
+            <LabeledInput label="경도(lng)" value={form.lng} onChange={(v) => setForm((f) => ({ ...f, lng: v }))} />
+          </div>
+          <LabeledTextarea label="설명(한국어)" value={form.ko} onChange={(v) => setForm((f) => ({ ...f, ko: v }))} />
+          <LabeledTextarea label="설명(영어)" value={form.en} onChange={(v) => setForm((f) => ({ ...f, en: v }))} />
+          <p className="text-[11px] text-ink-muted">
+            국가(ISO2)를 바꾸면 대륙은 자동으로 다시 분류됩니다. ('재생확인' 기능은 자동 채널에는
+            없습니다.)
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setEditing(false)} className="h-8 px-3 text-xs">
+              취소
+            </Button>
+            <Button type="button" onClick={save} disabled={saving} className="h-8 px-3 text-xs">
+              {saving ? "저장 중..." : "저장"}
+            </Button>
+          </div>
+        </div>
+      )}
+    </li>
+  );
+}
+
+function LabeledInput({ label, value, onChange }) {
+  return (
+    <label className="block space-y-1">
+      <span className="text-[11px] text-ink-muted">{label}</span>
+      <Input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-8 text-sm"
+      />
+    </label>
+  );
+}
+
+function LabeledTextarea({ label, value, onChange }) {
+  return (
+    <label className="block space-y-1">
+      <span className="text-[11px] text-ink-muted">{label}</span>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={2}
+        className="w-full rounded-md border border-border bg-surface px-2 py-1 text-sm text-ink"
+      />
+    </label>
+  );
+}

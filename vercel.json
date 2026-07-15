@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/auto-channels/scan",
+      "schedule": "0 2 * * *"
+    }
+  ]
+}

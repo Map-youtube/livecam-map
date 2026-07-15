@@ -21,7 +21,9 @@ import { auth } from "@/lib/firebase";
 import AdminGuard from "@/components/AdminGuard";
 import MarkerForm from "@/components/MarkerForm";
 import MarkerList from "@/components/MarkerList";
+import AutoChannelList from "@/components/AutoChannelList";
 import LiveChannelSection from "@/components/LiveChannelSection";
+import AutoChannelForm from "@/components/AutoChannelForm";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
@@ -43,6 +45,8 @@ export default function AdminPage() {
 
   // 값이 바뀌면 MarkerList 가 목록을 다시 불러온다 (등록 성공 시 +1).
   const [refreshSignal, setRefreshSignal] = useState(0);
+  // 오른쪽 목록 탭: "manual"(수동 마커, 백업) | "auto"(지역 자동 채널)
+  const [listTab, setListTab] = useState("manual");
   // 로그인된 관리자 이메일 (상단 표시용)
   const [adminEmail, setAdminEmail] = useState("");
 
@@ -113,16 +117,65 @@ export default function AdminPage() {
             desc="NASA처럼 24/7 라이브만 하는 유튜브 채널을 대분류/소분류로 묶어 등록합니다. 영상은 자동으로 수집되며, 채널과 지도 위치만 지정하면 됩니다."
           />
           <LiveChannelSection />
+
+          <Separator className="my-10" />
+
+          {/* 지역 자동 채널 등록 (채널만 등록하면 AI가 위치·장소명·태그·설명을 채워 지역 마커로) */}
+          <SectionTitle
+            title="지역 자동 채널 등록 (AI)"
+            desc="라이브캠 채널만 등록하면, 그 채널의 라이브 영상을 AI가 위치·장소명·태그·설명·대륙/국가/도시까지 자동으로 채워 일반 지역 마커로 지도에 올립니다. 영상이 바뀌어도 채널만 살아있으면 자동으로 갱신됩니다."
+          />
+          <AutoChannelForm onRegistered={() => setRefreshSignal((n) => n + 1)} />
         </div>
 
         {/* 오른쪽 절반: 등록된 마커 목록 (양이 많아 별도 컬럼으로 분리) */}
         {/* min-w-0 : 표가 넘칠 때 이 컬럼 안에서 가로 스크롤되게 함 */}
         <section className="w-full min-w-0 border-t border-border bg-surface px-4 py-6 lg:w-1/2 lg:border-l lg:border-t-0 lg:px-6">
-          <SectionTitle
-            title="등록된 마커 목록"
-            desc="영상 상태는 10분마다 자동으로 재점검되며, 재생 불가 영상은 지도에서 자동 제외됩니다."
-          />
-          <MarkerList refreshSignal={refreshSignal} />
+          {/* 탭: 수동 마커 목록(백업 보존) / 지역 자동 채널 목록 */}
+          <div className="mb-4 inline-flex rounded-lg border border-border bg-bg p-1">
+            <button
+              type="button"
+              onClick={() => setListTab("manual")}
+              className={
+                "rounded-md px-3 py-1.5 text-sm font-medium transition " +
+                (listTab === "manual"
+                  ? "bg-brand text-white shadow-sm"
+                  : "text-ink-muted hover:text-ink")
+              }
+            >
+              등록된 마커 목록
+            </button>
+            <button
+              type="button"
+              onClick={() => setListTab("auto")}
+              className={
+                "rounded-md px-3 py-1.5 text-sm font-medium transition " +
+                (listTab === "auto"
+                  ? "bg-brand text-white shadow-sm"
+                  : "text-ink-muted hover:text-ink")
+              }
+            >
+              지역 자동 채널
+            </button>
+          </div>
+
+          {listTab === "manual" ? (
+            <>
+              <SectionTitle
+                title="등록된 마커 목록"
+                desc="영상 상태는 10분마다 자동으로 재점검되며, 재생 불가 영상은 지도에서 자동 제외됩니다. (수동 등록 방식 — 백업으로 보존됩니다.)"
+              />
+              <MarkerList refreshSignal={refreshSignal} />
+            </>
+          ) : (
+            <>
+              <SectionTitle
+                title="지역 자동 채널"
+                desc="채널명 아래에 현재 사이트에 표시 중인 영상이 나열됩니다. 영상별로 장소명·좌표·태그·설명을 수정할 수 있습니다. 채널을 삭제하면 그 채널이 만든 마커도 함께 삭제됩니다."
+              />
+              <AutoChannelList refreshSignal={refreshSignal} />
+            </>
+          )}
         </section>
       </main>
     </AdminGuard>

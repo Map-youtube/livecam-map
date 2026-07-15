@@ -11,7 +11,7 @@
 // ⚠️ 모든 함수는 try-catch 로 감싸 실패 시 빈 배열/기본값을 반환한다(빌드/렌더가 죽지 않게).
 // ─────────────────────────────────────────────────────────────
 
-import { getPublicMarkers } from "@/lib/getPublicMarkers";
+import { getMapMarkers } from "@/lib/getMapMarkers";
 import { getContinentByCountry } from "@/lib/continentUtils";
 
 // 서비스가 사용하는 6개 대륙(+중동) 코드
@@ -55,10 +55,10 @@ function normalizeContinent(m) {
   return m;
 }
 
-// 정규화된 공개 마커 전체 (is_active/auto_disabled 필터는 getPublicMarkers 가 이미 처리)
+// 정규화된 공개 마커 전체 (수동 ∪ 자동. is_active/auto_disabled/is_live 필터는 각 소스가 이미 처리)
 export async function getNormalizedPublicMarkers() {
   try {
-    const markers = await getPublicMarkers();
+    const markers = await getMapMarkers();
     return (Array.isArray(markers) ? markers : []).map(normalizeContinent);
   } catch (error) {
     console.error("[seoData] 공개 마커 조회 실패:", error); // TODO: 배포 전 제거

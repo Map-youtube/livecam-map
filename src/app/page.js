@@ -9,7 +9,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { adminDb } from "@/lib/firebaseAdmin";
-import { getPublicMarkers } from "@/lib/getPublicMarkers";
+import { getMapMarkers } from "@/lib/getMapMarkers";
 import { getLiveChannels } from "@/lib/getLiveChannels";
 import MainMapView from "@/components/MainMapView";
 
@@ -37,7 +37,7 @@ export default async function Home() {
   let liveChannels = [];
   try {
     [markers, tags, liveChannels] = await Promise.all([
-      getPublicMarkers(),
+      getMapMarkers(),
       getPublicTags(),
       getLiveChannels(),
     ]);

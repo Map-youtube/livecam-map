@@ -117,6 +117,37 @@ export async function getChannelLiveVideos({
   }
 }
 
+// ─── 채널의 "라이브 후보" videoId 목록 (videos.list 없이, 무료) ──
+// getChannelLiveVideos 의 앞부분(RSS + streams 병합)만 떼어낸 것.
+//   - videos.list(유닛 소모)를 호출하지 않는다 → 여러 채널의 후보 ID를 한데 모아
+//     호출부에서 "전역 50개 배칭"으로 한 번에 검증하기 위한 용도.
+//   - 반환: string[] (중복 제거된 videoId 후보). 실패 시 빈 배열.
+export async function getChannelCandidateVideoIds({
+  channelId,
+  handle,
+  fallbackIds = [],
+} = {}) {
+  try {
+    const [rssIds, streamIds] = await Promise.all([
+      fetchRssVideoIds(channelId),
+      fetchStreamVideoIds(handle),
+    ]);
+    const merged = [];
+    const seen = new Set();
+    const safeFallback = Array.isArray(fallbackIds) ? fallbackIds : [];
+    for (const id of [...safeFallback, ...streamIds, ...rssIds]) {
+      if (id && !seen.has(id)) {
+        seen.add(id);
+        merged.push(id);
+      }
+    }
+    return merged;
+  } catch (error) {
+    console.error("[liveChannelUtils] getChannelCandidateVideoIds 실패:", error); // TODO: 배포 전 제거
+    return [];
+  }
+}
+
 // ─── 입력 문자열에서 채널 식별자 대략 파싱 ─────────────────────
 // 반환: { channelId?, handle?, legacyPath? } (확실한 것만 채움)
 function parseChannelInput(input) {
