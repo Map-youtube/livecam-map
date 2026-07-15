@@ -79,15 +79,15 @@ function CollapsibleRow({
           "flex w-full items-center gap-1 rounded-md py-1 pr-1 text-left transition hover:bg-brand-light " +
           // 최상위(대륙/Space)는 13px + bold, 하위(국가 등)는 기존 12px
           (isTop ? "text-[13px] font-bold text-ink " : "text-xs text-ink ") +
-          // 하위가 선택된 조상 노드는 옅은 파란 배경으로 약하게 강조
-          (ancestorActive ? "bg-blue-50" : "")
+          // 하위가 선택된 조상 노드는 옅은 브랜드 배경으로 약하게 강조
+          (ancestorActive ? "bg-brand-light/60" : "")
         }
       >
         <span className="w-3 text-ink-muted">
           {hasChildren ? (open ? "▾" : "▸") : ""}
         </span>
         <span className="truncate">{label}</span>
-        <span className="ml-auto font-mono text-[11px] text-ink-muted">
+        <span className="ml-auto font-mono text-[11px] tabular-nums text-ink-muted">
           {count}
         </span>
       </button>
@@ -291,12 +291,12 @@ export default function MainCategoryTree({
         style={{ paddingLeft: `${indentPx}px` }}
         className={
           "flex w-full items-center gap-1 rounded-md py-1 pr-1 text-left text-xs transition hover:bg-brand-light " +
-          (active ? "bg-blue-100 font-bold text-blue-800" : "text-ink")
+          (active ? "bg-brand-light font-bold text-brand" : "text-ink")
         }
       >
         <span className="w-3 text-ink-muted">·</span>
         <span className="truncate">{capitalizeWords(trFn(mk))}</span>
-        <span className="ml-auto font-mono text-[11px] text-ink-muted">
+        <span className="ml-auto font-mono text-[11px] tabular-nums text-ink-muted">
           {(() => {
             const c = sumChannelCounts(channels);
             return typeof c === "number" ? c : "";
@@ -392,13 +392,13 @@ export default function MainCategoryTree({
                                     "flex w-full items-center gap-1 rounded-md py-1 pr-1 text-left text-xs transition hover:bg-brand-light " +
                                     // 실제 선택된 도시는 옅은 파란 배경 + 굵게 강조
                                     (active
-                                      ? "bg-blue-100 font-bold text-blue-800"
+                                      ? "bg-brand-light font-bold text-brand"
                                       : "text-ink")
                                   }
                                 >
                                   <span className="w-3 text-ink-muted">·</span>
                                   <span className="truncate">{trFn(city)}</span>
-                                  <span className="ml-auto font-mono text-[11px] text-ink-muted">
+                                  <span className="ml-auto font-mono text-[11px] tabular-nums text-ink-muted">
                                     {countryObj[city]}
                                   </span>
                                 </button>
@@ -506,7 +506,7 @@ export default function MainCategoryTree({
                   }
                 >
                   <span className="truncate">#{trFn(tag.name)}</span>
-                  <span className="ml-auto font-mono text-[11px] text-ink-muted">
+                  <span className="ml-auto font-mono text-[11px] tabular-nums text-ink-muted">
                     {tag.count}
                   </span>
                 </button>
