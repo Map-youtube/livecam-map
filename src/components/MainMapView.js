@@ -45,13 +45,13 @@ const MODE_STORAGE_KEY = "livecam_map_mode";
 //     NEXT_PUBLIC_SHOW_AFFILIATE=true 를 추가하고 재배포하면 광고가 그대로 복원된다.
 const SHOW_AFFILIATE = process.env.NEXT_PUBLIC_SHOW_AFFILIATE === "true";
 
-// 레이어 토글 버튼 공통 스타일 (켜짐=파랑 강조 / 꺼짐=흰색)
+// 레이어 토글 버튼 공통 스타일 — 부드러운 알약(pill) + 은은한 글래스 (켜짐=브랜드 청록)
 function toggleBtnClass(on) {
   return (
-    "rounded-md border px-3 py-1.5 text-sm font-medium shadow-card transition " +
+    "rounded-full border px-3.5 py-1.5 text-sm font-medium shadow-sm backdrop-blur-sm transition " +
     (on
       ? "border-brand bg-brand text-white hover:bg-brand-hover"
-      : "border-border bg-surface text-ink hover:bg-bg")
+      : "border-border/70 bg-surface/90 text-ink hover:bg-white")
   );
 }
 
@@ -764,8 +764,9 @@ export default function MainMapView({ markers, tags, liveChannels }) {
 
   return (
     <div className="flex h-screen flex-col bg-bg">
-      {/* 상단 헤더 바 (좌: 로고/태그라인, 우: 언어 선택) */}
-      <header className="flex h-12 flex-shrink-0 items-center gap-2 border-b border-border bg-surface px-4">
+      {/* 상단 헤더 바 (좌: 로고/태그라인/LIVE 카운트, 우: 언어 선택)
+          소프트 라이트 톤 — 상단만 은은한 하늘빛, 로고 옆 LIVE 상태 알약. 구조/기능은 그대로. */}
+      <header className="flex h-12 flex-shrink-0 items-center gap-2.5 border-b border-border bg-[linear-gradient(180deg,#F5F9FD,#ffffff)] px-4">
         <LiveDot size="sm" />
         <span className="font-display text-base font-bold tracking-tight text-ink">
           LiveCam Map
@@ -773,7 +774,15 @@ export default function MainMapView({ markers, tags, liveChannels }) {
         <span className="hidden text-xs text-ink-muted sm:inline">
           {t("tagline")}
         </span>
-        {/* 우측: 언어 변경 드롭다운 (요구사항 2) */}
+        {/* 현재 표시 중인 라이브 수 (지역 + 라이브 채널) — 좁은 화면에선 숨김 */}
+        <span className="ml-1.5 hidden items-center gap-1.5 rounded-full border border-live/25 bg-live-light px-2.5 py-0.5 text-[11px] font-semibold text-live md:inline-flex">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-live" />
+          LIVE{" "}
+          <span className="font-mono tabular-nums">
+            {(markerList.length + channelMapMarkers.length).toLocaleString()}
+          </span>
+        </span>
+        {/* 우측: 언어 변경 드롭다운 */}
         <div className="ml-auto">
           <LanguageSelector />
         </div>

@@ -60,6 +60,21 @@ const TAG_DOT = [
   "#FB923C",
 ];
 
+// 국가코드(ISO alpha-2) → 국기 이모지.
+//   - 유효한 2글자 코드는 regional indicator 로 국기 이모지를 만든다(거의 모든 국가 커버).
+//   - 유효한 코드가 아니거나 unknown 이면 대체 깃발(🏳️).
+// ⚠️ Windows 데스크톱은 국기 이모지를 글자(예: "JP")로 표시한다(OS 폰트 한계).
+//    Mac/iOS/Android 등 대부분 브라우저·모바일에서는 실제 국기로 보인다.
+function flagEmoji(code) {
+  const cc = String(code || "").trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(cc)) return "🏳️";
+  const base = 0x1f1e6; // regional indicator 'A'
+  return String.fromCodePoint(
+    base + cc.charCodeAt(0) - 65,
+    base + cc.charCodeAt(1) - 65
+  );
+}
+
 // 대륙/대분류 앞 아이콘 칩 (없으면 렌더 안 함)
 function CatIcon({ icon }) {
   if (!icon) return null;
@@ -399,7 +414,14 @@ export default function MainCategoryTree({
                       return (
                         <CollapsibleRow
                           key={country}
-                          label={countryLabel}
+                          label={
+                            <>
+                              <span className="mr-1.5" aria-hidden="true">
+                                {flagEmoji(country)}
+                              </span>
+                              {countryLabel}
+                            </>
+                          }
                           count={countCountry(countryObj)}
                           depth={1}
                           defaultOpen={false}
