@@ -60,18 +60,30 @@ const TAG_DOT = [
   "#FB923C",
 ];
 
-// 국가코드(ISO alpha-2) → 국기 이모지.
-//   - 유효한 2글자 코드는 regional indicator 로 국기 이모지를 만든다(거의 모든 국가 커버).
-//   - 유효한 코드가 아니거나 unknown 이면 대체 깃발(🏳️).
-// ⚠️ Windows 데스크톱은 국기 이모지를 글자(예: "JP")로 표시한다(OS 폰트 한계).
-//    Mac/iOS/Android 등 대부분 브라우저·모바일에서는 실제 국기로 보인다.
-function flagEmoji(code) {
-  const cc = String(code || "").trim().toUpperCase();
-  if (!/^[A-Z]{2}$/.test(cc)) return "🏳️";
-  const base = 0x1f1e6; // regional indicator 'A'
-  return String.fromCodePoint(
-    base + cc.charCodeAt(0) - 65,
-    base + cc.charCodeAt(1) - 65
+// 국가 국기 — SVG(flagcdn, 무료 CDN). 이모지와 달리 Windows 포함 모든 기기에서
+// 실제 국기 그림으로 렌더된다.
+//   - 유효한 ISO alpha-2 코드면 SVG 국기, 로딩 실패/유효하지 않으면 대체 깃발(🏳️, 이모지).
+function CountryFlag({ code }) {
+  const cc = String(code || "").trim().toLowerCase();
+  const valid = /^[a-z]{2}$/.test(cc);
+  const [failed, setFailed] = useState(false);
+  if (!valid || failed) {
+    return (
+      <span className="mr-1.5 text-[13px]" aria-hidden="true">
+        🏳️
+      </span>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={`https://flagcdn.com/${cc}.svg`}
+      alt=""
+      aria-hidden="true"
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className="mr-1.5 inline-block h-[13px] w-[18px] flex-none rounded-[2px] object-cover align-[-1px] ring-1 ring-black/5"
+    />
   );
 }
 
@@ -82,7 +94,7 @@ function CatIcon({ icon }) {
     <span
       aria-hidden="true"
       className={
-        "flex h-[22px] w-[22px] flex-none items-center justify-center rounded-[7px] bg-gradient-to-br text-[12px] leading-none shadow-sm " +
+        "flex h-[20px] w-[20px] flex-none items-center justify-center rounded-[6px] bg-gradient-to-br text-[11px] leading-none shadow-sm " +
         icon.g
       }
     >
@@ -416,9 +428,7 @@ export default function MainCategoryTree({
                           key={country}
                           label={
                             <>
-                              <span className="mr-1.5" aria-hidden="true">
-                                {flagEmoji(country)}
-                              </span>
+                              <CountryFlag code={country} />
                               {countryLabel}
                             </>
                           }

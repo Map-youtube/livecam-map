@@ -158,6 +158,17 @@ export default function MainMapView({ markers, tags, liveChannels }) {
     return counts;
   }, [channelVideos]);
 
+  // 헤더 "LIVE N" — 트리에 표시되는 총합과 정확히 일치시킨다.
+  //   = 지역 마커 수(대륙 합) + 모든 채널의 현재 라이브 영상 수 합(방송/우주 합).
+  //   (기존엔 채널 "마커 수"를 더해서 트리의 채널 "영상 수" 합과 어긋났다)
+  const totalLiveCount = useMemo(() => {
+    const channelSum = Object.values(channelVideoCounts || {}).reduce(
+      (acc, c) => acc + (typeof c === "number" ? c : 0),
+      0
+    );
+    return markerList.length + channelSum;
+  }, [markerList, channelVideoCounts]);
+
   // 패널 열림 여부
   const isPanelOpen =
     selectedCity !== null || selectedTag !== null || selectedGroup !== null;
@@ -779,7 +790,7 @@ export default function MainMapView({ markers, tags, liveChannels }) {
           <span className="inline-block h-1.5 w-1.5 rounded-full bg-live" />
           LIVE{" "}
           <span className="font-mono tabular-nums">
-            {(markerList.length + channelMapMarkers.length).toLocaleString()}
+            {totalLiveCount.toLocaleString()}
           </span>
         </span>
         {/* 우측: 언어 변경 드롭다운 */}

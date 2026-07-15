@@ -176,6 +176,10 @@ button:disabled,
 .lm-marker {
   position: relative;
 }
+/* 마커 SVG 에 은은한 그림자 — 밝은 지도 위에서 살짝 떠 보이게(소프트 톤 다듬기) */
+.lm-marker svg {
+  filter: drop-shadow(0 2px 3px rgba(18, 24, 31, 0.28));
+}
 /* 라이브 신호점 — 새 SVG 핀의 우상단 모서리에 작은 배지처럼 얹는다(핀 안쪽 아이콘을 가리지 않도록) */
 .lm-marker .live-dot {
   position: absolute;

@@ -440,13 +440,13 @@ export default function VideoListPanel({
                           type="button"
                           onClick={() => handleCardClick(marker)}
                           className={
-                            "block overflow-hidden rounded-lg border border-border bg-surface text-left shadow-card transition duration-150 hover:-translate-y-0.5 hover:shadow-card " +
+                            "group block overflow-hidden rounded-xl border border-border/70 bg-surface text-left shadow-sm ring-1 ring-black/[0.02] transition duration-200 hover:-translate-y-0.5 hover:border-border hover:shadow-lg " +
                             // 선택된 카드: 빨간 테두리 + 은은하게 켜졌다 꺼지는 발광(box-shadow 애니메이션)
                             (isSelected ? "card-playing" : "")
                           }
                         >
-                          {/* 썸네일 (16:9) + 좌상단 상태 배지 */}
-                          <div className="relative aspect-video w-full overflow-hidden rounded-md bg-ink/5">
+                          {/* 썸네일 (16:9) + 좌상단 상태 배지 (카드가 corner 를 클립하므로 썸네일은 각지게) */}
+                          <div className="relative aspect-video w-full overflow-hidden bg-ink/5">
                             {/* 없거나 로딩 실패 시 기본 이미지로 대체 */}
                             <Thumbnail
                               src={thumb}
