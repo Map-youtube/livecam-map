@@ -58,20 +58,28 @@ export async function POST(request) {
     //    - channel_id 있는 마커 → byChannel 에 바로 담는다.
     //    - channel_id 없지만 video_id 있는 마커 → 역추적 대상으로 video_id 수집.
     const byChannel = new Map(); // channel_id → channel_name (대표)
+    const channelSeeds = new Map(); // channel_id → Set(video_id) — 검증된 씨앗 영상ID
     const videoToName = new Map(); // video_id → 마커 장소명(역추적 실패 시 참고용, 지금은 채널명 우선)
     let noChannelNoVideo = 0; // 채널ID·영상ID 둘 다 없어 손댈 수 없는 마커
+    // 채널ID → 씨앗 영상ID 추가 (중복 없이)
+    const addSeed = (cid, vid) => {
+      if (!cid || !vid) return;
+      if (!channelSeeds.has(cid)) channelSeeds.set(cid, new Set());
+      channelSeeds.get(cid).add(vid);
+    };
     try {
       const mSnap = await adminDb.collection(MARKERS).get();
       for (const d of mSnap.docs) {
         const data = d.data() || {};
         const cid = String(data.youtube_channel_id || "").trim();
+        const vid = String(data.youtube_video_id || "").trim();
         if (cid) {
           if (!byChannel.has(cid)) {
             byChannel.set(cid, String(data.youtube_channel_name || "").trim());
           }
+          addSeed(cid, vid); // 채널ID 있는 마커: 그 영상ID를 씨앗으로
           continue;
         }
-        const vid = String(data.youtube_video_id || "").trim();
         if (vid) {
           if (!videoToName.has(vid)) {
             videoToName.set(vid, String(data.location || "").trim());
@@ -102,6 +110,7 @@ export async function POST(request) {
           if (!byChannel.has(info.channelId)) {
             byChannel.set(info.channelId, info.channelName || "");
           }
+          addSeed(info.channelId, vid); // 역추적된 영상ID도 씨앗으로
         } else {
           unresolvedVideos += 1;
         }
@@ -125,12 +134,16 @@ export async function POST(request) {
       const batch = adminDb.batch();
       for (const { cid, name } of toCreate.slice(i, i + 450)) {
         const ref = adminDb.collection(CHANNELS).doc();
+        // 씨앗 영상ID: 스캔이 RSS/streams 로 못 찾아도 이 영상들을 항상 재확인한다.
+        //   Firestore 문서 크기·후보 배칭 부담을 줄이려 채널당 최대 10개로 제한.
+        const seeds = Array.from(channelSeeds.get(cid) || []).slice(0, 10);
         batch.set(ref, {
           channel_id: cid,
           handle: "",
           channel_name: name || cid,
           is_active: true,
           source: "imported",
+          seed_video_ids: seeds,
           last_seen_video_at: null,
           created_at: now,
           updated_at: now,

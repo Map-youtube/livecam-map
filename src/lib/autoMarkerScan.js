@@ -127,6 +127,9 @@ export async function scanChannels(channelDocs, opts = {}) {
         const ids = await getChannelCandidateVideoIds({
           channelId: ch.channel_id,
           handle: ch.handle,
+          // 씨앗 영상ID(기존 마커에서 온 검증된 영상)를 항상 후보 맨 앞에 포함시킨다.
+          //   → 오래된 24/7 스트림이 RSS/streams 스크래핑에 안 잡혀도 원본 영상을 매 스캔 재확인.
+          fallbackIds: Array.isArray(ch.seed_video_ids) ? ch.seed_video_ids : [],
         });
         for (const id of ids) {
           if (!idToChannel.has(id)) idToChannel.set(id, ch);
