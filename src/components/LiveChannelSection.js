@@ -9,7 +9,7 @@
 //   각 채널: 채널명 · 핸들 · 좌표 · 활성 토글 · 삭제(ISS 특수 채널은 삭제 불가).
 // ─────────────────────────────────────────────────────────────
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LiveChannelForm from "@/components/LiveChannelForm";
 import LeafletMapWrapper from "@/components/LeafletMapWrapper";
 import { getAdminIdToken } from "@/lib/clientAuth";
@@ -26,6 +26,8 @@ export default function LiveChannelSection() {
   const [videoCounts, setVideoCounts] = useState({});
   // 접힌 중분류(국가) 집합 — key: `${major}||${middle}` (#7 접기/펴기)
   const [collapsedMiddles, setCollapsedMiddles] = useState(() => new Set());
+  // 최초 로드 시 국가 폴더를 전부 접힘으로 초기화했는지 여부 (한 번만 실행)
+  const didInitCollapse = useRef(false);
 
   // ─── 채널별 현재 라이브 방송 개수 조회 (관리자 참고용) ───────
   const loadCounts = useCallback(async () => {
@@ -68,6 +70,25 @@ export default function LiveChannelSection() {
     reload();
     loadCounts();
   }, [reload, loadCounts]);
+
+  // 채널이 처음 로드되면 국가(중분류) 폴더를 전부 '접힘'으로 초기화한다.
+  //   - 기본 화면이 접힌 상태여야 스크롤이 짧아 관리가 편함(사용자 요청).
+  //   - didInitCollapse 로 최초 1회만 실행 → 이후 삭제/토글/이름변경으로 목록을
+  //     다시 불러와도, 사용자가 직접 펼쳐 둔 국가를 다시 접지 않는다.
+  useEffect(() => {
+    if (didInitCollapse.current) return;
+    if (!channels || channels.length === 0) return;
+    const keys = new Set();
+    for (const ch of channels) {
+      if (!ch) continue;
+      const M = ch.major_category || "(미분류)";
+      const mid = ch.middle_category || "";
+      // 중분류(국가)가 있는 채널만 접기 대상 (mid === "" 는 2단계라 폴더 없음)
+      if (mid !== "") keys.add(`${M}||${mid}`);
+    }
+    setCollapsedMiddles(keys);
+    didInitCollapse.current = true;
+  }, [channels]);
 
   // 중분류(국가) 접기/펴기 토글
   function toggleMiddle(major, middle) {
