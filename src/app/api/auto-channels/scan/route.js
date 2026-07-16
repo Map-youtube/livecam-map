@@ -24,6 +24,7 @@ import { revalidateTag } from "next/cache";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { verifyAdminRequest } from "@/lib/authUtils";
 import { scanChannels, cleanupStaleChannels } from "@/lib/autoMarkerScan";
+import { runRegionDescriptionFill } from "@/lib/regionDescriptionRun";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -90,6 +91,15 @@ async function runScan() {
   const scan = await scanChannels(channels, { aiCap: DAILY_AI_CAP });
   const cleanup = await cleanupStaleChannels(90);
 
+  // 새로 생긴 대륙/국가/주요도시의 AI 소개글을 매일 조금씩 자동 채운다(없는 것만, cap 제한).
+  //   → 새 지역이 추가돼도 스스로 채워짐. 실패해도 스캔 결과에는 영향 없음.
+  let regionDescriptions = null;
+  try {
+    regionDescriptions = await runRegionDescriptionFill({ cap: 30 });
+  } catch (regionErr) {
+    console.error("[api/auto-channels/scan] 지역 설명 채우기 실패:", regionErr); // TODO: 배포 전 제거
+  }
+
   // 공개 캐시 무효화
   try {
     revalidateTag("auto-markers");
@@ -98,7 +108,13 @@ async function runScan() {
     console.error("[api/auto-channels/scan] 재검증 실패:", revalErr); // TODO: 배포 전 제거
   }
 
-  return { ok: true, scannedChannels: channels.length, scan, cleanup };
+  return {
+    ok: true,
+    scannedChannels: channels.length,
+    scan,
+    cleanup,
+    regionDescriptions,
+  };
 }
 
 // Vercel Cron 은 GET 으로 호출

@@ -20,6 +20,11 @@ import {
   getMarkerThumb,
   citySlug,
 } from "@/lib/seoData";
+import {
+  getRegionDescriptions,
+  cityDescKey,
+  pickRegionText,
+} from "@/lib/regionDescriptions";
 import SeoPageShell from "@/components/seo/SeoPageShell";
 import Breadcrumb from "@/components/seo/Breadcrumb";
 import RegionCard from "@/components/seo/RegionCard";
@@ -105,7 +110,15 @@ export async function generateMetadata({ params }) {
     // 표시용 도시명은 실제 마커의 city 값 사용
     const cityName = markers[0].city || city;
     const countryLabel = COUNTRY_NAME_BY_CODE[countryUpper] || countryUpper;
-    const description = `${cityName}(${countryLabel})의 실시간 라이브캠 ${markers.length}곳. 거리·명소·해변을 지금 이 순간 생중계로 감상하세요.`;
+    // AI 소개(있으면) → 기존 템플릿 fallback (메타 설명)
+    const descs = await getRegionDescriptions();
+    const description =
+      pickRegionText(
+        descs,
+        cityDescKey(continent, countryUpper, citySlug(cityName)),
+        "ko"
+      ) ||
+      `${cityName}(${countryLabel})의 실시간 라이브캠 ${markers.length}곳. 거리·명소·해변을 지금 이 순간 생중계로 감상하세요.`;
     const ogImage = getMarkerThumb(markers[0]);
     const title = `${cityName} 실시간 라이브캠 | TripByClip`;
     return {
@@ -147,6 +160,16 @@ export default async function CityPage({ params }) {
   const countryLower = country.toLowerCase();
   const cityName = markers[0].city || city;
 
+  // 도시 소개: AI 소개(있으면) → 기존 템플릿 fallback
+  const descs = await getRegionDescriptions();
+  const introText =
+    pickRegionText(
+      descs,
+      cityDescKey(continent, countryUpper, citySlug(cityName)),
+      "ko"
+    ) ||
+    `${cityName}(${countryLabel})의 실시간 라이브캠 ${markers.length}곳입니다. 각 영상을 눌러 상세 정보와 함께 감상해 보세요.`;
+
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "ItemList",
@@ -180,8 +203,7 @@ export default async function CityPage({ params }) {
         {cityName} 실시간 라이브캠
       </h1>
       <p className="mt-2 max-w-3xl text-sm leading-relaxed text-ink-muted">
-        {cityName}({countryLabel})의 실시간 라이브캠 {markers.length}곳입니다. 각
-        영상을 눌러 상세 정보와 함께 감상해 보세요.
+        {introText}
       </p>
 
       <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">

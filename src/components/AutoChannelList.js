@@ -171,6 +171,36 @@ export default function AutoChannelList({ refreshSignal }) {
     }
   }
 
+  // 지역 소개글(대륙/국가/주요도시) AI 생성 — 없는 것만, 한 번에 일부씩(cap)
+  async function handleGenRegionDescriptions() {
+    setBusy("regiondesc");
+    setNotice("");
+    try {
+      const headers = await authHeaders();
+      if (!headers) return;
+      const res = await fetch("/api/region-descriptions/generate", {
+        method: "POST",
+        headers,
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        const b = data.byType || {};
+        setNotice(
+          `지역 설명 생성: ${data.generated}개 생성 (대륙 ${b.continent || 0} · 국가 ${b.country || 0} · 도시 ${b.city || 0}), 남은 지역 ${data.remaining || 0}개` +
+            (data.remaining > 0
+              ? " — 남은 게 있으면 버튼을 다시 눌러 이어서 생성하세요."
+              : " ✅ 전부 완료")
+        );
+      } else {
+        setNotice(data.error || "지역 설명 생성에 실패했습니다.");
+      }
+    } catch (e) {
+      setNotice("지역 설명 생성 중 오류가 발생했습니다.");
+    } finally {
+      setBusy("");
+    }
+  }
+
   // 기존 마커에서 채널 가져오기
   async function handleImport() {
     if (!window.confirm("기존 '등록된 마커 목록'에서 유튜브 채널을 추출해 자동 채널로 등록합니다. 계속할까요?"))
@@ -281,6 +311,15 @@ export default function AutoChannelList({ refreshSignal }) {
           disabled={busy !== ""}
         >
           {busy === "import" ? "가져오는 중..." : "기존 마커에서 채널 가져오기"}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleGenRegionDescriptions}
+          disabled={busy !== ""}
+          title="대륙/국가/주요도시 SEO 페이지의 소개글을 AI로 생성합니다(없는 것만, 1회성)"
+        >
+          {busy === "regiondesc" ? "설명 생성 중..." : "지역 설명 생성(AI)"}
         </Button>
         <Button type="button" variant="outline" onClick={load} disabled={busy !== ""}>
           새로고침
