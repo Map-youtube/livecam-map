@@ -372,6 +372,62 @@ export async function getLiveVideos(videoIds) {
   return liveVideos;
 }
 
+// ─── 여러 영상ID → 소속 채널 정보 역추적 (videos.list, 배치) ────
+// part=snippet 으로 50개씩 배치 조회(배치당 1유닛)한 뒤, 각 영상의 채널ID·채널명을 뽑는다.
+//   - 기존 마커에 youtube_channel_id 가 없던(레거시) 경우, 영상 링크만으로 채널을 되찾는 용도.
+//   - 삭제/비공개된 영상은 응답에 오지 않으므로 결과에 포함되지 않는다(채널을 알 수 없음).
+//   - 라이브가 끝났어도 영상 자체가 남아있으면 채널ID 는 정상적으로 조회된다 → 채널 부활 가능.
+//   반환: Map<videoId, { channelId, channelName }>  (조회 성공한 것만)
+// 실패(키 없음/네트워크/배치 오류) 시 부분 결과라도 반환 — throw 하지 않는다.
+export async function getVideosChannelInfo(videoIds) {
+  const result = new Map();
+  try {
+    if (getYoutubeApiKeys().length === 0) {
+      console.error(
+        "[youtubeUtils] YouTube 키(YOUTUBE_API_KEY)가 없어 채널 역추적을 건너뜁니다."
+      ); // TODO: 배포 전 제거
+      return result;
+    }
+
+    const ids = (Array.isArray(videoIds) ? videoIds : [])
+      .map((v) => String(v || "").trim())
+      .filter((v) => v.length > 0);
+
+    // 50개씩 배치 (videos.list 최대 id 수, 배치당 1유닛)
+    for (let i = 0; i < ids.length; i += 50) {
+      const chunk = ids.slice(i, i + 50);
+      const endpoint = new URL("https://www.googleapis.com/youtube/v3/videos");
+      endpoint.searchParams.set("part", "snippet");
+      endpoint.searchParams.set("id", chunk.join(","));
+
+      // 기본 키 할당량 초과 시 백업 키로 자동 재시도
+      const res = await youtubeFetch(endpoint);
+      if (!res.ok) {
+        // 이 배치는 건너뛴다 (전체 실패로 보지 않음)
+        console.error(
+          `[youtubeUtils] getVideosChannelInfo 배치 실패 (status ${res.status})`
+        ); // TODO: 배포 전 제거
+        continue;
+      }
+      const data = await res.json();
+      const items = Array.isArray(data.items) ? data.items : [];
+
+      for (const it of items) {
+        const snippet = it.snippet || {};
+        const channelId = String(snippet.channelId || "").trim();
+        if (!channelId) continue; // 채널ID 없으면 등록 불가라 스킵
+        result.set(it.id, {
+          channelId,
+          channelName: String(snippet.channelTitle || "").trim(),
+        });
+      }
+    }
+  } catch (error) {
+    console.error("[youtubeUtils] getVideosChannelInfo 에러:", error); // TODO: 배포 전 제거
+  }
+  return result;
+}
+
 // ─── 영상 존재 여부 빠른 확인 (oEmbed, 무료) ──────────────────
 // 엑셀 매크로(location.xlsm) IsYouTubeVideoValid() 와 동일한 방식.
 //   https://www.youtube.com/oembed?url=...&format=json 에 GET 요청 →

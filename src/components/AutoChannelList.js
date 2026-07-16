@@ -139,7 +139,16 @@ export default function AutoChannelList({ refreshSignal }) {
       const data = await res.json();
       if (res.ok && data.ok) {
         setNotice(
-          `${data.created}개 채널 등록(중복 ${data.skippedExisting}, 채널ID 없음 ${data.skippedNoChannelId}). "지금 스캔"으로 영상을 채우세요.`
+          `${data.created}개 채널 등록` +
+            ` (영상 링크로 ${data.resolvedFromVideos ?? 0}개 역추적` +
+            (data.videosListUnits
+              ? `, YouTube ${data.videosListUnits}유닛 사용`
+              : "") +
+            `, 중복 제외 ${data.skippedExisting}` +
+            (data.unresolvedVideos
+              ? `, 삭제/비공개 영상 ${data.unresolvedVideos}`
+              : "") +
+            `). "지금 스캔"으로 영상을 채우세요.`
         );
         await load();
       } else {
