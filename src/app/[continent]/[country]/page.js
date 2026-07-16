@@ -19,6 +19,7 @@ import {
   VALID_CONTINENTS,
   getNormalizedPublicMarkers,
   getMarkerThumb,
+  getCountryIntro,
   groupBy,
   citySlug,
 } from "@/lib/seoData";
@@ -80,7 +81,11 @@ export async function generateMetadata({ params }) {
 
     const countryLabel = COUNTRY_NAME_BY_CODE[countryUpper] || countryUpper;
     const markers = await getCountryMarkers(continent, countryUpper);
-    const description = `${countryLabel}의 실시간 라이브캠 ${markers.length}곳을 도시별로 모았습니다. 지금 이 순간의 거리와 명소를 생중계로 감상하세요.`;
+    // 손으로 쓴 주요국 소개(있으면) 또는 데이터 기반 자동 소개를 메타 설명으로도 사용
+    const description = getCountryIntro(countryUpper, {
+      countryLabel,
+      markerCount: markers.length,
+    });
     const ogImage = markers.length ? getMarkerThumb(markers[0]) : undefined;
     const title = `${countryLabel} 실시간 라이브캠 | TripByClip`;
     return {
@@ -115,11 +120,22 @@ export default async function CountryPage({ params }) {
   const countryLabel = COUNTRY_NAME_BY_CODE[countryUpper] || countryUpper;
   const countryLower = country.toLowerCase();
   const markers = await getCountryMarkers(continent, countryUpper);
-  const intro = `${countryLabel}의 실시간 라이브캠을 도시별로 모았습니다. 지금 이 순간의 거리와 명소를 생중계로 감상해 보세요.`;
 
   // 도시별 그룹핑 (도시명 가나다순)
   const byCity = groupBy(markers, (m) => m.city || "(도시 미지정)");
   const cityNames = Object.keys(byCity).sort((a, b) => a.localeCompare(b, "ko"));
+
+  // 국가 소개문: 손으로 쓴 주요국 소개가 있으면 사용, 없으면(신규 국가 포함)
+  // 마커수·마커 많은 상위 도시명으로 자동 구성한다.
+  const topCities = Object.keys(byCity)
+    .filter((c) => c && c !== "(도시 미지정)")
+    .sort((a, b) => byCity[b].length - byCity[a].length)
+    .slice(0, 3);
+  const intro = getCountryIntro(countryUpper, {
+    countryLabel,
+    markerCount: markers.length,
+    cityNames: topCities,
+  });
 
   const jsonLd = {
     "@context": "https://schema.org",
