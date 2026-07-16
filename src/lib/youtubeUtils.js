@@ -308,10 +308,15 @@ export async function getVideosLiveStatus(videoIds) {
   return result;
 }
 
-// ─── 여러 영상 중 "현재 라이브 중"인 것만 정보 반환 (videos.list, 배치) ──
-// part=snippet 으로 배치 조회(50개/1유닛)한 뒤 snippet.liveBroadcastContent === "live"
-// 인 영상만 남긴다. (NASA 채널 최근 영상 중 실시간 방송만 골라내는 용도)
-//   반환: [{ videoId, title, thumbnailUrl, channelName }]  (라이브인 것만, 순서 보존)
+// ─── 여러 영상 중 "현재 라이브 중 + 실제로 재생(임베드) 가능한" 것만 반환 (videos.list, 배치) ──
+// part=snippet,status 로 배치 조회(50개/1유닛 — status 추가해도 유닛 비용은 그대로)한 뒤
+//   snippet.liveBroadcastContent === "live" && status.embeddable !== false 인 영상만 남긴다.
+//   ⚠️ 중요: YouTube 가 "라이브 방송 중"이라고 응답해도(liveBroadcastContent==="live"),
+//     채널 소유자가 퍼가기(임베드)를 막아둔 영상은 status.embeddable === false 로 표시된다.
+//     이 경우 실제로는 사이트 iframe 에서 재생되지 않으므로(embed_blocked), 여기서 미리 걸러내지
+//     않으면 "재생 불가 영상이 라이브로 등록되어 사이트에 게시"되는 문제가 생긴다.
+//     (지역 자동 채널 파이프라인이 이 함수 결과로 is_live/게시 여부를 결정하기 때문)
+//   반환: [{ videoId, title, thumbnailUrl, channelName }]  (라이브+임베드가능만, 순서 보존)
 // 실패(키 없음/네트워크/배치 오류) 시 빈 배열 반환 — throw 하지 않는다.
 export async function getLiveVideos(videoIds) {
   const liveVideos = [];
@@ -331,7 +336,7 @@ export async function getLiveVideos(videoIds) {
     for (let i = 0; i < ids.length; i += 50) {
       const chunk = ids.slice(i, i + 50);
       const endpoint = new URL("https://www.googleapis.com/youtube/v3/videos");
-      endpoint.searchParams.set("part", "snippet");
+      endpoint.searchParams.set("part", "snippet,status");
       endpoint.searchParams.set("id", chunk.join(","));
 
       // 기본 키 할당량 초과 시 백업 키로 자동 재시도
@@ -350,6 +355,9 @@ export async function getLiveVideos(videoIds) {
         const snippet = it.snippet || {};
         // 현재 실시간 방송 중인 영상만 (upcoming/none 제외)
         if (snippet.liveBroadcastContent !== "live") continue;
+        // 임베드(퍼가기)가 막힌 영상은 라이브여도 사이트에서 재생되지 않으므로 제외
+        const status = it.status || {};
+        if (status.embeddable === false) continue;
 
         const thumbnails = snippet.thumbnails || {};
         const thumbnailUrl =
