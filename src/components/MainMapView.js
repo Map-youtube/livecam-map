@@ -780,7 +780,7 @@ export default function MainMapView({ markers, tags, liveChannels }) {
       <header className="flex h-12 flex-shrink-0 items-center gap-2.5 border-b border-border bg-[linear-gradient(180deg,#F5F9FD,#ffffff)] px-4">
         <LiveDot size="sm" />
         {/* 브랜드 워드마크: Trip = 잉크, by = 옅게, Clip = 브랜드 청록 강조 */}
-        <span className="font-display text-[17px] font-semibold tracking-tight text-ink">
+        <span className="font-display text-[20px] font-bold tracking-tight text-ink">
           Trip <span className="font-normal text-ink-muted">by</span>{" "}
           <span className="text-brand">Clip</span>
         </span>
