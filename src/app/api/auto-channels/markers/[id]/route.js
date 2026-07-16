@@ -16,6 +16,7 @@ import { adminDb } from "@/lib/firebaseAdmin";
 import { FieldValue } from "firebase-admin/firestore";
 import { verifyAdminRequest } from "@/lib/authUtils";
 import { getContinentByCountry } from "@/lib/continentUtils";
+import { normalizeCityName } from "@/lib/cityUtils";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -58,7 +59,8 @@ export async function PATCH(request, context) {
 
     const update = { updated_at: FieldValue.serverTimestamp() };
     if (typeof body.location === "string") update.location = body.location.trim();
-    if (typeof body.city === "string") update.city = body.city.trim();
+    if (typeof body.city === "string")
+      update.city = normalizeCityName(body.city); // 도시명 표준형으로 저장
     if (typeof body.country === "string")
       update.country = body.country.trim().toUpperCase().slice(0, 2);
     if (typeof body.continent === "string")

@@ -23,6 +23,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getLiveVideos, getThumbnailUrl } from "@/lib/youtubeUtils";
 import { getChannelCandidateVideoIds } from "@/lib/liveChannelUtils";
 import { enrichVideosToMarkers } from "@/lib/autoMarkerAi";
+import { normalizeCityName } from "@/lib/cityUtils";
 
 const MARKERS = "auto_markers";
 const CHANNELS = "auto_channels";
@@ -289,7 +290,7 @@ export async function scanChannels(channelDocs, opts = {}) {
           lat: ai.lat,
           lng: ai.lng,
           location: ai.location || v.title || "",
-          city: ai.city || "",
+          city: normalizeCityName(ai.city) || "", // 도시명 표준형(영어 Title Case)으로 저장
           country: ai.country || "",
           continent: ai.continent || "",
           tags: Array.isArray(ai.tags) ? ai.tags : [],

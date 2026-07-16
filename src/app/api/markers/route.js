@@ -15,6 +15,7 @@ import { extractVideoId, getYoutubeInfo } from "@/lib/youtubeUtils";
 import { getContinentByCountry } from "@/lib/continentUtils";
 import { generatePlaceDescription } from "@/lib/aiUtils";
 import { verifyAdminRequest } from "@/lib/authUtils";
+import { normalizeCityName } from "@/lib/cityUtils";
 
 // firebase-admin(Node 전용) 사용 → Edge 런타임 금지, Node.js 런타임 명시
 export const runtime = "nodejs";
@@ -59,7 +60,8 @@ export async function GET(request) {
       query = query.where("country", "==", country.toUpperCase());
     }
     if (city) {
-      query = query.where("city", "==", city);
+      // 필터도 표준형으로 맞춰 저장값(표준형)과 일치시킨다.
+      query = query.where("city", "==", normalizeCityName(city));
     }
 
     // is_active 처리:
@@ -301,7 +303,7 @@ export async function POST(request) {
       lat: latNum,
       lng: lngNum,
       location: location,
-      city: city || "",
+      city: normalizeCityName(city) || "", // 도시명 표준형(영어 Title Case)으로 저장
       country: countryCode,
       continent: continent,
 

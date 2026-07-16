@@ -19,6 +19,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/components/i18n/LanguageProvider";
 import { capitalizeWords } from "@/lib/textCase";
+import { normalizeCityName } from "@/lib/cityUtils";
 
 // 대륙 표시 순서
 const CONTINENT_ORDER = [
@@ -217,7 +218,8 @@ export default function MainCategoryTree({
         if (!m) continue;
         const continent = m.continent || "unknown";
         const country = m.country || "unknown";
-        const city = m.city || "(도시 미지정)";
+        // 도시명을 표준형으로 묶는다 → "seoul"/"Seoul"/"서울" 이 한 노드로 합쳐짐.
+        const city = normalizeCityName(m.city) || "(도시 미지정)";
         if (!t[continent]) t[continent] = {};
         if (!t[continent][country]) t[continent][country] = {};
         if (!t[continent][country][city]) t[continent][country][city] = 0;
@@ -479,7 +481,7 @@ export default function MainCategoryTree({
                                   }
                                 >
                                   <span className="w-3 text-ink-muted">·</span>
-                                  <span className="truncate">{trFn(city)}</span>
+                                  <span className="truncate">{capitalizeWords(trFn(city))}</span>
                                   <span className="ml-auto font-mono text-[11px] tabular-nums text-ink-muted">
                                     {countryObj[city]}
                                   </span>
