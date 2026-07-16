@@ -57,9 +57,33 @@ const ibmPlexMono = IBM_Plex_Mono({
   display: "swap",
 });
 
+// ─── 사이트 SEO 메타데이터 (구글 검색 결과에 노출되는 제목/소개글) ──
+//   - title / description 이 구글 스니펫(검색 결과의 제목·설명)의 1차 소스다.
+//   - 글로벌 서비스(기본 언어 영어)라 검색 노출 문구는 영어로 작성한다.
+//   - metadataBase: openGraph/canonical 등 상대경로를 절대 URL 로 만드는 기준.
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL || "https://www.tripbyclip.com";
+
 export const metadata = {
-  title: "LiveCam Map — 세계 라이브 지도",
-  description: "세계 곳곳의 실시간 라이브 영상을 지도로 탐험하는 서비스",
+  metadataBase: new URL(SITE_URL),
+  title: "TripByClip — Travel the World from Home with Live Web Cam Clips",
+  description:
+    "Travel the world from home with live web cam clips. Explore real-time views of cities, beaches, and famous landmarks worldwide on an interactive map.",
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    siteName: "TripByClip",
+    url: SITE_URL,
+    title: "TripByClip — Travel the World from Home with Live Web Cam Clips",
+    description:
+      "Travel the world from home with live web cam clips. Hop between real-time views of cities, beaches, and landmarks across the globe — one clip at a time.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "TripByClip — Travel the World from Home with Live Web Cam Clips",
+    description:
+      "Travel the world from home with live web cam clips. Explore real-time views of cities, beaches, and landmarks worldwide on an interactive map.",
+  },
 };
 
 // ─── 뷰포트 설정 (모바일 / 추후 앱 전환 대비) ──────────────────
