@@ -28,8 +28,20 @@ export default function Footer() {
           지도 데이터 © OpenStreetMap contributors
         </span>
 
-        {/* 법적 페이지 링크 */}
+        {/* 사이트 안내 + 법적 페이지 링크 */}
         <nav className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-0.5">
+          <Link href="/about" className="hover:text-brand hover:underline">
+            {t("footerAbout")}
+          </Link>
+          <span aria-hidden="true" className="text-border">
+            |
+          </span>
+          <Link href="/contact" className="hover:text-brand hover:underline">
+            {t("footerContact")}
+          </Link>
+          <span aria-hidden="true" className="text-border">
+            |
+          </span>
           <Link href="/terms" className="hover:text-brand hover:underline">
             {t("footerTerms")}
           </Link>

@@ -24,6 +24,8 @@ export default async function sitemap() {
   // 정적 경로(홈, 법적 페이지, 대륙 목록)
   const staticRoutes = [
     { path: "", changeFrequency: "daily", priority: 1 },
+    { path: "/about", changeFrequency: "monthly", priority: 0.5 },
+    { path: "/contact", changeFrequency: "yearly", priority: 0.4 },
     { path: "/terms", changeFrequency: "yearly", priority: 0.3 },
     { path: "/privacy", changeFrequency: "yearly", priority: 0.3 },
     { path: "/affiliate-disclosure", changeFrequency: "yearly", priority: 0.3 },
