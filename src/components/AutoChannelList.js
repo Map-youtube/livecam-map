@@ -15,8 +15,23 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getAdminIdToken } from "@/lib/clientAuth";
+import LeafletMapWrapper from "@/components/LeafletMapWrapper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+
+// 관리자 수정 일시(ms) → "YYYY.MM.DD" (없으면 빈 문자열)
+function fmtEditedDate(ms) {
+  try {
+    if (!ms) return "";
+    const d = new Date(ms);
+    if (Number.isNaN(d.getTime())) return "";
+    return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(
+      d.getDate()
+    ).padStart(2, "0")}`;
+  } catch (error) {
+    return "";
+  }
+}
 
 // 대륙 코드 → 한글 라벨(표시용)
 const CONTINENT_KO = {
@@ -349,6 +364,43 @@ function AutoMarkerRow({ marker, onDelete, onSaved, authHeaders }) {
       ? `https://i.ytimg.com/vi/${marker.youtube_video_id}/hqdefault.jpg`
       : null);
 
+  // ─── 위치 미세조정 지도 ──────────────────────────────────────
+  // 최초 중심: 마커의 저장 좌표(없으면 세계 뷰). 클릭해도 중심은 다시 옮기지 않는다
+  // (클릭할 때마다 지도가 튀지 않도록 — 기존 마커 등록 폼과 동일한 방식).
+  const hasInitCoord =
+    typeof marker.lat === "number" && typeof marker.lng === "number";
+  const [mapCenter] = useState(
+    hasInitCoord ? { lat: marker.lat, lng: marker.lng } : { lat: 20, lng: 0 }
+  );
+  const mapZoom = hasInitCoord ? 9 : 2;
+
+  // 지도 클릭 → 폼의 위도/경도 갱신 (아래 입력칸도 함께 바뀜)
+  function handleMapClick(coord) {
+    try {
+      if (coord && typeof coord.lat === "number" && typeof coord.lng === "number") {
+        setForm((f) => ({
+          ...f,
+          lat: coord.lat.toFixed(6),
+          lng: coord.lng.toFixed(6),
+        }));
+      }
+    } catch (error) {
+      console.error("[AutoChannelList] 지도 클릭 처리 실패:", error); // TODO: 배포 전 제거
+    }
+  }
+
+  // 현재 폼 좌표(문자열) → 지도에 찍을 마커 1개
+  const latNum = Number(form.lat);
+  const lngNum = Number(form.lng);
+  const hasCoord =
+    form.lat !== "" &&
+    form.lng !== "" &&
+    !Number.isNaN(latNum) &&
+    !Number.isNaN(lngNum);
+  const mapMarkers = hasCoord
+    ? [{ id: "edit", lat: latNum, lng: lngNum, location: form.location || "선택 위치" }]
+    : [];
+
   async function save() {
     setSaving(true);
     try {
@@ -416,6 +468,15 @@ function AutoMarkerRow({ marker, onDelete, onSaved, authHeaders }) {
                 종료
               </span>
             )}
+            {/* 관리자가 수정한 영상이면 수정 일시를 배지로 표시(내가 손본 것 구분용) */}
+            {marker.admin_edited_at ? (
+              <span
+                className="flex-none rounded-full bg-brand-light px-1.5 py-0.5 text-[10px] font-medium text-brand-hover"
+                title={`관리자 수정: ${new Date(marker.admin_edited_at).toLocaleString("ko-KR")}`}
+              >
+                ✎ 수정 {fmtEditedDate(marker.admin_edited_at)}
+              </span>
+            ) : null}
           </div>
           <p className="mt-0.5 truncate text-xs text-ink-muted">
             {[CONTINENT_KO[marker.continent] || marker.continent, marker.country, marker.city]
@@ -448,6 +509,22 @@ function AutoMarkerRow({ marker, onDelete, onSaved, authHeaders }) {
 
       {editing && (
         <div className="mt-3 space-y-2 rounded-md border border-border bg-bg/50 p-3">
+          {/* 위치 미세 조정 지도 — 지도를 클릭하면 아래 위도/경도가 자동으로 갱신된다 */}
+          <div>
+            <p className="mb-1 text-[11px] text-ink-muted">
+              📍 지도를 클릭해 위치를 미세 조정하세요. (아래 위도/경도가 자동으로 바뀝니다)
+            </p>
+            <div className="h-[260px] w-full overflow-hidden rounded-md border border-border">
+              <LeafletMapWrapper
+                markers={mapMarkers}
+                center={mapCenter}
+                zoom={mapZoom}
+                onMapClick={handleMapClick}
+                selectedMarkerId={hasCoord ? "edit" : null}
+              />
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <LabeledInput label="장소명" value={form.location} onChange={(v) => setForm((f) => ({ ...f, location: v }))} />
             <LabeledInput label="도시" value={form.city} onChange={(v) => setForm((f) => ({ ...f, city: v }))} />

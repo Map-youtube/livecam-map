@@ -58,6 +58,10 @@ export async function PATCH(request, context) {
     }
 
     const update = { updated_at: FieldValue.serverTimestamp() };
+    // 이 PATCH 는 항상 관리자의 수동 수정이므로 "관리자 수정함" 표시 + 수정 일시를 남긴다.
+    //   → 목록에서 내가 손본 영상인지 한눈에 구분하기 위함.
+    update.admin_edited = true;
+    update.admin_edited_at = FieldValue.serverTimestamp();
     if (typeof body.location === "string") update.location = body.location.trim();
     if (typeof body.city === "string")
       update.city = normalizeCityName(body.city); // 도시명 표준형으로 저장
