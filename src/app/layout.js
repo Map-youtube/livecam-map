@@ -18,6 +18,7 @@ import {
 import Script from "next/script";
 import "./globals.css";
 import { LanguageProvider } from "@/components/i18n/LanguageProvider";
+import VisitorTracker from "@/components/VisitorTracker";
 
 // GA4 측정 ID (미설정 시 GA 스크립트 자체를 렌더하지 않음)
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
@@ -137,6 +138,8 @@ export default function RootLayout({ children }) {
         {/* 전역 언어 상태 제공 (브라우저 언어 기본값 + 선택 저장 + RTL 처리) */}
         {/* 공통 푸터는 각 페이지가 렌더한다(메인=지도 영역 안, 법적 페이지=LegalPageLayout).
             → 메인 화면에서 스크롤 없이 푸터가 보이도록 하기 위함. */}
+        {/* 방문 집계 비콘(렌더 없음). 세션당 1회 /api/track 보고 → 대시보드 방문자 통계. */}
+        <VisitorTracker />
         <LanguageProvider>{children}</LanguageProvider>
       </body>
     </html>

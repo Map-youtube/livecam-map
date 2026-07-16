@@ -444,6 +444,17 @@ export default function MainMapView({
     (marker) => {
       try {
         if (!marker) return;
+        // 지도 클릭 집계(대시보드용). 조용히 보고, 실패해도 무시.
+        try {
+          fetch("/api/track", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type: "mapclick" }),
+            keepalive: true,
+          }).catch(() => {});
+        } catch (e) {
+          // 무시
+        }
         // 자동 라이브 채널 마커(__channel 플래그)면, 그 채널이 속한 소분류(그룹)를 연다.
         if (marker.__channel) {
           const ch = marker.__channel;

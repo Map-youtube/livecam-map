@@ -52,6 +52,7 @@ export async function GET(request) {
         visitors: num(data.daily_visitors),
         mapClicks: num(data.daily_map_clicks),
         countries: data.countries && typeof data.countries === "object" ? data.countries : {},
+        cities: data.cities && typeof data.cities === "object" ? data.cities : {},
       });
     }
     visitorsDaily.sort((a, b) => a.date.localeCompare(b.date));
@@ -69,6 +70,21 @@ export async function GET(request) {
     }
     const byCountry = Object.entries(countryTotals)
       .map(([country, count]) => ({ country, count: num(count) }))
+      .sort((a, b) => b.count - a.count);
+
+    // 도시별 누적: _summary.cities 우선, 없으면 일별 cities 합산
+    let cityTotals = {};
+    if (summary && summary.cities && typeof summary.cities === "object") {
+      cityTotals = { ...summary.cities };
+    } else {
+      for (const day of visitorsDaily) {
+        for (const [c, n] of Object.entries(day.cities || {})) {
+          cityTotals[c] = (cityTotals[c] || 0) + num(n);
+        }
+      }
+    }
+    const byCity = Object.entries(cityTotals)
+      .map(([city, count]) => ({ city, count: num(count) }))
       .sort((a, b) => b.count - a.count);
 
     const totalVisitors =
@@ -130,6 +146,7 @@ export async function GET(request) {
           totalVisitors,
           totalMapClicks,
           byCountry,
+          byCity,
           latestDate: latestVisitorDate,
         },
         api: {

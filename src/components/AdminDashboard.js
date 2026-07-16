@@ -179,6 +179,7 @@ export default function AdminDashboard() {
   const v = data.visitors || {};
   const a = data.api || {};
   const maxCountry = Math.max(1, ...(v.byCountry || []).map((c) => c.count));
+  const maxCity = Math.max(1, ...(v.byCity || []).map((c) => c.count));
   const latestDate = v.latestDate || a.latestDate || null;
 
   return (
@@ -257,6 +258,35 @@ export default function AdminDashboard() {
             )}
           </ul>
         </div>
+      </div>
+
+      {/* 도시별 방문자 (추적 재활성화 후 쌓임) */}
+      <div className="rounded-xl border border-border bg-surface p-4">
+        <SectionTitle desc="누적 방문자의 도시별 분포(방문 추적이 켜진 이후부터 집계)">
+          도시별 방문자
+        </SectionTitle>
+        {(v.byCity || []).length === 0 ? (
+          <p className="py-4 text-center text-xs text-ink-muted">
+            아직 도시 데이터가 없습니다. (방문 추적이 켜진 뒤 실제 방문부터 쌓입니다)
+          </p>
+        ) : (
+          <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+            {(v.byCity || []).slice(0, 20).map((c) => (
+              <li key={c.city} className="flex items-center gap-2 text-xs">
+                <span className="w-28 flex-none truncate text-ink">{c.city}</span>
+                <span className="h-3 flex-1 overflow-hidden rounded bg-bg">
+                  <span
+                    className="block h-full rounded bg-brand/70"
+                    style={{ width: `${Math.round((c.count / maxCity) * 100)}%` }}
+                  />
+                </span>
+                <span className="w-8 flex-none text-right font-mono tabular-nums text-ink-muted">
+                  {fmtInt(c.count)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* API 비용/사용량 */}
