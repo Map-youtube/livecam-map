@@ -252,7 +252,7 @@ export default function AutoChannelList({ refreshSignal }) {
           위 "기존 마커에서 채널 가져오기"를 이용하세요.
         </p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="space-y-1">
           {channels.map((ch) => {
             const vids = markersByChannel.get(ch.id) || [];
             const liveCount = vids.filter((v) => v.is_live === true).length;
@@ -260,29 +260,29 @@ export default function AutoChannelList({ refreshSignal }) {
             return (
               <li
                 key={ch.id}
-                className="overflow-hidden rounded-lg border border-border bg-surface"
+                className="overflow-hidden rounded-md border border-border bg-surface"
               >
-                {/* 채널 헤더 */}
-                <div className="flex items-center gap-2 px-3 py-2">
+                {/* 채널 헤더 — 세로 패딩을 줄여(py-1) 행 높이를 낮춰 더 많이 보이게 */}
+                <div className="flex items-center gap-2 px-2.5 py-1">
                   <button
                     type="button"
                     onClick={() => toggleOpen(ch.id)}
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
                   >
                     <span className="text-ink-muted">{open ? "▾" : "▸"}</span>
-                    <span className="truncate font-semibold text-ink">
+                    <span className="truncate text-sm font-semibold text-ink">
                       {ch.channel_name || ch.channel_id}
                     </span>
-                    <span className="flex-none rounded-full bg-secondary px-2 py-0.5 text-xs text-ink-muted">
-                      라이브 {liveCount} / 전체 {vids.length}
+                    <span className="flex-none rounded-full bg-secondary px-1.5 py-0.5 text-[11px] text-ink-muted">
+                      {liveCount}/{vids.length}
                     </span>
                     {ch.source === "imported" && (
-                      <span className="flex-none rounded-full bg-brand-light px-2 py-0.5 text-xs text-brand-hover">
+                      <span className="flex-none rounded-full bg-brand-light px-1.5 py-0.5 text-[11px] text-brand-hover">
                         가져옴
                       </span>
                     )}
                     {ch.is_active === false && (
-                      <span className="flex-none rounded-full bg-live-light px-2 py-0.5 text-xs text-live">
+                      <span className="flex-none rounded-full bg-live-light px-1.5 py-0.5 text-[11px] text-live">
                         비활성
                       </span>
                     )}
@@ -291,9 +291,9 @@ export default function AutoChannelList({ refreshSignal }) {
                     type="button"
                     variant="outline"
                     onClick={() => handleDeleteChannel(ch)}
-                    className="h-8 flex-none px-2 text-xs"
+                    className="h-7 flex-none px-2 text-xs"
                   >
-                    채널 삭제
+                    삭제
                   </Button>
                 </div>
 

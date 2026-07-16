@@ -27,6 +27,39 @@ import AutoChannelForm from "@/components/AutoChannelForm";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
+// ─── "Top" 버튼 (화면 하단 고정 → 클릭 시 맨 위로 부드럽게 스크롤) ──
+// 관리자 페이지는 세로로 길어(폼+목록) 스크롤이 많다. 300px 이상 내려가면
+// 우하단에 나타나고, 누르면 window 를 최상단으로 올린다.
+function ScrollTopButton() {
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    function onScroll() {
+      try {
+        setShow(window.scrollY > 300);
+      } catch (error) {
+        // 무시
+      }
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll(); // 초기 상태 반영
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  if (!show) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+      aria-label="맨 위로"
+      className="fixed bottom-5 right-5 z-50 flex h-11 items-center gap-1 rounded-full bg-brand px-4 text-sm font-semibold text-white shadow-lg ring-1 ring-black/5 transition hover:bg-brand-hover"
+    >
+      <span aria-hidden="true">↑</span> Top
+    </button>
+  );
+}
+
 // ─── 섹션 제목 (제목 + 한 줄 설명) ────────────────────────────
 // 관리자 화면의 각 영역을 같은 형식으로 통일해 위계를 명확히 한다.
 function SectionTitle({ title, desc }) {
@@ -102,16 +135,17 @@ export default function AdminPage() {
             </Button>
           </div>
 
-          {/* 등록 영역 (폼이 왼쪽 절반 폭을 넓게 사용 — 지도/태그가 넓어짐) */}
+          {/* 지역 자동 채널 등록 (AI) — 가장 자주 쓰는 기능이라 최상단 배치.
+              채널만 등록하면 AI가 위치·장소명·태그·설명을 채워 지역 마커로 올린다. */}
           <SectionTitle
-            title="마커 등록"
-            desc="유튜브 라이브 링크와 지도 위치를 입력하면 대륙/국가/도시로 자동 분류됩니다."
+            title="지역 자동 채널 등록 (AI)"
+            desc="라이브캠 채널만 등록하면, 그 채널의 라이브 영상을 AI가 위치·장소명·태그·설명·대륙/국가/도시까지 자동으로 채워 일반 지역 마커로 지도에 올립니다. 영상이 바뀌어도 채널만 살아있으면 자동으로 갱신됩니다."
           />
-          <MarkerForm onRegistered={() => setRefreshSignal((n) => n + 1)} />
+          <AutoChannelForm onRegistered={() => setRefreshSignal((n) => n + 1)} />
 
           <Separator className="my-10" />
 
-          {/* 자동 라이브 채널 관리 (방송국 등 24/7 채널 — 대분류/소분류로 묶음). 현위치(왼쪽) 유지 */}
+          {/* 자동 라이브 채널 관리 (방송국 등 24/7 채널 — 대분류/소분류로 묶음). 중간 유지 */}
           <SectionTitle
             title="자동 라이브 채널 관리"
             desc="NASA처럼 24/7 라이브만 하는 유튜브 채널을 대분류/소분류로 묶어 등록합니다. 영상은 자동으로 수집되며, 채널과 지도 위치만 지정하면 됩니다."
@@ -120,12 +154,12 @@ export default function AdminPage() {
 
           <Separator className="my-10" />
 
-          {/* 지역 자동 채널 등록 (채널만 등록하면 AI가 위치·장소명·태그·설명을 채워 지역 마커로) */}
+          {/* 마커 등록 (개별 영상 수동 등록) — 최하단 배치 */}
           <SectionTitle
-            title="지역 자동 채널 등록 (AI)"
-            desc="라이브캠 채널만 등록하면, 그 채널의 라이브 영상을 AI가 위치·장소명·태그·설명·대륙/국가/도시까지 자동으로 채워 일반 지역 마커로 지도에 올립니다. 영상이 바뀌어도 채널만 살아있으면 자동으로 갱신됩니다."
+            title="마커 등록"
+            desc="유튜브 라이브 링크와 지도 위치를 입력하면 대륙/국가/도시로 자동 분류됩니다."
           />
-          <AutoChannelForm onRegistered={() => setRefreshSignal((n) => n + 1)} />
+          <MarkerForm onRegistered={() => setRefreshSignal((n) => n + 1)} />
         </div>
 
         {/* 오른쪽 절반: 등록된 마커 목록 (양이 많아 별도 컬럼으로 분리) */}
@@ -178,6 +212,9 @@ export default function AdminPage() {
           )}
         </section>
       </main>
+
+      {/* 화면 하단 고정 "Top" 버튼 (스크롤 내리면 나타남) */}
+      <ScrollTopButton />
     </AdminGuard>
   );
 }
