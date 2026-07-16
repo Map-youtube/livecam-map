@@ -74,8 +74,10 @@ export default function SiteHeader({ nav }) {
           title={t("tagline")}
         >
           <LiveDot size="sm" />
-          <span className="font-display text-base font-bold tracking-tight text-ink">
-            LiveCam Map
+          {/* 브랜드 워드마크: Trip = 잉크, by = 옅게, Clip = 브랜드 청록 강조 */}
+          <span className="font-display text-[17px] font-semibold tracking-tight text-ink">
+            Trip <span className="font-normal text-ink-muted">by</span>{" "}
+            <span className="text-brand">Clip</span>
           </span>
         </Link>
 

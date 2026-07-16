@@ -779,8 +779,10 @@ export default function MainMapView({ markers, tags, liveChannels }) {
           소프트 라이트 톤 — 상단만 은은한 하늘빛, 로고 옆 LIVE 상태 알약. 구조/기능은 그대로. */}
       <header className="flex h-12 flex-shrink-0 items-center gap-2.5 border-b border-border bg-[linear-gradient(180deg,#F5F9FD,#ffffff)] px-4">
         <LiveDot size="sm" />
-        <span className="font-display text-base font-bold tracking-tight text-ink">
-          LiveCam Map
+        {/* 브랜드 워드마크: Trip = 잉크, by = 옅게, Clip = 브랜드 청록 강조 */}
+        <span className="font-display text-[17px] font-semibold tracking-tight text-ink">
+          Trip <span className="font-normal text-ink-muted">by</span>{" "}
+          <span className="text-brand">Clip</span>
         </span>
         <span className="hidden text-xs text-ink-muted sm:inline">
           {t("tagline")}

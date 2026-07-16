@@ -14,8 +14,9 @@ export default function Loading() {
         className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-brand"
         aria-hidden="true"
       />
-      <p className="font-display text-sm font-semibold tracking-tight text-gray-500">
-        LiveCam Map
+      <p className="font-display text-sm font-semibold tracking-tight text-gray-600">
+        Trip <span className="font-normal text-gray-400">by</span>{" "}
+        <span className="text-brand">Clip</span>
       </p>
     </div>
   );
