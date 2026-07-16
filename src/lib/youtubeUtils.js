@@ -239,11 +239,13 @@ export async function getYoutubeInfo(videoId) {
   }
 }
 
-// ─── 여러 영상의 존재/라이브 상태 일괄 조회 (videos.list, 배치) ──
+// ─── 여러 영상의 존재/라이브/임베드 상태 일괄 조회 (videos.list, 배치) ──
 // videos.list 는 한 번에 최대 50개 id 를 1유닛으로 조회할 수 있어 매우 저렴하다.
-//   반환: Map(videoId → { exists, streamEnded, liveBroadcastContent })
+//   반환: Map(videoId → { exists, streamEnded, liveBroadcastContent, embeddable })
 //   - 응답 items 에 없는 id = 삭제/비공개 → { exists:false }
 //   - liveStreamingDetails.actualEndTime 있으면 streamEnded:true (라이브 종료)
+//   - status.embeddable === false 이면 embeddable:false (퍼가기 차단 → 사이트에서 재생 불가)
+//     ⚠️ part 에 status 를 추가해도 유닛 비용은 배치당 1유닛으로 동일하다.
 // 실패 시 빈 Map 을 반환(throw 하지 않음) → 호출부에서 "판단 보류"로 처리 가능.
 export async function getVideosLiveStatus(videoIds) {
   const result = new Map();
@@ -263,7 +265,7 @@ export async function getVideosLiveStatus(videoIds) {
     for (let i = 0; i < ids.length; i += 50) {
       const chunk = ids.slice(i, i + 50);
       const endpoint = new URL("https://www.googleapis.com/youtube/v3/videos");
-      endpoint.searchParams.set("part", "snippet,liveStreamingDetails");
+      endpoint.searchParams.set("part", "snippet,status,liveStreamingDetails");
       endpoint.searchParams.set("id", chunk.join(","));
 
       // 기본 키 할당량 초과 시 백업 키로 자동 재시도
@@ -285,10 +287,13 @@ export async function getVideosLiveStatus(videoIds) {
         const ended = Boolean(lsd && lsd.actualEndTime);
         const lbc =
           (it.snippet && it.snippet.liveBroadcastContent) || "none";
+        // status.embeddable 이 명시적으로 false 일 때만 임베드 차단으로 본다(누락 시 허용).
+        const embeddable = !(it.status && it.status.embeddable === false);
         result.set(vid, {
           exists: true,
           streamEnded: ended,
           liveBroadcastContent: lbc,
+          embeddable,
         });
       }
       // 응답에 없는 id = 삭제/비공개 → exists:false
@@ -298,6 +303,7 @@ export async function getVideosLiveStatus(videoIds) {
             exists: false,
             streamEnded: false,
             liveBroadcastContent: "none",
+            embeddable: false,
           });
         }
       }

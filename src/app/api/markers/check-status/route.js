@@ -128,6 +128,9 @@ export async function POST(request) {
       if (status.exists === false) {
         // 삭제/비공개 등
         reason = "video_unavailable";
+      } else if (status.embeddable === false) {
+        // 퍼가기(임베드) 차단 → 사이트 iframe 에서 재생 불가. 라이브여도 제외한다.
+        reason = "embed_blocked";
       } else if (status.streamEnded === true) {
         // 라이브 방송 종료(영상은 남아있으나 재생 불가/라이브 아님)
         reason = "stream_ended";

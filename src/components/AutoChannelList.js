@@ -138,6 +138,39 @@ export default function AutoChannelList({ refreshSignal }) {
     }
   }
 
+  // 재생 상태 전수 점검 (현재 게시 중인 자동 마커를 YouTube 실제 상태로 재검증 → 재생불가 숨김)
+  async function handleVerifyPlayback() {
+    setBusy("verify");
+    setNotice("");
+    try {
+      const headers = await authHeaders();
+      if (!headers) return;
+      const res = await fetch("/api/auto-channels/verify-playback", {
+        method: "POST",
+        headers,
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        const r = data.byReason || {};
+        if (data.hidden > 0) {
+          setNotice(
+            `재생 상태 점검 완료: ${data.checked}개 확인, 재생불가 ${data.hidden}개 숨김` +
+              ` (임베드차단 ${r.embed_blocked || 0} · 라이브종료 ${r.stream_ended || 0} · 라이브아님 ${r.not_live || 0} · 삭제 ${r.video_deleted || 0})`
+          );
+        } else {
+          setNotice(`재생 상태 점검 완료: ${data.checked}개 확인, 재생불가 영상 없음 ✅`);
+        }
+        await load();
+      } else {
+        setNotice(data.error || "점검에 실패했습니다.");
+      }
+    } catch (e) {
+      setNotice("점검 중 오류가 발생했습니다.");
+    } finally {
+      setBusy("");
+    }
+  }
+
   // 기존 마커에서 채널 가져오기
   async function handleImport() {
     if (!window.confirm("기존 '등록된 마커 목록'에서 유튜브 채널을 추출해 자동 채널로 등록합니다. 계속할까요?"))
@@ -231,6 +264,15 @@ export default function AutoChannelList({ refreshSignal }) {
       <div className="flex flex-wrap items-center gap-2">
         <Button type="button" onClick={handleScanNow} disabled={busy !== ""}>
           {busy === "scan" ? "스캔 중..." : "지금 스캔"}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleVerifyPlayback}
+          disabled={busy !== ""}
+          title="현재 게시 중인 영상을 실제 재생 가능 여부로 전수 점검해 재생불가 영상을 숨깁니다"
+        >
+          {busy === "verify" ? "점검 중..." : "재생 상태 점검"}
         </Button>
         <Button
           type="button"
