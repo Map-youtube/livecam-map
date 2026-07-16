@@ -16,6 +16,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { getContinentByCountry } from "@/lib/continentUtils";
+import { recordApiUsage } from "@/lib/usageRecorder";
 
 // ─── AI 자동 생성 스위치 ──────────────────────────────────────
 // 이 기능(채널→자동 마커)의 핵심이 AI 이므로 기본 켬. 비용/장애 시 false 로 즉시 차단.
@@ -69,6 +70,11 @@ async function callGeminiJson(apiKey, systemPrompt, userPrompt) {
   }
 
   const data = await res.json();
+  // Gemini 호출 1회 집계(대시보드). 실패해도 무시.
+  recordApiUsage({
+    aiCalls: 1,
+    aiTokens: Number(data && data.usageMetadata && data.usageMetadata.totalTokenCount) || 0,
+  }).catch(() => {});
   const text =
     data &&
     data.candidates &&
@@ -213,6 +219,11 @@ async function callGeminiBatchJson(apiKey, systemPrompt, userPrompt, maxTokens) 
     }
 
     const data = await res.json();
+    // Gemini 배치 호출 1회 집계(대시보드). 실패해도 무시.
+    recordApiUsage({
+      aiCalls: 1,
+      aiTokens: Number(data && data.usageMetadata && data.usageMetadata.totalTokenCount) || 0,
+    }).catch(() => {});
     const text =
       data &&
       data.candidates &&

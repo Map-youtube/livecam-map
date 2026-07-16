@@ -9,6 +9,8 @@
 // ⚠️ 비용 절감을 위해 Search API(100유닛)는 절대 사용하지 않는다. videos.list(1유닛)만 사용.
 // ─────────────────────────────────────────────────────────────
 
+import { recordApiUsage } from "@/lib/usageRecorder";
+
 // ─── video_id 추출 ─────────────────────────────────────────────
 // 지원 형태:
 //   https://www.youtube.com/watch?v=VIDEOID
@@ -143,7 +145,11 @@ async function youtubeFetch(endpoint) {
       method: "GET",
       cache: "no-store",
     });
-    if (res.ok) return res;
+    if (res.ok) {
+      // 성공한 videos.list 1회 = 1유닛. 사용량 집계(대시보드). 실패해도 무시(지연 방지 fire-and-forget).
+      recordApiUsage({ youtubeUnits: 1 }).catch(() => {});
+      return res;
+    }
     lastRes = res;
     // 마지막 키였거나, 할당량 초과가 아닌 다른 에러면 그대로 반환(재시도 무의미)
     const quota = await isQuotaExceeded(res);

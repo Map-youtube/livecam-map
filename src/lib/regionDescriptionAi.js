@@ -14,6 +14,8 @@
 // ⚠️ GEMINI_API_KEY 는 서버 전용. 절대 NEXT_PUBLIC/하드코딩 금지.
 // ─────────────────────────────────────────────────────────────
 
+import { recordApiUsage } from "@/lib/usageRecorder";
+
 const REGION_DESC_MODEL = "gemini-3.1-flash-lite";
 
 function endpointFor(model) {
@@ -73,6 +75,11 @@ async function callGeminiBatchJson(apiKey, systemPrompt, userPrompt, maxTokens) 
     }
 
     const data = await res.json();
+    // Gemini 지역설명 호출 1회 집계(대시보드). 실패해도 무시.
+    recordApiUsage({
+      aiCalls: 1,
+      aiTokens: Number(data && data.usageMetadata && data.usageMetadata.totalTokenCount) || 0,
+    }).catch(() => {});
     const text =
       data &&
       data.candidates &&
