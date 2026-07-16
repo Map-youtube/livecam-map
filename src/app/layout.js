@@ -101,7 +101,7 @@ export const viewport = {
 export default function RootLayout({ children }) {
   return (
     <html
-      lang="ko"
+      lang="en"
       className={`${spaceGrotesk.variable} ${inter.variable} ${notoSansKr.variable} ${ibmPlexMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-bg font-body text-ink">
