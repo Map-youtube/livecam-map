@@ -219,6 +219,7 @@ export default function VideoListPanel({
   onClose,
   onSelectMarker,
   title,
+  cityDescription,
   tr,
   expandedMarkerId,
 }) {
@@ -378,16 +379,26 @@ export default function VideoListPanel({
   return (
     // 루트는 투명 — 헤더(불투명)와 카드 목록 영역(반투명)만 각자 배경을 갖는다.
     <div className="flex h-full flex-col">
-      {/* 상단: 제목 + 닫기 버튼 (소분류/제목 영역 — 불투명 유지) */}
-      <div className="flex flex-shrink-0 items-center justify-between border-b border-border bg-surface px-4 py-3">
-        <h2 className="truncate font-display text-sm font-bold text-ink">
+      {/* 상단: 제목 + 도시 소개글(작은 글씨, 정적페이지와 동일) + 닫기 버튼.
+          박스 높이는 그대로 유지하고, 소개글은 작은 글씨로 2줄까지만 보이게 클램프한다
+          (전체 텍스트는 DOM 에 남아 title 툴팁으로 확인 가능 + 크롤 대상). */}
+      <div className="flex flex-shrink-0 items-center gap-3 border-b border-border bg-surface px-4 py-3">
+        <h2 className="flex-none truncate font-display text-sm font-bold text-ink">
           {title || t("videoList")}
         </h2>
+        {cityDescription ? (
+          <p
+            className="line-clamp-2 min-w-0 flex-1 text-[11px] leading-tight text-ink-muted"
+            title={cityDescription}
+          >
+            {cityDescription}
+          </p>
+        ) : null}
         <button
           type="button"
           onClick={handleClose}
           aria-label={t("closePanel")}
-          className="ml-2 rounded-md p-1 text-ink-muted transition hover:bg-brand-light hover:text-brand"
+          className="ml-auto flex-none rounded-md p-1 text-ink-muted transition hover:bg-brand-light hover:text-brand"
         >
           ✕
         </button>
@@ -429,6 +440,18 @@ export default function VideoListPanel({
                       ]
                         .filter((v) => v)
                         .join(", ");
+
+                      // 영상 등록 시 작성된 설명(있으면). description{ko,en} 우선, 없으면 youtube_description.
+                      //   원문 그대로 표시(번역 안 함) — 저장된 소개글을 SEO/안내용으로 노출.
+                      const videoDesc =
+                        (marker.description &&
+                          typeof marker.description === "object" &&
+                          (marker.description.ko || marker.description.en)) ||
+                        (typeof marker.description === "string"
+                          ? marker.description
+                          : "") ||
+                        marker.youtube_description ||
+                        "";
 
                       // 이 카드가 현재 선택되어(재생 중) 있는지 — 반드시 자기 id 로 비교
                       const isSelected =
@@ -474,6 +497,18 @@ export default function VideoListPanel({
                               <p className="mt-1 flex items-center gap-1 text-[11px] text-ink-muted">
                                 <PinIcon />
                                 <span className="truncate">{regionText}</span>
+                              </p>
+                            )}
+
+                            {/* 영상 설명 (등록 시 작성된 설명) — 작은 글씨로 최대한 노출.
+                                레이아웃 보호를 위해 시각적으로는 여러 줄까지만 보이되,
+                                전체 텍스트는 DOM 에 남겨 SEO/툴팁으로 확인 가능. */}
+                            {videoDesc && (
+                              <p
+                                className="mt-1 line-clamp-6 text-[10px] leading-snug text-ink-muted"
+                                title={videoDesc}
+                              >
+                                {videoDesc}
                               </p>
                             )}
                           </div>

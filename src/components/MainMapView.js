@@ -55,7 +55,12 @@ function toggleBtnClass(on) {
   );
 }
 
-export default function MainMapView({ markers, tags, liveChannels }) {
+export default function MainMapView({
+  markers,
+  tags,
+  liveChannels,
+  regionDescriptions,
+}) {
   // 다국어: 정적 문자열(t) + 현재 언어(locale)
   const { t, locale, tContinent, countryName } = useI18n();
 
@@ -542,6 +547,29 @@ export default function MainMapView({ markers, tags, liveChannels }) {
     return "";
   }, [selectedCity, selectedTag, filteredMarkers, tr]);
 
+  // ─── 선택된 도시의 소개글 (정적 SEO 페이지와 동일 텍스트) ─────
+  // 서버(page.js)가 내려준 regionDescriptions 맵에서 도시 key 로 조회한다.
+  //   key 규칙/citySlug 로직은 lib/regionDescriptions 의 cityDescKey 와 반드시 동일해야 한다.
+  //   (한글 그대로 원문 표시 — tr 번역 대상 아님. 이미 저장된 한국어 소개글.)
+  const cityDescription = useMemo(() => {
+    try {
+      if (!selectedCity || !regionDescriptions) return "";
+      const slug = String(selectedCity.city || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9가-힣-]/g, "");
+      if (!slug) return "";
+      const key = `city__${selectedCity.continent}__${String(
+        selectedCity.country || ""
+      ).toUpperCase()}__${slug}`;
+      const entry = regionDescriptions[key];
+      return entry ? String(entry.ko || entry.en || "").trim() : "";
+    } catch (error) {
+      return "";
+    }
+  }, [selectedCity, regionDescriptions]);
+
   // ─── 지도에 표시할 "고정 채널" 마커 (ISS 등 추적 채널 제외) ───
   // 지역 마커와 별개 데이터지만, 화면 표시는 같은 지도 위에 얹는다.
   // __channel 플래그로 클릭 시 채널 선택 흐름과 구분한다.
@@ -910,6 +938,7 @@ export default function MainMapView({ markers, tags, liveChannels }) {
                 <VideoListPanel
                   markers={filteredMarkers}
                   title={panelTitle}
+                  cityDescription={cityDescription}
                   tr={tr}
                   onClose={closePanel}
                   onSelectMarker={handleSelectMarker}
