@@ -130,6 +130,206 @@ function normalizeTags(aiTags, existingTags) {
   }
 }
 
+// ─── 429(분당 제한) 대응 유틸 ────────────────────────────────
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Gemini 429 응답 본문에서 "Please retry in 11.99s" 같은 지연을 뽑아 ms 로.
+function parseRetryDelayMs(bodyText) {
+  try {
+    const m = String(bodyText || "").match(/retry in ([0-9.]+)s/i);
+    if (m) return Math.ceil(parseFloat(m[1]) * 1000) + 600;
+  } catch (error) {
+    /* 무시 */
+  }
+  return 0;
+}
+
+// ─── 파싱된 AI 결과 1건 → 마커 필드로 정규화 (단건·배치 공용) ──
+function normalizeAiItem(parsed, existingTags) {
+  const location = String(parsed.location || "").trim();
+  const city = String(parsed.city || "").trim();
+  const country = String(parsed.country || "").trim().toUpperCase().slice(0, 2);
+  const lat = toValidLat(parsed.lat);
+  const lng = toValidLng(parsed.lng);
+  // 대륙은 AI 를 믿지 않고 country(ISO2)에서 시스템 규칙대로 파생(트리 분류 일관성).
+  const validCountry = /^[A-Z]{2}$/.test(country) ? country : "";
+  const continent = validCountry ? getContinentByCountry(validCountry) || "" : "";
+  const descObj =
+    parsed.description && typeof parsed.description === "object"
+      ? parsed.description
+      : {};
+  return {
+    ok: true,
+    location,
+    city,
+    country: validCountry,
+    continent,
+    lat,
+    lng,
+    tags: normalizeTags(parsed.tags, existingTags),
+    description: {
+      ko: String(descObj.ko || "").trim(),
+      en: String(descObj.en || "").trim(),
+    },
+    model: AUTO_MARKER_MODEL,
+  };
+}
+
+// ─── Gemini 배치 호출 (JSON, 429 시 지연 후 재시도) ───────────
+// 성공 시 파싱 객체 반환. 429 는 응답이 알려준 지연만큼 기다렸다 최대 4회까지 재시도.
+async function callGeminiBatchJson(apiKey, systemPrompt, userPrompt, maxTokens) {
+  let lastErr = null;
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    const res = await fetch(`${endpointFor(AUTO_MARKER_MODEL)}?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          temperature: 0.3,
+          maxOutputTokens: maxTokens || 8192,
+        },
+      }),
+    });
+
+    if (res.status === 429) {
+      // 분당 제한 → 응답이 알려준 시간만큼 대기 후 재시도
+      const t = await res.text().catch(() => "");
+      const wait = parseRetryDelayMs(t) || 13000;
+      lastErr = new Error(`429 rate limit (attempt ${attempt})`);
+      if (attempt < 4) {
+        await sleep(wait);
+        continue;
+      }
+      throw lastErr;
+    }
+    if (!res.ok) {
+      const bodyText = await res.text().catch(() => "");
+      throw new Error(
+        `Gemini 배치 실패 (status ${res.status}): ${bodyText.slice(0, 200)}`
+      );
+    }
+
+    const data = await res.json();
+    const text =
+      data &&
+      data.candidates &&
+      data.candidates[0] &&
+      data.candidates[0].content &&
+      data.candidates[0].content.parts &&
+      data.candidates[0].content.parts[0] &&
+      data.candidates[0].content.parts[0].text;
+    if (!text) throw new Error("Gemini 배치 응답에 content 가 없습니다.");
+
+    let clean = String(text).trim();
+    clean = clean.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+    const start = clean.indexOf("{");
+    const end = clean.lastIndexOf("}");
+    if (start !== -1 && end !== -1 && end > start) clean = clean.slice(start, end + 1);
+    return JSON.parse(clean);
+  }
+  throw lastErr || new Error("Gemini 배치 실패");
+}
+
+// ─── 배치: 영상 여러 개 → 마커 필드 (RPM 제한 우회의 핵심) ────
+// 무료 Gemini 는 분당 15회(RPM) 제한. 영상 1개당 1회 호출하면 대량 처리 시 대부분 429.
+//   → 한 번의 호출에 여러 영상을 넣어(videoId 로 매칭) 요청 수를 1/N 로 줄인다.
+// 입력: videos = [{ videoId, title, channelName, tags?, description? }]
+// 반환: Map<videoId, enrichedResult>  (성공 매칭된 것만. 없는 videoId 는 호출부에서 실패 처리)
+export async function enrichVideosToMarkers(videos = [], existingTags = []) {
+  const out = new Map();
+  try {
+    if (!AUTO_MARKER_AI_ENABLED) return out;
+    const apiKey = getGeminiKey();
+    if (!apiKey) {
+      console.error(
+        "[autoMarkerAi] GEMINI_API_KEY 가 없습니다. 배치 채우기를 건너뜁니다."
+      ); // TODO: 배포 전 제거
+      return out;
+    }
+    const list = (Array.isArray(videos) ? videos : []).filter(
+      (v) => v && v.videoId
+    );
+    if (list.length === 0) return out;
+
+    const tagListStr = (Array.isArray(existingTags) ? existingTags : [])
+      .map((t) => (typeof t === "string" ? t : t && t.name))
+      .filter(Boolean)
+      .join(", ");
+
+    const systemPrompt = [
+      "당신은 지리·도시·여행 전문가다. 유튜브 라이브캠 영상들의 제목·채널명·태그를 근거로",
+      "각 영상이 '실제로 촬영되고 있는 장소'를 특정하고, 여행 지도 사이트에 등록할 정보를 만든다.",
+      "여러 영상을 한 번에 처리하며, 각 결과에는 입력으로 준 videoId 를 그대로 넣어 매칭한다.",
+      "",
+      "규칙(각 영상마다 적용):",
+      "1) location(장소명=마커 제목)은 한국어로 '[도시] [대표 지점/명소]' 형식. 도시를 알면 반드시 도시명을 맨 앞에 붙인다.",
+      "   예: '도쿄 신주쿠역', '파리 에펠탑', '부산 해운대 해수욕장'. 채널명·해상도(4K)·이모지·'LIVE/라이브'·'전경/앞' 같은 군더더기는 넣지 않는다.",
+      "   (도시 없이 넓은 지역/공원이면 '[지역] [명소]' 형식.)",
+      "2) city 는 영어 통용 표기(Tokyo, Seoul, Paris…). country 는 ISO 3166-1 alpha-2 대문자(KR, JP, US, GB).",
+      "3) lat/lng 는 실제 좌표(소수점 4자리 이상). 확신 없으면 도시 중심 좌표라도.",
+      "4) tags 는 아래 '사이트 태그 목록'에 있는 것 중에서만 1~3개. 적합한 게 없으면 빈 배열([]). 목록에 없는 태그를 지어내지 마라.",
+      "5) description 은 ko·en 각각 2~3문장, 사실 위주.",
+      "6) 위치를 전혀 특정할 수 없으면 location/city/country/lat/lng 를 비우고 description 만 채운다. 절대 지어내지 마라.",
+      "",
+      `사이트 태그 목록: ${tagListStr || "(없음)"}`,
+      "",
+      '반드시 아래 JSON 형식으로만 답하라(다른 텍스트 금지). results 배열의 각 원소는 입력 영상 1개에 대응:',
+      '{"results":[{"videoId":"","location":"","city":"","country":"","lat":null,"lng":null,"tags":[],"description":{"ko":"","en":""}}]}',
+    ].join("\n");
+
+    // 한 요청에 담는 영상 수. 출력 토큰(각 ko/en 설명 포함)을 고려해 8개.
+    const BATCH = 8;
+    for (let i = 0; i < list.length; i += BATCH) {
+      const chunk = list.slice(i, i + BATCH);
+      const userPrompt = [
+        "다음 유튜브 라이브 영상들 각각의 장소 정보를 추론해줘. 각 결과에 videoId 를 그대로 넣어줘.",
+        ...chunk.map(
+          (v, idx) =>
+            `[${idx + 1}] videoId=${v.videoId} | 제목: ${v.title || "(없음)"} | 채널: ${
+              v.channelName || "(없음)"
+            }` +
+            (v.tags && v.tags.length
+              ? ` | 태그: ${(Array.isArray(v.tags) ? v.tags.slice(0, 10) : []).join(", ")}`
+              : ""),
+        ),
+      ].join("\n");
+
+      try {
+        const parsed = await callGeminiBatchJson(
+          apiKey,
+          systemPrompt,
+          userPrompt,
+          8192
+        );
+        const results = Array.isArray(parsed && parsed.results)
+          ? parsed.results
+          : [];
+        const byId = new Map();
+        for (const r of results) {
+          if (r && r.videoId) byId.set(String(r.videoId).trim(), r);
+        }
+        for (const v of chunk) {
+          const r = byId.get(v.videoId);
+          if (r) out.set(v.videoId, normalizeAiItem(r, existingTags));
+          // 매칭 안 된 영상은 out 에 안 넣음 → 호출부가 실패로 보고 다음 스캔에서 재시도.
+        }
+      } catch (batchError) {
+        console.error(
+          "[autoMarkerAi] 배치 호출 실패(이 묶음 건너뜀):",
+          batchError && batchError.message
+        ); // TODO: 배포 전 제거
+        // 이 배치 전체 실패 → out 에 안 넣음(다음 스캔 재시도). 전체 중단하지 않음.
+      }
+    }
+  } catch (error) {
+    console.error("[autoMarkerAi] enrichVideosToMarkers 예외:", error); // TODO: 배포 전 제거
+  }
+  return out;
+}
+
 // ─── 메인: 영상 → 마커 필드 ───────────────────────────────────
 export async function enrichVideoToMarker(video = {}, existingTags = []) {
   // 실패해도 등록/스캔을 막지 않도록, 항상 이 형태의 객체를 반환한다.

@@ -22,7 +22,7 @@ import { adminDb } from "@/lib/firebaseAdmin";
 import { FieldValue } from "firebase-admin/firestore";
 import { getLiveVideos, getThumbnailUrl } from "@/lib/youtubeUtils";
 import { getChannelCandidateVideoIds } from "@/lib/liveChannelUtils";
-import { enrichVideoToMarker } from "@/lib/autoMarkerAi";
+import { enrichVideosToMarkers } from "@/lib/autoMarkerAi";
 
 const MARKERS = "auto_markers";
 const CHANNELS = "auto_channels";
@@ -185,8 +185,11 @@ export async function scanChannels(channelDocs, opts = {}) {
       liveByChannel.get(ch.id).add(v.videoId);
     }
 
-    // 3) 새 라이브 영상 처리 (없으면 enrich, 있으면 재활용)
-    let aiUsed = 0;
+    // 3) 라이브 영상 처리
+    //   3-a) 먼저 "이미 있는 영상"은 AI 없이 재활용, "새 영상"만 추려낸다(일일 상한까지).
+    //   3-b) 새 영상들을 배치로 한 번에 Gemini 처리(분당 15회 제한 우회).
+    //   3-c) 배치 결과를 각 문서로 저장.
+    const toEnrich = []; // { v, ch, ref }
     for (const v of liveVideos) {
       const ch = idToChannel.get(v.videoId);
       if (!ch) continue;
@@ -209,39 +212,49 @@ export async function scanChannels(channelDocs, opts = {}) {
           report.reused += 1;
           continue;
         }
-
-        // 새 영상 → 일일 AI 상한 확인
-        if (aiUsed >= aiCap) {
+        // 새 영상 → 일일 AI 상한 확인 후 배치 대상에 추가
+        if (toEnrich.length >= aiCap) {
           report.aiCapReached = true;
           continue; // 이번엔 건너뛰고 다음 스캔에서 처리
         }
+        toEnrich.push({ v, ch, ref });
+      } catch (error) {
+        console.error("[autoMarkerScan] 기존 문서 조회 실패:", v.videoId, error); // TODO: 배포 전 제거
+        report.enrichFailed += 1;
+      }
+    }
 
-        // Gemini 로 위치/제목/태그/설명 채우기 (호출 1회 = 이 영상 평생 유일)
-        const ai = await enrichVideoToMarker(
-          {
-            title: v.title,
-            channelName: v.channelName || ch.channel_name || "",
-            videoId: v.videoId,
-          },
-          existingTags
-        );
-        aiUsed += 1;
+    // 3-b) 새 영상들을 배치로 Gemini 처리 (videoId → 결과 Map)
+    const enrichedMap =
+      toEnrich.length > 0
+        ? await enrichVideosToMarkers(
+            toEnrich.map(({ v, ch }) => ({
+              videoId: v.videoId,
+              title: v.title,
+              channelName: v.channelName || ch.channel_name || "",
+            })),
+            existingTags
+          )
+        : new Map();
 
-        if (!ai.ok) {
-          report.enrichFailed += 1;
-          continue; // AI 호출 자체 실패 → 마커 안 만듦(빈 마커 방지). 다음 스캔 재시도.
-        }
+    // 3-c) 결과 저장
+    for (const { v, ch, ref } of toEnrich) {
+      const ai = enrichedMap.get(v.videoId);
+      if (!ai || !ai.ok) {
+        report.enrichFailed += 1;
+        continue; // AI 매칭 실패 → 마커 안 만듦(빈 마커 방지). 다음 스캔 재시도.
+      }
+      const now = FieldValue.serverTimestamp();
 
-        const now = FieldValue.serverTimestamp();
+      // 위치 특정 여부: 국가·좌표가 유효하고 (0,0) "널섬"이 아니어야 지도에 올린다.
+      // (월드 모음/여러 장소 편집본 등은 AI 가 위치를 안 주므로 여기서 걸러진다.)
+      const located =
+        !!ai.country &&
+        typeof ai.lat === "number" &&
+        typeof ai.lng === "number" &&
+        !(ai.lat === 0 && ai.lng === 0);
 
-        // 위치 특정 여부: 국가·좌표가 유효하고 (0,0) "널섬"이 아니어야 지도에 올린다.
-        // (월드 모음/여러 장소 편집본 등은 AI 가 위치를 안 주므로 여기서 걸러진다.)
-        const located =
-          !!ai.country &&
-          typeof ai.lat === "number" &&
-          typeof ai.lng === "number" &&
-          !(ai.lat === 0 && ai.lng === 0);
-
+      try {
         if (!located) {
           // 위치 미상 → 숨김 상태로 "캐시"만 한다(is_active:false).
           //   → 지도/목록엔 안 뜨고, 다음 스캔에서 다시 AI 를 부르지도 않는다(비용 0).
@@ -306,11 +319,7 @@ export async function scanChannels(channelDocs, opts = {}) {
         });
         report.newEnriched += 1;
       } catch (error) {
-        console.error(
-          "[autoMarkerScan] 영상 처리 실패:",
-          v.videoId,
-          error
-        ); // TODO: 배포 전 제거
+        console.error("[autoMarkerScan] 영상 저장 실패:", v.videoId, error); // TODO: 배포 전 제거
         report.enrichFailed += 1;
       }
     }
