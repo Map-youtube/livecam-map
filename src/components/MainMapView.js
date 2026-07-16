@@ -30,6 +30,7 @@ import LanguageSelector from "@/components/i18n/LanguageSelector";
 import { useI18n } from "@/components/i18n/LanguageProvider";
 import { useAutoTranslate } from "@/components/i18n/useAutoTranslate";
 import { capitalizeWords } from "@/lib/textCase";
+import { pickVideoDesc } from "@/lib/markerDesc";
 
 // 지도 기본 중심/줌 (최초 표시)
 const DEFAULT_CENTER = { lat: 20, lng: 0 };
@@ -797,6 +798,23 @@ export default function MainMapView({
   }, [selectedGroupVideos]);
   const { tr: trTitle } = useAutoTranslate(visibleTitles, locale);
 
+  // ─── "보이는 도시 패널"의 소개글만 현재 언어로 번역(+캐시) ─────
+  // 도시 패널이 열렸을 때만: 도시 소개글 + 그 도시 영상들의 설명을 배치로 번역.
+  //   → 낭비 없이 최소 비용(닫혀 있으면 번역 안 함). VideoListPanel 이 trDesc 로 표시.
+  const visibleDescriptions = useMemo(() => {
+    // 도시/태그 패널이 열려 있을 때만 대상(그 외엔 설명이 화면에 없음)
+    if (!selectedCity && !selectedTag) return [];
+    const set = new Set();
+    if (cityDescription) set.add(cityDescription);
+    const list = Array.isArray(filteredMarkers) ? filteredMarkers : [];
+    for (const m of list) {
+      const d = pickVideoDesc(m);
+      if (d) set.add(d);
+    }
+    return [...set];
+  }, [selectedCity, selectedTag, cityDescription, filteredMarkers]);
+  const { tr: trDesc } = useAutoTranslate(visibleDescriptions, locale);
+
   const channelPanelTitle = selectedGroup
     ? `📡 ${capitalizeWords(tr(selectedGroup.minor || ""))}`
     : "";
@@ -940,6 +958,7 @@ export default function MainMapView({
                   title={panelTitle}
                   cityDescription={cityDescription}
                   tr={tr}
+                  trDesc={trDesc}
                   onClose={closePanel}
                   onSelectMarker={handleSelectMarker}
                   expandedMarkerId={expandedMarkerId}

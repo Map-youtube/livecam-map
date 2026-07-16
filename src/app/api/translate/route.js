@@ -28,7 +28,10 @@ import { SUPPORTED_CODES } from "@/lib/i18n/languages";
 const GOOGLE_ENDPOINT =
   "https://translation.googleapis.com/language/translate/v2";
 const MAX_TEXTS = 120; // 한 요청 최대 문자열 수
-const MAX_LEN = 200; // 문자열당 최대 길이(자)
+// 문자열당 최대 길이(자). 도시/영상 소개글(1~3문장)까지 온전히 번역되도록 500 으로 둔다.
+//   ⚠️ 이 값보다 길면 잘려서 캐시 key 가 원문과 달라져 tr() 매칭이 안 되므로(원문 노출),
+//      표시 문자열 길이와 이 상한을 함께 고려한다.
+const MAX_LEN = 500;
 // Google 번역 1회 호출당 문자열 수. Google v2 는 q 배열을 최대 128개까지 허용하지만,
 // 작게 나눠(각 청크 실패는 그 청크에만 영향) 신뢰도를 높인다. (기존 구조 유지)
 const CHUNK_SIZE = 20;

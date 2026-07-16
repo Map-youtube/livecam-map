@@ -28,6 +28,7 @@ import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import LiveDot from "@/components/LiveDot";
 import Thumbnail from "@/components/DefaultThumbnail";
 import { useI18n } from "@/components/i18n/LanguageProvider";
+import { pickVideoDesc } from "@/lib/markerDesc";
 
 // 한 줄에 표시할 카드 수 (그리드 열 수와 반드시 일치)
 const COLUMNS = 3;
@@ -221,6 +222,7 @@ export default function VideoListPanel({
   title,
   cityDescription,
   tr,
+  trDesc,
   expandedMarkerId,
 }) {
   const list = Array.isArray(markers) ? markers : [];
@@ -228,6 +230,8 @@ export default function VideoListPanel({
   // 다국어: 정적 문자열(t) + 국가명(countryName). 동적(도시/장소/태그)은 tr 프롭.
   const { t, countryName } = useI18n();
   const trFn = typeof tr === "function" ? tr : (x) => x;
+  // 소개글(도시/영상 설명) 전용 번역기. 없으면 원문 그대로.
+  const trDescFn = typeof trDesc === "function" ? trDesc : (x) => x;
   // 상태 배지 종류 → 번역 라벨
   const badgeLabel = { live: t("live"), disabled: t("disabled"), inactive: t("inactive") };
 
@@ -389,9 +393,9 @@ export default function VideoListPanel({
         {cityDescription ? (
           <p
             className="line-clamp-2 min-w-0 flex-1 text-[11px] leading-tight text-ink-muted"
-            title={cityDescription}
+            title={trDescFn(cityDescription)}
           >
-            {cityDescription}
+            {trDescFn(cityDescription)}
           </p>
         ) : null}
         <button
@@ -441,17 +445,10 @@ export default function VideoListPanel({
                         .filter((v) => v)
                         .join(", ");
 
-                      // 영상 등록 시 작성된 설명(있으면). description{ko,en} 우선, 없으면 youtube_description.
-                      //   원문 그대로 표시(번역 안 함) — 저장된 소개글을 SEO/안내용으로 노출.
-                      const videoDesc =
-                        (marker.description &&
-                          typeof marker.description === "object" &&
-                          (marker.description.ko || marker.description.en)) ||
-                        (typeof marker.description === "string"
-                          ? marker.description
-                          : "") ||
-                        marker.youtube_description ||
-                        "";
+                      // 영상 등록 시 작성된 설명(있으면). 표시·번역이 같은 문자열을 쓰도록
+                      //   공용 pickVideoDesc 로 원문을 뽑고, trDescFn 으로 현재 언어 번역을 적용.
+                      const videoDescRaw = pickVideoDesc(marker);
+                      const videoDesc = videoDescRaw ? trDescFn(videoDescRaw) : "";
 
                       // 이 카드가 현재 선택되어(재생 중) 있는지 — 반드시 자기 id 로 비교
                       const isSelected =
