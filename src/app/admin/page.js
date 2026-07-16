@@ -24,6 +24,7 @@ import MarkerList from "@/components/MarkerList";
 import AutoChannelList from "@/components/AutoChannelList";
 import LiveChannelSection from "@/components/LiveChannelSection";
 import AutoChannelForm from "@/components/AutoChannelForm";
+import AdminDashboard from "@/components/AdminDashboard";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
@@ -80,6 +81,8 @@ export default function AdminPage() {
   const [refreshSignal, setRefreshSignal] = useState(0);
   // 오른쪽 목록 탭: "manual"(수동 마커, 백업) | "auto"(지역 자동 채널)
   const [listTab, setListTab] = useState("manual");
+  // 화면 뷰: "manage"(관리) | "dashboard"(대시보드)
+  const [view, setView] = useState("manage");
   // 로그인된 관리자 이메일 (상단 표시용)
   const [adminEmail, setAdminEmail] = useState("");
 
@@ -110,20 +113,44 @@ export default function AdminPage() {
 
   return (
     <AdminGuard>
-      {/* 왼쪽 절반: 등록 폼 + 자동 라이브 채널 관리 / 오른쪽 절반: 등록된 마커 목록 */}
-      {/* 작은 화면에선 세로로 쌓임(flex-col), lg 이상에서 좌우 2단(flex-row) */}
-      <main className="flex min-h-screen flex-col bg-bg lg:flex-row">
-        {/* 왼쪽 절반 (min-w-0 : 내부 표/지도가 넘칠 때 가로 스크롤되게 함. 작은 화면에선 전체폭) */}
-        <div className="w-full min-w-0 px-4 py-6 lg:w-1/2 lg:px-6">
-          {/* 상단 바: 서비스명 + 관리자 이메일 + 로그아웃 */}
-          <div className="mb-6 flex items-center justify-between gap-3 border-b border-border pb-3">
-            <div className="min-w-0">
-              <p className="font-display text-sm font-bold tracking-tight text-ink">
-                TripByClip 관리자
-              </p>
-              <p className="truncate text-xs text-ink-muted">
-                {adminEmail ? adminEmail : "로그인됨"}
-              </p>
+      <div className="flex min-h-screen flex-col bg-bg">
+        {/* 공통 상단 바 (항상 표시): 서비스명 + 뷰 토글(관리↔대시보드) + 로그아웃 */}
+        <header className="flex flex-shrink-0 items-center justify-between gap-3 border-b border-border bg-surface px-4 py-3 lg:px-6">
+          <div className="min-w-0">
+            <p className="font-display text-sm font-bold tracking-tight text-ink">
+              TripByClip 관리자
+            </p>
+            <p className="truncate text-xs text-ink-muted">
+              {adminEmail ? adminEmail : "로그인됨"}
+            </p>
+          </div>
+          <div className="flex flex-none items-center gap-2">
+            {/* 대시보드 ↔ 관리 전환 */}
+            <div className="inline-flex rounded-lg border border-border bg-bg p-1">
+              <button
+                type="button"
+                onClick={() => setView("manage")}
+                className={
+                  "rounded-md px-3 py-1.5 text-sm font-medium transition " +
+                  (view === "manage"
+                    ? "bg-brand text-white shadow-sm"
+                    : "text-ink-muted hover:text-ink")
+                }
+              >
+                ⚙️ 관리
+              </button>
+              <button
+                type="button"
+                onClick={() => setView("dashboard")}
+                className={
+                  "rounded-md px-3 py-1.5 text-sm font-medium transition " +
+                  (view === "dashboard"
+                    ? "bg-brand text-white shadow-sm"
+                    : "text-ink-muted hover:text-ink")
+                }
+              >
+                📊 대시보드
+              </button>
             </div>
             <Button
               type="button"
@@ -134,8 +161,19 @@ export default function AdminPage() {
               로그아웃
             </Button>
           </div>
+        </header>
 
-          {/* 지역 자동 채널 등록 (AI) — 가장 자주 쓰는 기능이라 최상단 배치.
+        {view === "dashboard" ? (
+          /* ── 대시보드 뷰 ── */
+          <div className="px-4 py-6 lg:px-6">
+            <AdminDashboard />
+          </div>
+        ) : (
+          /* ── 관리 뷰 (좌: 등록 폼 / 우: 목록) ── */
+          <div className="flex flex-1 flex-col lg:flex-row">
+            {/* 왼쪽 절반 (min-w-0 : 내부 표/지도가 넘칠 때 가로 스크롤되게 함) */}
+            <div className="w-full min-w-0 px-4 py-6 lg:w-1/2 lg:px-6">
+              {/* 지역 자동 채널 등록 (AI) — 가장 자주 쓰는 기능이라 최상단 배치.
               채널만 등록하면 AI가 위치·장소명·태그·설명을 채워 지역 마커로 올린다. */}
           <SectionTitle
             title="지역 자동 채널 등록 (AI)"
@@ -210,8 +248,10 @@ export default function AdminPage() {
               <AutoChannelList refreshSignal={refreshSignal} />
             </>
           )}
-        </section>
-      </main>
+            </section>
+          </div>
+        )}
+      </div>
 
       {/* 화면 하단 고정 "Top" 버튼 (스크롤 내리면 나타남) */}
       <ScrollTopButton />
