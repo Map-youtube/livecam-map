@@ -334,6 +334,9 @@ function MarkerClusterLayer({
       const group = L.markerClusterGroup({
         zoomToBoundsOnClick: false,
         spiderfyOnMaxZoom: false,
+        // 최대 줌(19)과 그 직전 단계(18)에서는 클러스터링을 끈다 → 가까이 붙은 마커도
+        // 뭉치지 않고 개별 마커로 모두 보인다. (이 줌 이상에서는 클러스터가 생성되지 않음)
+        disableClusteringAtZoom: 18,
       });
 
       // 클러스터 클릭 → "부드럽게" 확대.
