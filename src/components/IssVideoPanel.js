@@ -206,20 +206,24 @@ export default function IssVideoPanel({
                           type="button"
                           onClick={() => selectVideo(v)}
                           className={
-                            "block overflow-hidden rounded-lg border border-border bg-surface text-left shadow-card transition duration-150 hover:-translate-y-0.5 " +
+                            // flex-col + 썸네일 flex-none: 카드 높이가 서로 달라도(제목 줄 수 차이 등)
+                            // 썸네일이 항상 카드 최상단에 딱 붙는다.
+                            "flex flex-col overflow-hidden rounded-lg border border-border bg-surface text-left shadow-card transition duration-150 hover:-translate-y-0.5 " +
                             // 선택된 카드: 빨간 테두리 + 은은하게 켜졌다 꺼지는 발광(box-shadow 애니메이션)
                             (isSelected ? "card-playing" : "")
                           }
                         >
-                          {/* 썸네일 (16:9) + 좌상단 LIVE 배지 */}
-                          <div className="relative aspect-video w-full overflow-hidden rounded-md bg-ink/5">
+                          {/* 썸네일 (16:9) + 좌상단 LIVE 배지.
+                              flex-none: 카드가 세로로 늘어나도 썸네일은 16:9 를 유지하며 최상단에 고정. */}
+                          <div className="relative aspect-video w-full flex-none overflow-hidden rounded-md bg-ink/5">
                             {/* 없거나 로딩 실패 시 기본 이미지로 대체 */}
                             <Thumbnail
                               src={v.thumbnailUrl}
                               alt={v.title || t("nasaLive")}
                               className="h-full w-full object-cover"
                             />
-                            <div className="absolute left-1 top-1">
+                            {/* LIVE 배지: 좌상단 고정 + 5% 축소(origin-top-left 로 코너 기준) */}
+                            <div className="absolute left-1 top-1 origin-top-left scale-95">
                               <span className="inline-flex items-center gap-1 rounded-full bg-live-light px-2 py-0.5 text-xs font-semibold text-live shadow-card">
                                 <LiveDot size="sm" />
                                 LIVE
