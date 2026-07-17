@@ -290,41 +290,71 @@ export default function AutoChannelList({ refreshSignal }) {
 
   return (
     <div className="space-y-4">
-      {/* 도구 모음 */}
-      <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" onClick={handleScanNow} disabled={busy !== ""}>
-          {busy === "scan" ? "스캔 중..." : "지금 스캔"}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handleVerifyPlayback}
-          disabled={busy !== ""}
-          title="현재 게시 중인 영상을 실제 재생 가능 여부로 전수 점검해 재생불가 영상을 숨깁니다"
-        >
-          {busy === "verify" ? "점검 중..." : "재생 상태 점검"}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handleImport}
-          disabled={busy !== ""}
-        >
-          {busy === "import" ? "가져오는 중..." : "기존 마커에서 채널 가져오기"}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handleGenRegionDescriptions}
-          disabled={busy !== ""}
-          title="대륙/국가/주요도시 SEO 페이지의 소개글을 AI로 생성합니다(없는 것만, 1회성)"
-        >
-          {busy === "regiondesc" ? "설명 생성 중..." : "지역 설명 생성(AI)"}
-        </Button>
-        <Button type="button" variant="outline" onClick={load} disabled={busy !== ""}>
-          새로고침
-        </Button>
-        <span className="text-xs text-ink-muted">
+      {/* 도구 모음 — 각 버튼 아래에 "누르면 소모하는 API"를 작은 글씨로 표기 */}
+      <div className="flex flex-wrap items-start gap-2">
+        <div className="flex flex-col items-start gap-0.5">
+          <Button type="button" onClick={handleScanNow} disabled={busy !== ""}>
+            {busy === "scan" ? "스캔 중..." : "지금 스캔"}
+          </Button>
+          <span className="px-1 text-[10px] leading-tight text-live">
+            (YouTube·Gemini 소모)
+          </span>
+        </div>
+
+        <div className="flex flex-col items-start gap-0.5">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleVerifyPlayback}
+            disabled={busy !== ""}
+            title="현재 게시 중인 영상을 실제 재생 가능 여부로 전수 점검해 재생불가 영상을 숨깁니다"
+          >
+            {busy === "verify" ? "점검 중..." : "재생 상태 점검"}
+          </Button>
+          <span className="px-1 text-[10px] leading-tight text-live">
+            (YouTube 소모)
+          </span>
+        </div>
+
+        <div className="flex flex-col items-start gap-0.5">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleImport}
+            disabled={busy !== ""}
+          >
+            {busy === "import" ? "가져오는 중..." : "기존 마커에서 채널 가져오기"}
+          </Button>
+          <span className="px-1 text-[10px] leading-tight text-live">
+            (YouTube 소모)
+          </span>
+        </div>
+
+        <div className="flex flex-col items-start gap-0.5">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleGenRegionDescriptions}
+            disabled={busy !== ""}
+            title="대륙/국가/주요도시 SEO 페이지의 소개글을 AI로 생성합니다(없는 것만, 1회성)"
+          >
+            {busy === "regiondesc" ? "설명 생성 중..." : "지역 설명 생성(AI)"}
+          </Button>
+          <span className="px-1 text-[10px] leading-tight text-ink-muted">
+            (Gemini 소모 · 없는 것만)
+          </span>
+        </div>
+
+        <div className="flex flex-col items-start gap-0.5">
+          <Button type="button" variant="outline" onClick={load} disabled={busy !== ""}>
+            새로고침
+          </Button>
+          <span className="px-1 text-[10px] leading-tight text-brand">
+            (소모 없음)
+          </span>
+        </div>
+
+        <span className="self-center text-xs text-ink-muted">
           채널 {channels.length}개 · 영상 {markers.length}개
         </span>
       </div>
