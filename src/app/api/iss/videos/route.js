@@ -25,8 +25,8 @@
 // YOUTUBE_API_KEY 는 서버 전용(getLiveVideos 내부에서 사용). Node.js 런타임 명시.
 // ─────────────────────────────────────────────────────────────
 
-import { unstable_cache } from "next/cache";
 import { getLiveVideos } from "@/lib/youtubeUtils";
+import { getTimedSnapshot } from "@/lib/liveSnapshot";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -162,26 +162,27 @@ async function computeLiveVideos() {
   };
 }
 
-// ─── 라이브 영상 목록 (1시간 캐시) ───────────────────────────
-// ⚠️ YouTube 무료 할당량(10,000유닛/일) 방어: ISS(NASA) 라이브 스트림의 video_id 는
-//    수개월간 거의 바뀌지 않으므로 5분마다 videos.list 를 재확인할 필요가 없다.
-//    1시간 캐시로 하루 재확인 횟수를 288회→24회(약 12배↓)로 줄여 유닛 소모를 크게 절감한다.
-const getNasaLiveVideos = unstable_cache(
-  async () => {
-    try {
-      const { videos } = await computeLiveVideos();
-      return videos;
-    } catch (error) {
-      console.error("[api/iss/videos] 라이브 목록 계산 실패:", error); // TODO: 배포 전 제거
-      return [];
-    }
-  },
-  ["nasa-live-videos"], // 캐시 키
-  {
-    revalidate: 3600, // 1시간 (기존 5분 → YouTube 유닛 절감)
-    tags: ["nasa-live-videos"],
-  }
-);
+// ─── 라이브 영상 목록 (Firestore 시간제 스냅샷, 1시간) ────────
+// ⚠️ YouTube 무료 할당량(10,000유닛/일) 방어: 과거 unstable_cache(5분)는 Vercel 서버리스에서
+//    인스턴스/리전별로 분리돼 방문자 수에 비례해 videos.list 가 폭증했다(할당량 2배 초과 사고).
+//    → Firestore 문서 1개(live_snapshots/iss)로 전역 단일 캐시. 트래픽과 무관하게 1시간 1회만
+//      재계산하고, 방문자 요청은 Firestore 에서 읽어 내려준다(방문자당 YouTube 0).
+//    ISS 스트림 video_id 는 수개월 안정적이라 1시간 주기로도 충분히 신선하다.
+async function getNasaLiveVideos() {
+  return getTimedSnapshot({
+    docId: "iss",
+    refreshMs: 60 * 60 * 1000, // 1시간
+    compute: async () => {
+      try {
+        const { videos } = await computeLiveVideos();
+        return videos;
+      } catch (error) {
+        console.error("[api/iss/videos] 라이브 목록 계산 실패:", error); // TODO: 배포 전 제거
+        return [];
+      }
+    },
+  });
+}
 
 export async function GET(request) {
   try {
