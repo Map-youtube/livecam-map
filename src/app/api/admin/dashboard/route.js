@@ -148,6 +148,40 @@ export async function GET(request) {
 
     const totalCost = apiDaily.reduce((s, d) => s + d.cost, 0);
     const totalYoutubeUnits = apiDaily.reduce((s, d) => s + d.youtubeUnits, 0);
+    // 이번 달 API 비용(손익 계산용) — apiDaily 중 이번 달 doc 합산
+    const monthApiCost = apiDaily
+      .filter((d) => d.date.slice(0, 7) === monthStr)
+      .reduce((s, d) => s + d.cost, 0);
+
+    // ── finance (수동 입력: 서버비용/애드센스) ────────────────
+    const finSnap = await adminDb.collection("finance").get();
+    const financeMonths = [];
+    for (const d of finSnap.docs) {
+      if (!MONTH_RE.test(d.id)) continue;
+      const data = d.data() || {};
+      financeMonths.push({
+        month: d.id,
+        vercel: num(data.vercel_usd),
+        firebase: num(data.firebase_usd),
+        adsense: num(data.adsense_usd),
+      });
+    }
+    financeMonths.sort((a, b) => a.month.localeCompare(b.month));
+    const financeTotals = financeMonths.reduce(
+      (s, m) => ({
+        vercel: s.vercel + m.vercel,
+        firebase: s.firebase + m.firebase,
+        adsense: s.adsense + m.adsense,
+      }),
+      { vercel: 0, firebase: 0, adsense: 0 }
+    );
+    const thisMonthFinance =
+      financeMonths.find((m) => m.month === monthStr) || {
+        month: monthStr,
+        vercel: 0,
+        firebase: 0,
+        adsense: 0,
+      };
 
     const latestVisitorDate = visitorsDaily.length
       ? visitorsDaily[visitorsDaily.length - 1].date
@@ -185,7 +219,14 @@ export async function GET(request) {
             monthCharacters: monthTranslateChars, // 이번 달(무료 한도 비교용)
             monthCalls: monthTranslateCalls,
           },
+          monthCost: monthApiCost, // 이번 달 API 비용(손익용)
           latestDate: latestApiDate,
+        },
+        finance: {
+          month: monthStr,
+          months: financeMonths,
+          totals: financeTotals,
+          thisMonth: thisMonthFinance,
         },
       },
       { status: 200 }

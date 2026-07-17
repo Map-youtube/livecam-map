@@ -122,6 +122,11 @@ export default function AdminDashboard() {
   const [error, setError] = useState("");
   const [period, setPeriod] = useState("day"); // day | week | month
 
+  // 재무 수동입력 폼 상태
+  const [finForm, setFinForm] = useState({ month: "", vercel: "", firebase: "", adsense: "" });
+  const [finSaving, setFinSaving] = useState(false);
+  const [finMsg, setFinMsg] = useState("");
+
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -148,6 +153,59 @@ export default function AdminDashboard() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // 데이터 로드되면 재무 폼을 "이번 달" 기존값으로 프리필(입력 시작점).
+  useEffect(() => {
+    const tm = data?.finance?.thisMonth;
+    const month = data?.finance?.month || tm?.month;
+    if (!month) return;
+    setFinForm((prev) => {
+      if (prev.month) return prev; // 사용자가 이미 편집 중이면 덮어쓰지 않음
+      return {
+        month,
+        vercel: tm?.vercel ? String(tm.vercel) : "",
+        firebase: tm?.firebase ? String(tm.firebase) : "",
+        adsense: tm?.adsense ? String(tm.adsense) : "",
+      };
+    });
+  }, [data]);
+
+  // 재무 수동입력 저장
+  const saveFinance = useCallback(async () => {
+    setFinSaving(true);
+    setFinMsg("");
+    try {
+      const token = await getAdminIdToken();
+      if (!token) {
+        window.location.href = "/admin/login";
+        return;
+      }
+      const res = await fetch("/api/admin/finance", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          month: finForm.month,
+          vercel: Number(finForm.vercel) || 0,
+          firebase: Number(finForm.firebase) || 0,
+          adsense: Number(finForm.adsense) || 0,
+        }),
+      });
+      const json = await res.json();
+      if (res.ok && json.ok) {
+        setFinMsg("저장되었습니다.");
+        await load(); // 대시보드 값 갱신
+      } else {
+        setFinMsg(json.error || "저장에 실패했습니다.");
+      }
+    } catch (e) {
+      setFinMsg("저장에 실패했습니다.");
+    } finally {
+      setFinSaving(false);
+    }
+  }, [finForm, load]);
 
   const visitorBuckets = useMemo(
     () => bucketize(data?.visitors?.daily || [], period),
@@ -178,9 +236,19 @@ export default function AdminDashboard() {
 
   const v = data.visitors || {};
   const a = data.api || {};
+  const fin = data.finance || {};
   const maxCountry = Math.max(1, ...(v.byCountry || []).map((c) => c.count));
   const maxCity = Math.max(1, ...(v.byCity || []).map((c) => c.count));
   const latestDate = v.latestDate || a.latestDate || null;
+
+  // 서버 비용(Vercel+Firebase) 이번 달 / 누적
+  const serverThisMonth = Number(fin.thisMonth?.vercel || 0) + Number(fin.thisMonth?.firebase || 0);
+  const serverTotal = Number(fin.totals?.vercel || 0) + Number(fin.totals?.firebase || 0);
+
+  // 이번 달 손익 = 수입(애드센스) - 비용(API + 서버)
+  const monthRevenue = Number(fin.thisMonth?.adsense || 0);
+  const monthCost = Number(a.monthCost || 0) + serverThisMonth;
+  const monthNet = monthRevenue - monthCost;
 
   return (
     <div className="space-y-6">
@@ -201,8 +269,17 @@ export default function AdminDashboard() {
           value={fmtUsd(a.totalCost)}
           sub={`YouTube ${fmtInt(a.totalYoutubeUnits)} 유닛`}
         />
-        <Kpi title="서버 비용(Vercel/Firebase)" pending sub="자동 수집 불가 · 수동입력/연동 필요" />
-        <Kpi title="애드센스 수입" pending sub="승인 후 API 연동 필요" />
+        <Kpi
+          title="서버 비용(이번 달)"
+          value={fmtUsd(serverThisMonth)}
+          sub={`누적 ${fmtUsd(serverTotal)} · 수동 입력`}
+        />
+        <Kpi
+          title="애드센스 수입(이번 달)"
+          value={fmtUsd(fin.thisMonth?.adsense)}
+          tone="brand"
+          sub={`누적 ${fmtUsd(fin.totals?.adsense)} · 수동 입력`}
+        />
       </div>
 
       {/* 기간 선택 */}
@@ -333,10 +410,154 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {/* 이번 달 손익 + 서버비용/애드센스 수동입력 */}
+      <div className="rounded-xl border border-border bg-surface p-4">
+        <SectionTitle
+          desc={`${fin.month || "이번 달"} 기준 · 수입(애드센스) − 비용(API+서버). 서버비용·애드센스는 자동 수집이 안 돼 아래에서 직접 입력합니다.`}
+        >
+          이번 달 손익
+        </SectionTitle>
+
+        {/* 요약 3칸 */}
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-lg border border-border bg-bg/40 p-3">
+            <p className="text-[11px] text-ink-muted">수입(애드센스)</p>
+            <p className="mt-0.5 font-display text-lg font-bold text-brand">
+              {fmtUsd(monthRevenue)}
+            </p>
+          </div>
+          <div className="rounded-lg border border-border bg-bg/40 p-3">
+            <p className="text-[11px] text-ink-muted">비용(API+서버)</p>
+            <p className="mt-0.5 font-display text-lg font-bold text-ink">{fmtUsd(monthCost)}</p>
+          </div>
+          <div className="rounded-lg border border-border bg-bg/40 p-3">
+            <p className="text-[11px] text-ink-muted">순수지</p>
+            <p
+              className={`mt-0.5 font-display text-lg font-bold ${
+                monthNet >= 0 ? "text-brand" : "text-live"
+              }`}
+            >
+              {monthNet < 0 ? "-" : ""}
+              {fmtUsd(Math.abs(monthNet))}
+            </p>
+          </div>
+        </div>
+
+        {/* 수동입력 폼 */}
+        <div className="mt-4 border-t border-border pt-4">
+          <p className="mb-2 text-xs font-medium text-ink">
+            서버 비용·애드센스 입력 <span className="text-ink-muted">(USD, 월 단위 실제 금액)</span>
+          </p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+            <label className="text-[11px] text-ink-muted">
+              월(YYYY-MM)
+              <input
+                type="month"
+                value={finForm.month}
+                onChange={(e) => setFinForm((f) => ({ ...f, month: e.target.value }))}
+                className="mt-0.5 w-full rounded-md border border-border bg-bg px-2 py-1 text-xs text-ink"
+              />
+            </label>
+            <label className="text-[11px] text-ink-muted">
+              Vercel($)
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={finForm.vercel}
+                onChange={(e) => setFinForm((f) => ({ ...f, vercel: e.target.value }))}
+                className="mt-0.5 w-full rounded-md border border-border bg-bg px-2 py-1 text-xs text-ink"
+              />
+            </label>
+            <label className="text-[11px] text-ink-muted">
+              Firebase($)
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={finForm.firebase}
+                onChange={(e) => setFinForm((f) => ({ ...f, firebase: e.target.value }))}
+                className="mt-0.5 w-full rounded-md border border-border bg-bg px-2 py-1 text-xs text-ink"
+              />
+            </label>
+            <label className="text-[11px] text-ink-muted">
+              애드센스($)
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={finForm.adsense}
+                onChange={(e) => setFinForm((f) => ({ ...f, adsense: e.target.value }))}
+                className="mt-0.5 w-full rounded-md border border-border bg-bg px-2 py-1 text-xs text-ink"
+              />
+            </label>
+            <div className="flex items-end">
+              <button
+                type="button"
+                onClick={saveFinance}
+                disabled={finSaving || !finForm.month}
+                className="w-full rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-hover disabled:opacity-50"
+              >
+                {finSaving ? "저장 중…" : "저장"}
+              </button>
+            </div>
+          </div>
+          {finMsg && <p className="mt-1.5 text-[11px] text-ink-muted">{finMsg}</p>}
+        </div>
+
+        {/* 월별 표 */}
+        {(fin.months || []).length > 0 && (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-ink-muted">
+                  <th className="py-1 pr-3 font-medium">월</th>
+                  <th className="py-1 pr-3 text-right font-medium">Vercel</th>
+                  <th className="py-1 pr-3 text-right font-medium">Firebase</th>
+                  <th className="py-1 pr-3 text-right font-medium">애드센스</th>
+                  <th className="py-1 text-right font-medium">월 순수지*</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...(fin.months || [])].reverse().map((m) => {
+                  const net = m.adsense - (m.vercel + m.firebase);
+                  return (
+                    <tr key={m.month} className="border-t border-border">
+                      <td className="py-1 pr-3 font-mono">{m.month}</td>
+                      <td className="py-1 pr-3 text-right font-mono tabular-nums">
+                        {fmtUsd(m.vercel)}
+                      </td>
+                      <td className="py-1 pr-3 text-right font-mono tabular-nums">
+                        {fmtUsd(m.firebase)}
+                      </td>
+                      <td className="py-1 pr-3 text-right font-mono tabular-nums text-brand">
+                        {fmtUsd(m.adsense)}
+                      </td>
+                      <td
+                        className={`py-1 text-right font-mono tabular-nums ${
+                          net >= 0 ? "text-brand" : "text-live"
+                        }`}
+                      >
+                        {net < 0 ? "-" : ""}
+                        {fmtUsd(Math.abs(net))}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <p className="mt-1 text-[10px] text-ink-muted">
+              * 월 순수지는 서버비용 기준(애드센스 − Vercel − Firebase)의 간이 계산이며, API
+              비용은 상단 손익 요약에만 반영됩니다.
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* 아직 자동수집 안 되는 항목 — 정직하게 안내 */}
       <div className="rounded-xl border border-border bg-bg/50 p-4">
-        <SectionTitle desc="이 값들은 외부 데이터라 자동으로 못 가져옵니다. 연결 방법:">
-          아직 연동되지 않은 항목
+        <SectionTitle desc="아래 값은 외부 데이터라 자동 수집이 안 됩니다. 지금은 위에서 매월 직접 입력하고, 나중에 API 연동으로 자동화할 수 있습니다:">
+          자동화 예정(현재는 수동 입력)
         </SectionTitle>
         <ul className="space-y-1.5 text-xs text-ink-muted">
           <li>
