@@ -65,11 +65,18 @@ const ibmPlexMono = IBM_Plex_Mono({
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL || "https://www.tripbyclip.com";
 
+// 네이버 서치어드바이저 권장 길이(제목 40자·설명 80자) 안에 맞춘 짧은 버전.
+//   구글 스니펫용 긴 버전은 title/description 이 담당하고, 이 값들은 그 길이 제한을 지킨다.
+const TITLE_SHORT = "TripByClip — Web Cam Clips Worldwide"; // 36자
+const DESC_SHORT =
+  "Travel the world from home with live web cam clips — cities, beaches, landmarks."; // 80자
+const OG_DESC_SHORT =
+  "Hop between real-time cam views of cities, beaches & landmarks worldwide."; // 73자
+
 export const metadata = {
   metadataBase: new URL(SITE_URL),
-  title: "TripByClip — Travel the World from Home with Live Web Cam Clips",
-  description:
-    "Travel the world from home with live web cam clips. Explore real-time views of cities, beaches, and famous landmarks worldwide on an interactive map.",
+  title: TITLE_SHORT,
+  description: DESC_SHORT,
   alternates: { canonical: "/" },
   // 검색엔진 사이트 소유확인 (네이버 서치어드바이저 등)
   // → <meta name="naver-site-verification" content="..."> 로 <head> 에 렌더된다.
@@ -82,9 +89,8 @@ export const metadata = {
     type: "website",
     siteName: "TripByClip",
     url: SITE_URL,
-    title: "TripByClip — Travel the World from Home with Live Web Cam Clips",
-    description:
-      "Travel the world from home with live web cam clips. Hop between real-time views of cities, beaches, and landmarks across the globe — one clip at a time.",
+    title: TITLE_SHORT,
+    description: OG_DESC_SHORT,
   },
   twitter: {
     card: "summary_large_image",
