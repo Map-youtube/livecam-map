@@ -213,6 +213,10 @@ export default function AutoChannelForm({ onRegistered }) {
         >
           {submitting ? "등록 중... (채널 확인 + AI 채우기)" : "채널 등록"}
         </Button>
+        {/* 등록 시 즉시 그 채널을 스캔(YouTube)해 AI(Gemini)로 영상을 채우므로 소모가 발생함 */}
+        <p className="text-center text-[10px] leading-tight text-live">
+          (등록 시 YouTube·Gemini 소모 — 그 채널을 즉시 1회 스캔해 영상을 채웁니다)
+        </p>
         {!canSubmit && !submitting && channelStatus !== "duplicate" && (
           <p className="text-center text-xs text-ink-muted">
             등록 가능한 채널로 확인되면 등록할 수 있습니다.
