@@ -22,6 +22,25 @@ const COUNTRY_KO = {
   LU: "룩셈부르크", LI: "리히텐슈타인", JP: "일본", ZZ: "미상",
 };
 
+// ⏱ 각 기능의 실제 호출/갱신 주기 (코드 상수를 그대로 반영 — 값 변경 시 여기도 함께 수정).
+//   출처: getLiveChannelVideos.js(1h), iss/videos(1h), vercel.json 크론(0 2 * * *=매일 09시 태국),
+//         MainMapView setInterval(5분), getPublicMarkers/getAutoMarkers/getLiveChannels(5분),
+//         MarkerList 자동점검(10분), gcpMonitoring(1h).
+const REFRESH_CYCLES = [
+  { name: "방송 채널 영상", cycle: "1시간마다", cost: "YouTube", note: "라이브 영상 목록 재확인(전역 배칭)" },
+  { name: "ISS(우주) 영상", cycle: "1시간마다", cost: "YouTube", note: "NASA 라이브 재확인" },
+  {
+    name: "지역 자동채널 스캔",
+    cycle: "하루 1회 (태국 오전 9시)",
+    cost: "YouTube",
+    note: "+ 채널 등록 즉시 1회 + 관리자 '지금 스캔' 버튼",
+  },
+  { name: "마커/채널 목록 캐시", cycle: "5분마다", cost: "Firestore", note: "손님 화면용 마커·채널 목록 갱신" },
+  { name: "화면 자동 새로고침", cycle: "5분마다", cost: "없음", note: "서버 캐시를 읽음(새 YouTube 호출 아님)" },
+  { name: "관리자 상태 점검(수동마커)", cycle: "10분마다", cost: "YouTube", note: "관리 페이지 열어둔 동안만" },
+  { name: "대시보드 사용량(이 화면)", cycle: "1시간마다", cost: "없음", note: "Monitoring 집계값 캐시" },
+];
+
 function fmtInt(n) {
   return Number(n || 0).toLocaleString("en-US");
 }
@@ -419,6 +438,53 @@ export default function AdminDashboard() {
             </div>
           </>
         )}
+      </div>
+
+      {/* ── 호출 주기 안내 (얼마나 자주 갱신·호출되나) ── */}
+      <div className="rounded-xl border border-border bg-surface p-4">
+        <SectionTitle desc="각 기능이 얼마나 자주 외부(YouTube/Firestore)를 호출·갱신하는지. 비용/한도는 이 주기 × 개수로 정해집니다.">
+          ⏱ 호출 주기
+        </SectionTitle>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-left text-ink-muted">
+                <th className="py-1 pr-3 font-medium">대상</th>
+                <th className="py-1 pr-3 font-medium">주기</th>
+                <th className="py-1 pr-3 font-medium">소비</th>
+                <th className="py-1 font-medium">비고</th>
+              </tr>
+            </thead>
+            <tbody>
+              {REFRESH_CYCLES.map((r) => (
+                <tr key={r.name} className="border-t border-border align-top">
+                  <td className="py-1.5 pr-3 font-medium text-ink">{r.name}</td>
+                  <td className="py-1.5 pr-3 font-mono tabular-nums text-ink">{r.cycle}</td>
+                  <td className="py-1.5 pr-3">
+                    <span
+                      className={
+                        "rounded px-1.5 py-0.5 text-[10px] font-semibold " +
+                        (r.cost === "YouTube"
+                          ? "bg-live-light text-live"
+                          : r.cost === "Firestore"
+                          ? "bg-brand-light text-brand"
+                          : "bg-bg text-ink-muted")
+                      }
+                    >
+                      {r.cost}
+                    </span>
+                  </td>
+                  <td className="py-1.5 text-[11px] leading-snug text-ink-muted">{r.note}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-ink-muted">
+          ※ 방송·ISS는 손님이 아무리 많아도 <strong>1시간에 1번만</strong> YouTube를 부릅니다(스냅샷
+          공유). 자동채널은 <strong>하루 1번</strong> 몰아서(50개 배칭). 새 자동채널을 등록하면 그
+          즉시 1번 스캔되고, 이후는 하루 주기에 편입됩니다.
+        </p>
       </div>
 
       {/* 기간 선택 */}
