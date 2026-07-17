@@ -298,18 +298,26 @@ export default function AdminDashboard() {
           <BarChart items={apiBuckets} valueKey="cost" color="bg-live" label="비용($)" />
         </div>
         <div className="rounded-xl border border-border bg-surface p-4">
-          <SectionTitle desc="무료 한도 대비 실제 사용량">API 무료 한도 현황</SectionTitle>
+          <SectionTitle desc="무료 한도는 기간별로 리셋 — 유튜브는 '오늘', 번역은 '이번 달' 기준">
+            API 무료 한도 현황
+          </SectionTitle>
           <ul className="space-y-2 text-xs">
             <li className="flex items-center justify-between">
-              <span className="text-ink">YouTube Data (누적 유닛)</span>
+              <span className="text-ink">
+                YouTube Data <span className="text-ink-muted/70">(오늘 {a.today?.date || ""})</span>
+              </span>
               <span className="font-mono tabular-nums text-ink-muted">
-                {fmtInt(a.totalYoutubeUnits)} <span className="text-ink-muted/60">/ 10,000·일</span>
+                {fmtInt(a.today?.youtubeUnits)}{" "}
+                <span className="text-ink-muted/60">/ {fmtInt(a.today?.youtubeLimit || 10000)}·일</span>
               </span>
             </li>
             <li className="flex items-center justify-between">
-              <span className="text-ink">번역(Google) 누적 글자</span>
+              <span className="text-ink">
+                번역(Google) <span className="text-ink-muted/70">(이번 달 {a.translate?.month || ""})</span>
+              </span>
               <span className="font-mono tabular-nums text-ink-muted">
-                {fmtInt(a.translate?.characters)} <span className="text-ink-muted/60">/ 500,000·월</span>
+                {fmtInt(a.translate?.monthCharacters)}{" "}
+                <span className="text-ink-muted/60">/ 500,000·월</span>
               </span>
             </li>
             <li className="flex items-center justify-between">
@@ -317,8 +325,9 @@ export default function AdminDashboard() {
               <span className="text-ink-muted">무료 티어 내(호출 캐시)</span>
             </li>
             <li className="mt-1 border-t border-border pt-2 text-[11px] text-ink-muted">
-              ※ 유튜브/번역은 위 무료 한도 안에서 운영 중. Gemini 는 새 항목당 1회만
-              호출 후 영구 캐시라 사실상 $0.
+              ※ 유튜브 유닛은 매일 자정(UTC), 번역 글자는 매월 초에 0으로 리셋됩니다.
+              누적 사용량이 아니라 <strong>현재 기간</strong>의 사용량이라 한도와 직접 비교됩니다.
+              Gemini 는 새 항목당 1회만 호출 후 영구 캐시라 사실상 $0.
             </li>
           </ul>
         </div>

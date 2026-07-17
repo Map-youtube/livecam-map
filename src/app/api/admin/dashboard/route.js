@@ -97,10 +97,21 @@ export async function GET(request) {
         : visitorsDaily.reduce((s, d) => s + d.mapClicks, 0);
 
     // ── api_usage (API 사용량/비용) ──────────────────────────
+    // 무료 한도는 "기간별"로 리셋된다:
+    //   - YouTube Data: 10,000 유닛 / "하루"       → 오늘(todayStr) 사용량으로 비교
+    //   - Google 번역:  500,000 글자 / "한 달"      → 이번 달(monthStr) 사용량으로 비교
+    // 따라서 전체 누적이 아니라 해당 기간 doc 의 값을 따로 뽑아야 한다.
+    const todayStr = new Date().toISOString().slice(0, 10); // 서버 UTC 기준(usageRecorder 와 동일)
+    const monthStr = todayStr.slice(0, 7); // YYYY-MM
+
     const auSnap = await adminDb.collection("api_usage").get();
     const apiDaily = [];
-    let translateChars = 0;
+    let translateChars = 0; // 전체 누적(참고용)
     let translateCalls = 0;
+    let monthTranslateChars = 0; // 이번 달(무료 한도 500,000/월 비교용)
+    let monthTranslateCalls = 0;
+    let todayYoutubeUnits = 0; // 오늘(무료 한도 10,000/일 비교용)
+    let todayYoutubeLimit = 10000;
     for (const d of auSnap.docs) {
       const data = d.data() || {};
       if (MONTH_RE.test(d.id)) {
@@ -108,16 +119,25 @@ export async function GET(request) {
         const t = data.translate || {};
         translateChars += num(t.characters_used);
         translateCalls += num(t.calls);
+        if (d.id === monthStr) {
+          monthTranslateChars = num(t.characters_used);
+          monthTranslateCalls = num(t.calls);
+        }
         continue;
       }
       if (!DATE_RE.test(d.id)) continue;
       const yt = data.youtube || {};
       const ai = data.ai || {};
       const places = data.places || {};
+      const dayYoutubeUnits = num(yt.units_used);
+      if (d.id === todayStr) {
+        todayYoutubeUnits = dayYoutubeUnits;
+        todayYoutubeLimit = num(yt.units_limit) || 10000;
+      }
       apiDaily.push({
         date: d.id,
         cost: num(data.total_estimated_cost_usd),
-        youtubeUnits: num(yt.units_used),
+        youtubeUnits: dayYoutubeUnits,
         youtubeLimit: num(yt.units_limit) || 10000,
         aiTokens: num(ai.match_tokens_used) || num(ai.tokens_used),
         aiCost: num(ai.estimated_cost_usd),
@@ -152,8 +172,19 @@ export async function GET(request) {
         api: {
           daily: apiDaily,
           totalCost,
-          totalYoutubeUnits,
-          translate: { characters: translateChars, calls: translateCalls },
+          totalYoutubeUnits, // 전체 누적(KPI 카드용)
+          today: {
+            date: todayStr,
+            youtubeUnits: todayYoutubeUnits, // 오늘 사용 유닛(무료 한도 비교용)
+            youtubeLimit: todayYoutubeLimit || 10000,
+          },
+          translate: {
+            characters: translateChars, // 전체 누적(참고용)
+            calls: translateCalls,
+            month: monthStr,
+            monthCharacters: monthTranslateChars, // 이번 달(무료 한도 비교용)
+            monthCalls: monthTranslateCalls,
+          },
           latestDate: latestApiDate,
         },
       },
