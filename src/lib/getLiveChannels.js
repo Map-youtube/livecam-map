@@ -15,6 +15,7 @@
 //   is_active, created_at, updated_at
 // ─────────────────────────────────────────────────────────────
 
+import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { adminDb } from "@/lib/firebaseAdmin";
 
@@ -54,11 +55,17 @@ async function fetchActiveChannels() {
   }
 }
 
-export const getLiveChannels = unstable_cache(
-  fetchActiveChannels,
-  ["live-channels"],
-  {
-    revalidate: 300, // 5분
-    tags: ["live-channels"],
-  }
+// ⚠️ Firestore 읽기 폭증 방지(2026-07-16 사고 대응): unstable_cache(시간 기준 캐시)만으로는
+//    같은 채널 페이지의 generateMetadata+본문+관련채널조회에서 각각 재조회되는 걸 못 막는다
+//    (Vercel 서버리스 인스턴스별 캐시 분리 — YouTube 유닛 사고와 동일 원인). React cache() 로
+//    한 번 더 감싸 "요청(렌더) 1회당 실제 조회는 1번만" 되도록 강제한다.
+export const getLiveChannels = cache(
+  unstable_cache(
+    fetchActiveChannels,
+    ["live-channels"],
+    {
+      revalidate: 300, // 5분
+      tags: ["live-channels"],
+    }
+  )
 );

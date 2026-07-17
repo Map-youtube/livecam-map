@@ -13,6 +13,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getLiveChannels } from "@/lib/getLiveChannels";
+import { getChannelById } from "@/lib/getChannelById";
 import { getLiveChannelVideosCached } from "@/lib/getLiveChannelVideos";
 import { getRelatedChannels } from "@/lib/relatedChannels";
 import { capitalizeWords } from "@/lib/textCase";
@@ -37,16 +38,6 @@ export async function generateStaticParams() {
     console.error("[channel] generateStaticParams 실패:", error); // TODO: 배포 전 제거
     return [];
   }
-}
-
-// 활성 채널 1개 조회 (없으면 null)
-async function getChannelById(id) {
-  const channels = await getLiveChannels();
-  return (
-    (Array.isArray(channels) ? channels : []).find(
-      (c) => c && String(c.id) === String(id)
-    ) || null
-  );
 }
 
 // 분류 경로 라벨 배열 (대/중/소 중 값이 있는 것만)

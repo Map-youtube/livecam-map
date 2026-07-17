@@ -18,6 +18,7 @@ import {
   getMarkerThumb,
   citySlug,
 } from "@/lib/seoData";
+import { getPublicMarkerById } from "@/lib/getPublicMarkerById";
 import SeoPageShell from "@/components/seo/SeoPageShell";
 import Breadcrumb from "@/components/seo/Breadcrumb";
 import YouTubeEmbed from "@/components/seo/YouTubeEmbed";
@@ -41,12 +42,6 @@ export async function generateStaticParams() {
     console.error("[marker] generateStaticParams 실패:", error); // TODO: 배포 전 제거
     return [];
   }
-}
-
-// 공개 마커 1개 조회 (없으면 null)
-async function getPublicMarkerById(id) {
-  const markers = await getNormalizedPublicMarkers();
-  return markers.find((m) => m && String(m.id) === String(id)) || null;
 }
 
 // ─── SEO 메타데이터 ──────────────────────────────────────────

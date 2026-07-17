@@ -9,8 +9,16 @@
 // - 도시명 → URL 슬러그 변환/역매칭 유틸 제공.
 //
 // ⚠️ 모든 함수는 try-catch 로 감싸 실패 시 빈 배열/기본값을 반환한다(빌드/렌더가 죽지 않게).
-// ─────────────────────────────────────────────────────────────
-
+//
+// ⚠️ Firestore 읽기 폭증 방지(2026-07-16 사고 대응): getNormalizedPublicMarkers 는
+//    마커 전체(수동+자동, 수백~수천 개)를 읽는 "무거운" 함수인데, 마커/도시/국가 상세 페이지가
+//    generateMetadata + 페이지 본문 + 관련영상조회에서 각각 따로 불러 페이지 1개당 최대 3번
+//    전체 컬렉션을 재조회했다. unstable_cache(getMapMarkers 내부)는 시간 기준 캐시라
+//    "같은 페이지의 같은 렌더 안에서 중복 호출을 막는" 용도가 아니다(Vercel 서버리스에서
+//    인스턴스별로 분리돼 실제로는 재조회가 자주 발생 — YouTube 유닛 사고와 같은 원인).
+//    React 의 cache() 로 감싸 "요청(렌더) 1회당 실제 조회는 1번만" 되도록 강제한다
+//    (Next.js 공식 권장 패턴: 시간 캐시=unstable_cache/fetch, 요청 중복제거=React cache).
+import { cache } from "react";
 import { getMapMarkers } from "@/lib/getMapMarkers";
 import { getContinentByCountry } from "@/lib/continentUtils";
 
@@ -105,7 +113,8 @@ export function getCountryIntro(countryUpper, opts = {}) {
 }
 
 // 대륙 정규화: 레거시 continent="americas" 마커를 국가코드로 north/south america 재분류
-function normalizeContinent(m) {
+// (getPublicMarkerById 등 단일 문서 조회 헬퍼에서도 동일 규칙을 적용해야 해서 export 한다)
+export function normalizeContinent(m) {
   try {
     if (m && m.continent === "americas") {
       const c = getContinentByCountry(m.country);
@@ -118,7 +127,8 @@ function normalizeContinent(m) {
 }
 
 // 정규화된 공개 마커 전체 (수동 ∪ 자동. is_active/auto_disabled/is_live 필터는 각 소스가 이미 처리)
-export async function getNormalizedPublicMarkers() {
+// ⚠️ React cache() 로 감싸 "같은 렌더(요청) 안에서는 실제 조회를 1번만" 수행한다.
+async function fetchNormalizedPublicMarkers() {
   try {
     const markers = await getMapMarkers();
     return (Array.isArray(markers) ? markers : []).map(normalizeContinent);
@@ -127,6 +137,7 @@ export async function getNormalizedPublicMarkers() {
     return [];
   }
 }
+export const getNormalizedPublicMarkers = cache(fetchNormalizedPublicMarkers);
 
 // 도시명 → URL 슬러그 (소문자, 공백→하이픈, 안전문자만 유지; 한글은 그대로 둔다)
 export function citySlug(city) {
