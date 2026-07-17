@@ -58,19 +58,19 @@ async function computeByChannel() {
   return byChannel;
 }
 
-// 2시간 캐시 (라이브 영상 목록 갱신 주기 = YouTube videos.list 유닛 소모 주기)
+// 1시간 캐시 (라이브 영상 목록 갱신 주기 = YouTube videos.list 유닛 소모 주기)
 // ⚠️ YouTube 무료 할당량(10,000유닛/일) 방어가 핵심 이유:
 //   computeByChannel 은 채널 1개당 videos.list 1유닛을 쓴다(현재 방송 채널 수십 개).
 //   30분마다 재확인하면 (채널수 × 48회)/일 로 유닛이 빠르게 소진돼, 실제로 할당량이
 //   초과되면 운영(production)에서 백업 키가 없어 영상 목록이 통째로 비게 된다(사이트 영상 사라짐).
-//   방송/도시 라이브 스트림의 video_id 는 보통 수 시간~수일 동안 그대로이므로, 2시간 캐시로도
-//   충분히 신선하다. 이렇게 하면 하루 재확인 횟수가 48회→12회(4배↓)로 줄어 유닛 소모를 크게 절감한다.
+//   방송 채널은 새 라이브가 수시로 올라와 너무 길게 캐시하면 새 방송이 늦게 뜨므로, 신선도와
+//   유닛 절감의 균형점으로 1시간으로 둔다. 하루 재확인 횟수 48회→24회(2배↓)로 유닛을 절감한다.
 //   (스트림이 중간에 끊긴 영상은 클라이언트 iframe onError→report-error 로 별도 감지·숨김된다.)
 export const getLiveChannelVideosCached = unstable_cache(
   computeByChannel,
   ["live-channel-videos"],
   {
-    revalidate: 7200, // 2시간 (기존 30분 → YouTube 유닛 절감)
+    revalidate: 3600, // 1시간 (기존 30분 → YouTube 유닛 절감, 새 방송 신선도 균형)
     tags: ["live-channel-videos"],
   }
 );

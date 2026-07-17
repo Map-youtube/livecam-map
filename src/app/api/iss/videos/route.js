@@ -162,10 +162,10 @@ async function computeLiveVideos() {
   };
 }
 
-// ─── 라이브 영상 목록 (30분 캐시) ────────────────────────────
+// ─── 라이브 영상 목록 (1시간 캐시) ───────────────────────────
 // ⚠️ YouTube 무료 할당량(10,000유닛/일) 방어: ISS(NASA) 라이브 스트림의 video_id 는
 //    수개월간 거의 바뀌지 않으므로 5분마다 videos.list 를 재확인할 필요가 없다.
-//    30분 캐시로 하루 재확인 횟수를 288회→48회(약 6배↓)로 줄여 유닛 소모를 크게 절감한다.
+//    1시간 캐시로 하루 재확인 횟수를 288회→24회(약 12배↓)로 줄여 유닛 소모를 크게 절감한다.
 const getNasaLiveVideos = unstable_cache(
   async () => {
     try {
@@ -178,7 +178,7 @@ const getNasaLiveVideos = unstable_cache(
   },
   ["nasa-live-videos"], // 캐시 키
   {
-    revalidate: 1800, // 30분 (기존 5분 → YouTube 유닛 절감)
+    revalidate: 3600, // 1시간 (기존 5분 → YouTube 유닛 절감)
     tags: ["nasa-live-videos"],
   }
 );
