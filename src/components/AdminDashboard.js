@@ -107,6 +107,32 @@ function Kpi({ title, value, sub, tone = "ink", pending }) {
   );
 }
 
+// 무료 한도 대비 사용량 막대 (한도 초과 시 빨강). label · used/limit.
+function UsageBar({ label, used, limit, unit = "" }) {
+  const u = Number(used || 0);
+  const lim = Number(limit || 0);
+  const pct = lim > 0 ? Math.min(100, Math.round((u / lim) * 100)) : 0;
+  const over = lim > 0 && u > lim;
+  return (
+    <div>
+      <div className="flex items-baseline justify-between text-xs">
+        <span className="text-ink">{label}</span>
+        <span className={`font-mono tabular-nums ${over ? "text-live" : "text-ink-muted"}`}>
+          {fmtInt(u)}
+          {unit} <span className="text-ink-muted/60">/ {fmtInt(lim)}{unit}</span>
+          {over && <span className="ml-1 font-semibold text-live">초과</span>}
+        </span>
+      </div>
+      <div className="mt-1 h-2 overflow-hidden rounded bg-bg">
+        <span
+          className={`block h-full rounded ${over ? "bg-live" : "bg-brand"}`}
+          style={{ width: `${Math.max(2, pct)}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function SectionTitle({ children, desc }) {
   return (
     <div className="mb-3">
@@ -250,14 +276,22 @@ export default function AdminDashboard() {
   const monthCost = Number(a.monthCost || 0) + serverThisMonth;
   const monthNet = monthRevenue - monthCost;
 
+  // ── GCP 실측 사용량(Google 집계, 정확) ──────────────────────
+  const usage = data.usage || {};
+  const usageDaily = Array.isArray(usage.daily) ? usage.daily : [];
+  const limits = usage.limits || {};
+  const fsLimit = limits.firestore || {};
+  const usageLatest = usageDaily.length ? usageDaily[usageDaily.length - 1] : null;
+  // 최근 14일 Firestore 초과 예상비용 합계
+  const usageFsCost = usageDaily.reduce((s, d) => s + Number(d.firestoreCost || 0), 0);
+
   return (
     <div className="space-y-6">
-      {/* 데이터 신선도 안내 (정직성) */}
-      <div className="rounded-lg border border-amber-300/60 bg-amber-50 px-4 py-2.5 text-xs leading-relaxed text-amber-800">
-        <strong>데이터 안내:</strong> 아래 수치는 실제 저장된 기록입니다(최신 기준일{" "}
-        <strong>{latestDate || "없음"}</strong>). 현재 사이트 코드는 방문자·API
-        사용량의 <strong>일별 기록을 쓰지 않고 있어</strong>, 이 시점 이후로는 집계가
-        멈춰 있습니다. 계속 집계하려면 추적을 다시 켜야 합니다(다음 단계).
+      {/* 데이터 신선도 안내 */}
+      <div className="rounded-lg border border-border bg-bg/50 px-4 py-2.5 text-xs leading-relaxed text-ink-muted">
+        <strong className="text-ink">데이터 안내:</strong> 아래 <strong>실측 사용량</strong> 섹션은
+        Google Cloud 가 집계한 <strong>정확한 값</strong>(콘솔과 동일)입니다. 방문자·손익 등 그 외
+        수치는 자체 기록/수동 입력입니다. 최신 방문자 기준일 <strong>{latestDate || "없음"}</strong>.
       </div>
 
       {/* KPI 카드 */}
@@ -280,6 +314,111 @@ export default function AdminDashboard() {
           tone="brand"
           sub={`누적 ${fmtUsd(fin.totals?.adsense)} · 수동 입력`}
         />
+      </div>
+
+      {/* ── 실측 사용량 (Google Cloud Monitoring 집계, 정확) ── */}
+      <div className="rounded-xl border-2 border-brand/30 bg-surface p-4">
+        <SectionTitle desc="Google Cloud 가 집계한 실제 사용량 — 콘솔과 동일한 정확한 값. 무료 한도 대비 표시.">
+          📊 실측 사용량 (Google 집계 · 정확)
+        </SectionTitle>
+
+        {!usage.ok ? (
+          <div className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-800">
+            아직 정확한 사용량을 불러오지 못했습니다. {usage.error || ""}
+            <br />
+            서비스 계정에 <strong>Monitoring 뷰어</strong> 역할을 부여한 뒤 몇 분 기다렸다가
+            새로고침하세요.
+          </div>
+        ) : !usageLatest ? (
+          <p className="py-4 text-center text-xs text-ink-muted">사용량 데이터가 아직 없습니다.</p>
+        ) : (
+          <>
+            <p className="mb-3 text-[11px] text-ink-muted">
+              최신 집계일 <strong className="text-ink">{usageLatest.date}</strong>(UTC 기준) ·
+              오늘 값은 하루가 끝나기 전이라 계속 올라갑니다.
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <UsageBar
+                label="YouTube Data (유닛/일)"
+                used={usageLatest.youtubeUnits}
+                limit={limits.youtubeUnitsPerDay || 10000}
+              />
+              <UsageBar
+                label="Firestore 읽기/일"
+                used={usageLatest.firestoreReads}
+                limit={fsLimit.readsPerDay || 50000}
+              />
+              <UsageBar
+                label="Firestore 쓰기/일"
+                used={usageLatest.firestoreWrites}
+                limit={fsLimit.writesPerDay || 20000}
+              />
+              <UsageBar
+                label="Firestore 삭제/일"
+                used={usageLatest.firestoreDeletes}
+                limit={fsLimit.deletesPerDay || 20000}
+              />
+            </div>
+
+            {/* 최근 14일 추이 표 (읽기가 핵심 — 최근 것부터) */}
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left text-ink-muted">
+                    <th className="py-1 pr-3 font-medium">날짜(UTC)</th>
+                    <th className="py-1 pr-3 text-right font-medium">YouTube 유닛</th>
+                    <th className="py-1 pr-3 text-right font-medium">FS 읽기</th>
+                    <th className="py-1 pr-3 text-right font-medium">FS 쓰기</th>
+                    <th className="py-1 text-right font-medium">초과 예상비용</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...usageDaily].reverse().map((d) => {
+                    const ytOver = d.youtubeUnits > (limits.youtubeUnitsPerDay || 10000);
+                    const rOver = d.firestoreReads > (fsLimit.readsPerDay || 50000);
+                    return (
+                      <tr key={d.date} className="border-t border-border">
+                        <td className="py-1 pr-3 font-mono">{d.date}</td>
+                        <td
+                          className={`py-1 pr-3 text-right font-mono tabular-nums ${
+                            ytOver ? "text-live" : "text-ink"
+                          }`}
+                        >
+                          {fmtInt(d.youtubeUnits)}
+                        </td>
+                        <td
+                          className={`py-1 pr-3 text-right font-mono tabular-nums ${
+                            rOver ? "text-live" : "text-ink"
+                          }`}
+                        >
+                          {fmtInt(d.firestoreReads)}
+                        </td>
+                        <td className="py-1 pr-3 text-right font-mono tabular-nums text-ink">
+                          {fmtInt(d.firestoreWrites)}
+                        </td>
+                        <td
+                          className={`py-1 text-right font-mono tabular-nums ${
+                            d.firestoreCost > 0 ? "text-live" : "text-ink-muted"
+                          }`}
+                        >
+                          {d.firestoreCost > 0 ? fmtUsd(d.firestoreCost) : "$0.00"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <p className="mt-2 text-[11px] leading-relaxed text-ink-muted">
+                ※ 최근 {usageDaily.length}일 Firestore 초과 예상비용 합계:{" "}
+                <strong className={usageFsCost > 0 ? "text-live" : "text-ink"}>
+                  {fmtUsd(usageFsCost)}
+                </strong>{" "}
+                (공식 표준 단가 기준 추정 — 정확한 청구액은 결제 콘솔). YouTube 유닛은 무료 할당량
+                초과 시 비용이 아니라 그날 <strong>서비스 중단(403)</strong>으로 이어집니다.
+              </p>
+            </div>
+          </>
+        )}
       </div>
 
       {/* 기간 선택 */}
@@ -375,19 +514,10 @@ export default function AdminDashboard() {
           <BarChart items={apiBuckets} valueKey="cost" color="bg-live" label="비용($)" />
         </div>
         <div className="rounded-xl border border-border bg-surface p-4">
-          <SectionTitle desc="무료 한도는 기간별로 리셋 — 유튜브는 '오늘', 번역은 '이번 달' 기준">
-            API 무료 한도 현황
+          <SectionTitle desc="Monitoring 이 안 잡는 항목(번역·Gemini)만 — YouTube·Firestore 는 위 '실측 사용량' 참고">
+            그 외 무료 한도 현황
           </SectionTitle>
           <ul className="space-y-2 text-xs">
-            <li className="flex items-center justify-between">
-              <span className="text-ink">
-                YouTube Data <span className="text-ink-muted/70">(오늘 {a.today?.date || ""})</span>
-              </span>
-              <span className="font-mono tabular-nums text-ink-muted">
-                {fmtInt(a.today?.youtubeUnits)}{" "}
-                <span className="text-ink-muted/60">/ {fmtInt(a.today?.youtubeLimit || 10000)}·일</span>
-              </span>
-            </li>
             <li className="flex items-center justify-between">
               <span className="text-ink">
                 번역(Google) <span className="text-ink-muted/70">(이번 달 {a.translate?.month || ""})</span>
@@ -402,9 +532,9 @@ export default function AdminDashboard() {
               <span className="text-ink-muted">무료 티어 내(호출 캐시)</span>
             </li>
             <li className="mt-1 border-t border-border pt-2 text-[11px] text-ink-muted">
-              ※ 유튜브 유닛은 매일 자정(UTC), 번역 글자는 매월 초에 0으로 리셋됩니다.
-              누적 사용량이 아니라 <strong>현재 기간</strong>의 사용량이라 한도와 직접 비교됩니다.
-              Gemini 는 새 항목당 1회만 호출 후 영구 캐시라 사실상 $0.
+              ※ 번역 글자는 매월 초 0으로 리셋(자체 기록). Gemini 는 새 항목당 1회만 호출 후 영구
+              캐시라 사실상 $0. <strong>YouTube 유닛·Firestore 읽기/쓰기는 위 "실측 사용량"</strong>에서
+              Google 집계 정확값으로 확인하세요.
             </li>
           </ul>
         </div>

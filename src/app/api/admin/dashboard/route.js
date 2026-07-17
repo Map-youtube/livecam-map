@@ -14,6 +14,7 @@
 
 import { adminDb } from "@/lib/firebaseAdmin";
 import { verifyAdminRequest } from "@/lib/authUtils";
+import { getGcpUsage, USAGE_LIMITS } from "@/lib/gcpMonitoring";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -188,6 +189,16 @@ export async function GET(request) {
       : null;
     const latestApiDate = apiDaily.length ? apiDaily[apiDaily.length - 1].date : null;
 
+    // ── GCP Monitoring 실측 사용량(YouTube 유닛·Firestore 읽기/쓰기/삭제) ──
+    // Google 이 집계한 정확한 값. 권한 없으면 usage.ok=false 로 안내.
+    let usage = { ok: false, error: "조회 안 함", daily: [] };
+    try {
+      usage = await getGcpUsage(14);
+    } catch (usageError) {
+      console.error("[api/admin/dashboard] 사용량 조회 예외:", usageError); // TODO: 배포 전 제거
+      usage = { ok: false, error: "사용량 조회 중 오류", daily: [] };
+    }
+
     return Response.json(
       {
         ok: true,
@@ -227,6 +238,13 @@ export async function GET(request) {
           months: financeMonths,
           totals: financeTotals,
           thisMonth: thisMonthFinance,
+        },
+        // GCP 실측 사용량 + 무료 한도 상수(대시보드에서 한도 대비 표시/비용계산)
+        usage: {
+          ok: usage.ok,
+          error: usage.error || null,
+          daily: usage.daily || [],
+          limits: USAGE_LIMITS,
         },
       },
       { status: 200 }
