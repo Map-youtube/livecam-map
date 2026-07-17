@@ -71,6 +71,13 @@ export const metadata = {
   description:
     "Travel the world from home with live web cam clips. Explore real-time views of cities, beaches, and famous landmarks worldwide on an interactive map.",
   alternates: { canonical: "/" },
+  // 검색엔진 사이트 소유확인 (네이버 서치어드바이저 등)
+  // → <meta name="naver-site-verification" content="..."> 로 <head> 에 렌더된다.
+  verification: {
+    other: {
+      "naver-site-verification": "0ccedca60d1eace0b93f8111598633f41131934a",
+    },
+  },
   openGraph: {
     type: "website",
     siteName: "TripByClip",
