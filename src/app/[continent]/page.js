@@ -16,10 +16,10 @@ import { COUNTRY_NAME_BY_CODE } from "@/lib/countryList";
 import {
   VALID_CONTINENTS,
   CONTINENT_INTRO,
-  getNormalizedPublicMarkers,
   getMarkerThumb,
   groupBy,
 } from "@/lib/seoData";
+import { getContinentPublicMarkers } from "@/lib/queryPublicMarkers";
 import {
   getRegionDescriptions,
   continentDescKey,
@@ -44,10 +44,9 @@ export function generateStaticParams() {
   return VALID_CONTINENTS.map((c) => ({ continent: c }));
 }
 
-// 해당 대륙의 공개 마커
+// 해당 대륙의 공개 마커 (타겟 쿼리 — 전체 스캔 아님)
 async function getContinentMarkers(continent) {
-  const all = await getNormalizedPublicMarkers();
-  return all.filter((m) => m && m.continent === continent);
+  return getContinentPublicMarkers(continent);
 }
 
 // ─── SEO 메타데이터 ──────────────────────────────────────────

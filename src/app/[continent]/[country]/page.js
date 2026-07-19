@@ -23,6 +23,7 @@ import {
   groupBy,
   citySlug,
 } from "@/lib/seoData";
+import { getCountryPublicMarkers } from "@/lib/queryPublicMarkers";
 import {
   getRegionDescriptions,
   countryDescKey,
@@ -60,12 +61,11 @@ export async function generateStaticParams() {
   }
 }
 
-// 해당 국가의 공개 마커 (continent + country 일치)
+// 해당 국가의 공개 마커 (타겟 쿼리 — 전체 스캔 아님). continent 는 country 로 결정되는
+// 값이라 국가 쿼리 결과에 이미 일치하지만, 방어적으로 한 번 더 확인한다(작은 결과셋이라 비용 없음).
 async function getCountryMarkers(continent, countryUpper) {
-  const all = await getNormalizedPublicMarkers();
-  return all.filter(
-    (m) => m && m.continent === continent && (m.country || "") === countryUpper
-  );
+  const list = await getCountryPublicMarkers(countryUpper);
+  return list.filter((m) => m && m.continent === continent);
 }
 
 // continent/country 유효성 검증 결과 반환 (유효하지 않으면 null)

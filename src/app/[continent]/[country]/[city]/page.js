@@ -20,6 +20,7 @@ import {
   getMarkerThumb,
   citySlug,
 } from "@/lib/seoData";
+import { getCountryPublicMarkers } from "@/lib/queryPublicMarkers";
 import {
   getRegionDescriptions,
   cityDescKey,
@@ -76,16 +77,12 @@ function decodeSlug(slug) {
   }
 }
 
-// 해당 도시(슬러그)의 공개 마커
+// 해당 도시(슬러그)의 공개 마커 (타겟 쿼리 — 전체 스캔 아님. 국가로 좁힌 뒤 도시로 필터)
 async function getCityMarkers(continent, countryUpper, slug) {
   const decoded = decodeSlug(slug);
-  const all = await getNormalizedPublicMarkers();
-  return all.filter(
-    (m) =>
-      m &&
-      m.continent === continent &&
-      (m.country || "") === countryUpper &&
-      citySlug(m.city) === decoded
+  const countryMarkers = await getCountryPublicMarkers(countryUpper);
+  return countryMarkers.filter(
+    (m) => m && m.continent === continent && citySlug(m.city) === decoded
   );
 }
 
