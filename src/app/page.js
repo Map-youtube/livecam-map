@@ -8,6 +8,7 @@
 // ⚠️ 인증/로그인 로직을 넣지 않는다 (공개 화면).
 // ─────────────────────────────────────────────────────────────
 
+import { unstable_cache } from "next/cache";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { getMapMarkers } from "@/lib/getMapMarkers";
 import { getLiveChannels } from "@/lib/getLiveChannels";
@@ -51,21 +52,31 @@ function slimMarkerForClient(marker) {
 }
 
 // 태그 목록 조회 (id, name 만 사용 → 타임스탬프 직렬화 문제 없음)
-async function getPublicTags() {
-  try {
-    const snapshot = await adminDb.collection("tags").get();
-    const tags = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      name: (doc.data() && doc.data().name) || "",
-    }));
-    // 한국어 가나다순 정렬
-    tags.sort((a, b) => a.name.localeCompare(b.name, "ko"));
-    return tags;
-  } catch (error) {
-    console.error("[page] 태그 조회 실패:", error); // TODO: 배포 전 제거
-    return [];
-  }
-}
+//
+// ⚠️ Firestore 읽기 절감(2026-07-20 전체 재점검): 이 함수는 홈(/)이 렌더될 때마다 호출되는데,
+//    예전에는 캐시가 전혀 없어서 다른 데이터(getMapMarkers 등)가 캐시 히트인 "따뜻한" 렌더에서도
+//    tags 컬렉션을 매번 통째로 스캔했다(방문/크롤 렌더마다 tags 문서 수만큼 읽기). tags 는 거의
+//    안 바뀌므로 unstable_cache(10분)로 감싸 렌더마다 재조회를 막는다(관리자가 태그를 추가하면
+//    revalidateTag("tags") 로 즉시 갱신 가능하도록 태그도 부여).
+const getPublicTags = unstable_cache(
+  async () => {
+    try {
+      const snapshot = await adminDb.collection("tags").get();
+      const tags = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        name: (doc.data() && doc.data().name) || "",
+      }));
+      // 한국어 가나다순 정렬
+      tags.sort((a, b) => a.name.localeCompare(b.name, "ko"));
+      return tags;
+    } catch (error) {
+      console.error("[page] 태그 조회 실패:", error); // TODO: 배포 전 제거
+      return [];
+    }
+  },
+  ["public-tags"],
+  { revalidate: 600, tags: ["tags"] }
+);
 
 export default async function Home() {
   // 마커(캐싱)·태그·자동 라이브 채널·지역 소개글을 병렬로 조회
