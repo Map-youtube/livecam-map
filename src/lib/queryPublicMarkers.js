@@ -18,6 +18,7 @@
 import { unstable_cache } from "next/cache";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { normalizeContinent } from "@/lib/seoData";
+import { getTimedSnapshot } from "@/lib/liveSnapshot";
 
 function toPlainValue(value) {
   try {
@@ -58,9 +59,8 @@ function autoVisible(m) {
 // ⚠️ 중복제거는 "그 국가/대륙 범위 안"이 아니라 "사이트 전체" 기준이어야 한다(getMapMarkers 와
 //    동일 규칙). 범위 안에서만 제거하면, 수동 마커와 국가가 다르게 등록된(오분류 등) 자동 마커의
 //    영상이 겹칠 때 원래는 제외돼야 하는데 살아남는 사례가 실제로 발생한다(실측: US/NL/PA/GL 4개
-//    국가에서 발견). 그래서 "수동 마커 전체의 video_id 목록"만 가볍게 전역 캐시해 기준으로 쓴다.
-//    (필드 하나만 쓰지만 Firestore 는 문서 단위 과금이라 markers 컬렉션 전체 읽기와 비용은 같다.
-//     대신 5분에 한 번, 사이트 전체가 공유해서 딱 1번만 읽으므로 페이지 수와 무관하게 저렴하다.)
+//    국가에서 발견). 그래서 "수동 마커 전체의 video_id 목록"만 기준으로 쓴다.
+//    (필드 하나만 쓰지만 Firestore 는 문서 단위 과금이라 markers 컬렉션 전체 읽기와 비용은 같다.)
 async function fetchGlobalManualVideoIds() {
   const snap = await adminDb.collection("markers").select("youtube_video_id", "is_active", "auto_disabled").get();
   const ids = new Set();
@@ -71,11 +71,27 @@ async function fetchGlobalManualVideoIds() {
   });
   return [...ids]; // Set 은 캐시 직렬화가 안 되므로 배열로 반환
 }
-const getGlobalManualVideoIds = unstable_cache(
-  fetchGlobalManualVideoIds,
-  ["manual-video-ids-global"],
-  { revalidate: 300, tags: ["public-markers"] }
-);
+// ⚠️ Firestore 읽기 폭증 방지(2026-07-20 사고 후속 — 재발): 예전엔 unstable_cache 로 감쌌지만,
+//    Vercel 서버리스에서 인스턴스별로 캐시가 분리돼 지역 SEO 페이지 렌더마다 markers 전체를
+//    다시 스캔했다(getSeoNav 와 함께 읽기 초과 재발의 원인). → 방송/ISS·getSeoNav 와 동일하게
+//    Firestore 시간제 스냅샷으로 전환: 15분에 1번만 markers 를 스캔하고, 그 외 모든 렌더는
+//    스냅샷 문서 1개만 읽는다(트래픽·페이지 수와 무관하게 읽기 고정). 결과는 이전과 동일한 배열.
+function getGlobalManualVideoIds() {
+  return getTimedSnapshot({
+    docId: "manual_video_ids",
+    refreshMs: 15 * 60 * 1000, // 15분
+    compute: async () => {
+      try {
+        return await fetchGlobalManualVideoIds();
+      } catch (error) {
+        console.error("[queryPublicMarkers] 전역 video_id 스캔 실패:", error); // TODO: 배포 전 제거
+        return [];
+      }
+    },
+    // 빈 배열([])도 유효값(수동 마커의 video_id 가 하나도 없을 수 있음)이므로 배열이면 그대로 사용.
+    isEmpty: (v) => !Array.isArray(v),
+  });
+}
 
 // field(country|continent) 기준으로 수동+자동 컬렉션을 타겟 쿼리해 "공개 마커" 배열 반환.
 async function queryPublicMarkersByField(field, value, useIn = false) {
