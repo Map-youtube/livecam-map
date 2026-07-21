@@ -70,7 +70,7 @@ export const getPublicMarkers = unstable_cache(
   fetchActiveMarkers,
   ["public-markers"], // 캐시 키
   {
-    revalidate: 900, // 15분
+    revalidate: 1800, // 30분 (홈 지도 콜드 렌더 빈도↓ — 관리자 변경은 revalidateTag 로 즉시 반영)
     tags: ["public-markers"], // 태그 기반 무효화용
   }
 );

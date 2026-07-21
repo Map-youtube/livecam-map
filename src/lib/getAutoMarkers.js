@@ -64,7 +64,7 @@ export const getAutoMarkers = unstable_cache(
   fetchActiveAutoMarkers,
   ["auto-markers"],
   {
-    revalidate: 900, // 15분
+    revalidate: 1800, // 30분 (홈 지도 콜드 렌더 빈도↓ — 스캔은 revalidateTag 로 즉시 반영)
     tags: ["auto-markers"],
   }
 );
