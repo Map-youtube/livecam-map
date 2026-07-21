@@ -17,7 +17,6 @@ import { COUNTRY_NAME_BY_CODE } from "@/lib/countryList";
 import { getContinentByCountry } from "@/lib/continentUtils";
 import {
   VALID_CONTINENTS,
-  getNormalizedPublicMarkers,
   getMarkerThumb,
   getCountryIntro,
   groupBy,
@@ -40,25 +39,12 @@ export const dynamicParams = true;
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL || "https://www.tripbyclip.com";
 
-// ─── 정적 생성: 공개 마커에 존재하는 (대륙, 국가) 조합 ────────
+// ─── 정적 생성: 빌드 때 사전생성하지 않음(빈 배열) ───────────
+// ⚠️ Firestore 읽기 절감(2026-07-21): dynamicParams=true 이므로 빌드에서 국가 페이지를 미리
+//    만들지 않고(전체 스캔 회피), 첫 요청 시 on-demand ISR 로 렌더한다(그때 국가 스냅샷 1개만 읽음).
+//    결과는 24h 캐시. sitemap 에는 그대로 노출되어 색인에는 영향 없다.
 export async function generateStaticParams() {
-  try {
-    const markers = await getNormalizedPublicMarkers();
-    const seen = new Set();
-    const params = [];
-    for (const m of markers) {
-      if (!m || !m.continent || !m.country) continue;
-      const key = `${m.continent}/${m.country}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      // URL 의 국가코드는 소문자 사용 (/asia/jp)
-      params.push({ continent: m.continent, country: m.country.toLowerCase() });
-    }
-    return params;
-  } catch (error) {
-    console.error("[country] generateStaticParams 실패:", error); // TODO: 배포 전 제거
-    return [];
-  }
+  return [];
 }
 
 // 해당 국가의 공개 마커 (타겟 쿼리 — 전체 스캔 아님). continent 는 country 로 결정되는

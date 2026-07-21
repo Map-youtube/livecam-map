@@ -13,11 +13,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getContinentLabel } from "@/lib/i18n/continents";
 import { COUNTRY_NAME_BY_CODE } from "@/lib/countryList";
-import {
-  getNormalizedPublicMarkers,
-  getMarkerThumb,
-  citySlug,
-} from "@/lib/seoData";
+import { getMarkerThumb, citySlug } from "@/lib/seoData";
 import { getPublicMarkerById } from "@/lib/getPublicMarkerById";
 import SeoPageShell from "@/components/seo/SeoPageShell";
 import Breadcrumb from "@/components/seo/Breadcrumb";
@@ -31,17 +27,15 @@ export const dynamicParams = true;
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL || "https://www.tripbyclip.com";
 
-// ─── 정적 생성: 모든 공개 마커 id ───────────────────────────
+// ─── 정적 생성: 빌드 때 사전생성하지 않음(빈 배열) ───────────
+// ⚠️ Firestore 읽기 절감(2026-07-21): 마커 페이지가 수백~수천 개라, 예전엔 빌드마다
+//    getNormalizedPublicMarkers()(전체 스캔)로 모든 마커 id 를 뽑아 그 페이지를 전부 프리렌더했다
+//    → 매 배포마다 "전체 스캔 + 수백 페이지 렌더"로 Firestore 읽기가 몰렸다(실측: LOOKUP 급증).
+//    dynamicParams=true 이므로 빈 배열을 반환해 빌드에선 만들지 않고, 크롤러/방문자의 첫 요청 시
+//    on-demand ISR 로 렌더한다(그때 getPublicMarkerById=문서 1~2개 + 관련영상은 국가/대륙 스냅샷을
+//    읽어 저비용). 렌더 결과는 24h 캐시되므로 이후 방문은 DB 를 안 친다. sitemap 에는 그대로 노출된다.
 export async function generateStaticParams() {
-  try {
-    const markers = await getNormalizedPublicMarkers();
-    return markers
-      .filter((m) => m && m.id)
-      .map((m) => ({ markerId: String(m.id) }));
-  } catch (error) {
-    console.error("[marker] generateStaticParams 실패:", error); // TODO: 배포 전 제거
-    return [];
-  }
+  return [];
 }
 
 // ─── SEO 메타데이터 ──────────────────────────────────────────
