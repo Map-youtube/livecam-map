@@ -62,12 +62,15 @@ async function fetchActiveMarkers() {
   }
 }
 
-// unstable_cache 로 감싼 캐싱 버전 (5분)
+// unstable_cache 로 감싼 캐싱 버전 (15분)
+// ⚠️ 홈(지도)은 모든 마커가 필요해 전체를 읽는다(스냅샷 1문서로 못 만듦 — 마커 대량 시 1MB 초과).
+//    URL 1개라 통제되지만, 재렌더당 전체 스캔이므로 캐시를 5→15분으로 늘려 콜드 스캔 빈도를 낮춘다.
+//    관리자 마커 변경 시 revalidateTag("public-markers")로 즉시 무효화되므로 신선도는 유지된다.
 export const getPublicMarkers = unstable_cache(
   fetchActiveMarkers,
   ["public-markers"], // 캐시 키
   {
-    revalidate: 300, // 5분
+    revalidate: 900, // 15분
     tags: ["public-markers"], // 태그 기반 무효화용
   }
 );

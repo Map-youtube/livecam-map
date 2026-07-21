@@ -58,11 +58,13 @@ async function fetchActiveAutoMarkers() {
   }
 }
 
+// 홈(지도)에서 getPublicMarkers 와 함께 전체를 읽으므로 캐시를 15분으로 맞춘다(콜드 스캔 빈도↓).
+// 스캔이 revalidateTag("auto-markers")로 즉시 무효화하므로 새 자동 마커의 신선도는 유지된다.
 export const getAutoMarkers = unstable_cache(
   fetchActiveAutoMarkers,
   ["auto-markers"],
   {
-    revalidate: 300, // 5분
+    revalidate: 900, // 15분
     tags: ["auto-markers"],
   }
 );
