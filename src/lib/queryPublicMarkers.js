@@ -15,7 +15,6 @@
 //   반환 마커는 getNormalizedPublicMarkers() 와 동일한 형태(정규화·직렬화 완료).
 // ─────────────────────────────────────────────────────────────
 
-import { unstable_cache } from "next/cache";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { normalizeContinent } from "@/lib/seoData";
 import { getTimedSnapshot } from "@/lib/liveSnapshot";
@@ -93,6 +92,39 @@ function getGlobalManualVideoIds() {
   });
 }
 
+// ⚠️ 스냅샷 문서 크기 방어(1MB 한도): 이 결과는 국가/대륙별 스냅샷 문서에 통째로 저장된다.
+//    마커가 3,000개+로 늘면 한 대륙 문서가 1MB 를 넘겨 쓰기가 실패 → 매 렌더 재스캔(누수 재발)한다.
+//    SEO 목록 카드(RegionCard)·관련영상·JSON-LD·메타데이터는 아래 필드만 쓰므로, 무거운 텍스트
+//    필드(youtube_description ~500자, description{ko,en}, youtube_title 등)는 저장에서 제외한다.
+//    → 마커당 ~1KB → ~200바이트로 줄어 문서가 작게 유지된다(표시·기능 동일).
+const SNAPSHOT_OMIT_FIELDS = new Set([
+  "youtube_description",
+  "description",
+  "youtube_title",
+  "youtube_url",
+  "youtube_channel_name",
+  "youtube_channel_id",
+  "youtube_channel_url",
+  "created_at",
+  "updated_at",
+  "last_checked_at",
+  "description_confirmed",
+  "disabled_reason",
+  "ai_enriched",
+  "ai_model",
+  "ai_enriched_at",
+  "source_channel_id",
+  "source_channel_youtube_id",
+]);
+function slimForSnapshot(m) {
+  if (!m || typeof m !== "object") return m;
+  const out = {};
+  for (const key of Object.keys(m)) {
+    if (!SNAPSHOT_OMIT_FIELDS.has(key)) out[key] = m[key];
+  }
+  return out;
+}
+
 // field(country|continent) 기준으로 수동+자동 컬렉션을 타겟 쿼리해 "공개 마커" 배열 반환.
 async function queryPublicMarkersByField(field, value, useIn = false) {
   const build = (col) =>
@@ -119,32 +151,58 @@ async function queryPublicMarkersByField(field, value, useIn = false) {
     (m) => !(m.youtube_video_id && globalManualVideoIds.has(m.youtube_video_id))
   );
 
-  return [...manual, ...autoDeduped];
+  // 스냅샷 저장 전, 목록/카드가 안 쓰는 무거운 필드를 제거해 문서 크기를 작게 유지한다.
+  return [...manual, ...autoDeduped].map(slimForSnapshot);
 }
 
-// 같은 국가 공개 마커 (unstable_cache 로 국가별 공유 캐시, 5분)
+// ⚠️ Firestore 읽기 폭증 방지(2026-07-21 사고 — 진짜 baseline 원인):
+//    국가/대륙 페이지 본문(그리고 마커 상세의 '주변 라이브캠')은 렌더마다 이 함수를 부른다.
+//    예전엔 unstable_cache(5분)였는데, 자동 스캔이 revalidateTag("auto-markers"/"public-markers")로
+//    이 캐시와 SEO 페이지 ISR 을 함께 무효화 → 크롤러가 800개 페이지를 재렌더할 때마다 국가/대륙
+//    전체를 다시 QUERY 했다(GCP 실측: 밤새 2,000~4,000 읽기/시간 꾸준 + 배포 빌드 시 4만 스파이크,
+//    읽기의 91%가 QUERY). unstable_cache 는 서버리스 인스턴스별로 분리돼 크롤러 동시성 아래서
+//    중복 스캔을 못 막는다. → 방송/ISS·nav·중복제거와 동일하게 국가/대륙별 Firestore 시간제
+//    스냅샷으로 전환. 페이지 재렌더·빌드·크롤러 모두 스냅샷 문서 1개만 읽는다(15분에 1번만 스캔).
+//    ⚠️ 스냅샷은 revalidateTag 로 즉시 갱신되지 않으므로, 마커 변경은 최대 15분 뒤 SEO 목록에 반영된다
+//       (SEO 페이지는 원래 24h ISR 이라 즉시성이 필요 없음 — 허용되는 지연).
+
+// 같은 국가 공개 마커 (국가별 Firestore 시간제 스냅샷, 15분)
 export function getCountryPublicMarkers(countryUpper) {
-  return unstable_cache(
-    () => queryPublicMarkersByField("country", countryUpper),
-    ["public-markers-by-country", countryUpper],
-    { revalidate: 300, tags: ["public-markers", "auto-markers"] }
-  )();
+  const cc = String(countryUpper || "").trim().toUpperCase();
+  return getTimedSnapshot({
+    docId: `country_${cc}`,
+    refreshMs: 15 * 60 * 1000, // 15분
+    compute: async () => {
+      try {
+        return await queryPublicMarkersByField("country", cc);
+      } catch (error) {
+        console.error("[queryPublicMarkers] 국가 쿼리 실패:", cc, error); // TODO: 배포 전 제거
+        return []; // 실패 시 빈 배열 → 기본 isEmpty 가 이전 정상값을 유지(덮어쓰지 않음)
+      }
+    },
+  });
 }
 
-// 같은 대륙 공개 마커 (legacy "americas" 포함해 in 쿼리 → 정규화값으로 재확인은 호출부 책임)
+// 같은 대륙 공개 마커 (legacy "americas" 포함 in 쿼리 후 정규화 continent 로 재확인, 대륙별 스냅샷 15분)
 export function getContinentPublicMarkers(continent) {
+  const cont = String(continent || "").trim();
   const inList =
-    continent === "north_america" || continent === "south_america"
-      ? [continent, "americas"] // legacy 값도 함께 조회
-      : [continent];
-  const key = [...inList].sort().join(",");
-  return unstable_cache(
-    () => queryPublicMarkersByField("continent", inList, true),
-    ["public-markers-by-continent", key],
-    { revalidate: 300, tags: ["public-markers", "auto-markers"] }
-  )().then((list) =>
-    // "in" 쿼리로 legacy 값도 섞여 왔을 수 있으므로, 정규화된 continent 가 정확히
-    // 요청한 값과 같은 것만 남긴다(정규화는 이미 위에서 적용됨).
-    list.filter((m) => (m.continent || "").trim() === continent)
-  );
+    cont === "north_america" || cont === "south_america"
+      ? [cont, "americas"] // legacy 값도 함께 조회
+      : [cont];
+  return getTimedSnapshot({
+    docId: `continent_${cont}`,
+    refreshMs: 15 * 60 * 1000, // 15분
+    compute: async () => {
+      try {
+        const list = await queryPublicMarkersByField("continent", inList, true);
+        // "in" 쿼리로 legacy("americas") 값이 섞여 올 수 있으므로, 정규화된 continent 가
+        // 정확히 요청한 값과 같은 것만 남긴다(정규화는 queryPublicMarkersByField 안에서 적용됨).
+        return list.filter((m) => (m.continent || "").trim() === cont);
+      } catch (error) {
+        console.error("[queryPublicMarkers] 대륙 쿼리 실패:", cont, error); // TODO: 배포 전 제거
+        return [];
+      }
+    },
+  });
 }
