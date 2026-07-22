@@ -353,8 +353,9 @@ export default function AdminDashboard() {
         ) : (
           <>
             <p className="mb-3 text-[11px] text-ink-muted">
-              최신 집계일 <strong className="text-ink">{usageLatest.date}</strong>(UTC 기준) ·
-              오늘 값은 하루가 끝나기 전이라 계속 올라갑니다.
+              최신 집계일 <strong className="text-ink">{usageLatest.date}</strong>{" "}
+              (태평양시 기준 = 실제 한도 리셋, 태국 14:00 시작) · 오늘 값은 하루가 끝나기 전이라 계속
+              올라가고, Google 집계 지연으로 최근 1시간가량은 빠져 있습니다.
             </p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <UsageBar

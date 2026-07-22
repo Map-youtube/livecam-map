@@ -6,13 +6,18 @@
 //   Google 이 이미 집계해 둔 정확한 수치(콘솔에 보이는 값)를 그대로 읽어와 대시보드에 쓴다.
 //   → YouTube Data API 요청수(=유닛), Firestore 읽기/쓰기/삭제 일별 사용량.
 //
+// ⚠️ 하루 경계 = "태평양 자정"(America/Los_Angeles) 기준으로 집계한다. 이유:
+//   Firestore 무료 한도와 YouTube API 할당량은 모두 "태평양 자정"에 리셋된다(여름 PDT면
+//   07:00 UTC = 태국 14:00, 겨울 PST면 08:00 UTC = 태국 15:00). 예전엔 이 파일이 UTC 자정으로
+//   하루를 잘라, 대시보드의 "오늘 사용량"이 실제 한도 소모량과 최대 7~8시간 어긋났다(값 불일치의
+//   원인). → 시간별로 받아 태평양 날짜(Intl, DST 자동 반영)로 버킷해 실제 리셋 경계와 일치시킨다.
+//
 // 인증:
 //   기존 서비스 계정(FIREBASE_SERVICE_ACCOUNT_KEY)을 재사용한다. 새 키 발급 불필요.
 //   이 계정에 IAM 역할 "Monitoring 뷰어(roles/monitoring.viewer)"가 있어야 조회된다.
-//   (없으면 403 → { ok:false, error } 반환, 대시보드는 "권한 필요"로 안내)
 //
 // ⚠️ 서버 전용. 서비스 계정 키를 다루므로 클라이언트에서 import 금지.
-// ⚠️ 초과분 "예상 비용"은 공식 표준 단가 기준 추정치다(정확한 청구액은 결제 콘솔 기준).
+// ⚠️ Monitoring 데이터는 집계에 ~1시간 지연이 있어, "오늘"은 항상 최근 1시간가량이 빠져 보인다.
 // ─────────────────────────────────────────────────────────────
 
 import { unstable_cache } from "next/cache";
@@ -49,28 +54,35 @@ function parseServiceAccount() {
   }
 }
 
-// UTC 자정 기준으로 정렬된 조회 구간 [start, now] 생성
+// 조회 구간 [start, now] — days 개의 "태평양 날짜"를 온전히 덮도록 넉넉히 잡는다(+2일 버퍼).
 function buildInterval(days) {
   const now = new Date();
-  const todayMidnightUtc = Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    now.getUTCDate()
-  );
-  const startMs = todayMidnightUtc - (days - 1) * 86400000; // days-1 일 전 자정
-  return {
-    startISO: new Date(startMs).toISOString(),
-    endISO: now.toISOString(),
-  };
+  const startMs = now.getTime() - (days + 2) * 86400000;
+  return { startISO: new Date(startMs).toISOString(), endISO: now.toISOString() };
 }
 
-// timeSeries 를 일별 합계 { "YYYY-MM-DD": 값 } 로 조회
-async function queryDaily(projectId, token, filter, startISO, endISO) {
+// UTC ISO → 태평양(America/Los_Angeles) 날짜 "YYYY-MM-DD" (DST 자동 처리)
+const PACIFIC_FMT = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Los_Angeles",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+function pacificDate(iso) {
+  try {
+    return PACIFIC_FMT.format(new Date(iso));
+  } catch (error) {
+    return String(iso || "").slice(0, 10);
+  }
+}
+
+// timeSeries 를 "시간별"로 받아 태평양 날짜별 합계 { "YYYY-MM-DD": 값 } 로 집계
+async function queryDailyPacific(projectId, token, filter, startISO, endISO) {
   const params = new URLSearchParams();
   params.set("filter", filter);
   params.set("interval.startTime", startISO);
   params.set("interval.endTime", endISO);
-  params.set("aggregation.alignmentPeriod", "86400s"); // 하루
+  params.set("aggregation.alignmentPeriod", "3600s"); // 1시간(태평양 경계로 JS 에서 재버킷)
   params.set("aggregation.perSeriesAligner", "ALIGN_SUM");
   params.set("aggregation.crossSeriesReducer", "REDUCE_SUM"); // 리전/시리즈 합산
 
@@ -86,9 +98,9 @@ async function queryDaily(projectId, token, filter, startISO, endISO) {
   const byDay = {};
   for (const s of Array.isArray(data.timeSeries) ? data.timeSeries : []) {
     for (const p of Array.isArray(s.points) ? s.points : []) {
-      // 알림 구간의 시작일을 그 "날짜"로 본다(자정 정렬 구간).
-      const day = ((p.interval && p.interval.startTime) || "").slice(0, 10);
-      if (!day) continue;
+      const startTime = (p.interval && p.interval.startTime) || "";
+      if (!startTime) continue;
+      const day = pacificDate(startTime); // ← 태평양 날짜(실제 리셋 경계)로 귀속
       const v = Number(
         (p.value && (p.value.int64Value ?? p.value.doubleValue)) || 0
       );
@@ -130,28 +142,28 @@ async function fetchUsage(days) {
 
     const { startISO, endISO } = buildInterval(days);
     const [youtube, reads, writes, deletes] = await Promise.all([
-      queryDaily(
+      queryDailyPacific(
         projectId,
         token,
         'metric.type="serviceruntime.googleapis.com/api/request_count" resource.label.service="youtube.googleapis.com"',
         startISO,
         endISO
       ),
-      queryDaily(
+      queryDailyPacific(
         projectId,
         token,
         'metric.type="firestore.googleapis.com/document/read_count"',
         startISO,
         endISO
       ),
-      queryDaily(
+      queryDailyPacific(
         projectId,
         token,
         'metric.type="firestore.googleapis.com/document/write_count"',
         startISO,
         endISO
       ),
-      queryDaily(
+      queryDailyPacific(
         projectId,
         token,
         'metric.type="firestore.googleapis.com/document/delete_count"',
@@ -160,7 +172,7 @@ async function fetchUsage(days) {
       ),
     ]);
 
-    // 날짜 합집합 → 일별 레코드 배열(오름차순)
+    // 날짜 합집합 → 태평양 날짜 오름차순, 최근 days 개만(가장 오래된 버퍼일은 부분치라 잘라냄)
     const allDays = new Set([
       ...Object.keys(youtube),
       ...Object.keys(reads),
@@ -169,6 +181,7 @@ async function fetchUsage(days) {
     ]);
     const daily = [...allDays]
       .sort()
+      .slice(-days)
       .map((date) => {
         const yt = Math.round(youtube[date] || 0);
         const r = Math.round(reads[date] || 0);
