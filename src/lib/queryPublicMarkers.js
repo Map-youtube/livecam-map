@@ -78,7 +78,7 @@ async function fetchGlobalManualVideoIds() {
 function getGlobalManualVideoIds() {
   return getTimedSnapshot({
     docId: "manual_video_ids",
-    refreshMs: 60 * 60 * 1000, // 60분 (SEO 목록은 실시간 불필요 — 재계산 읽기 절감)
+    refreshMs: 3 * 60 * 60 * 1000, // 3시간 (SEO 목록은 실시간 불필요 — 재계산 스캔 빈도↓)
     compute: async () => {
       try {
         return await fetchGlobalManualVideoIds();
@@ -171,7 +171,7 @@ export function getCountryPublicMarkers(countryUpper) {
   const cc = String(countryUpper || "").trim().toUpperCase();
   return getTimedSnapshot({
     docId: `country_${cc}`,
-    refreshMs: 60 * 60 * 1000, // 60분 (SEO 목록은 실시간 불필요 — 재계산 읽기 절감)
+    refreshMs: 3 * 60 * 60 * 1000, // 3시간 (SEO 목록은 실시간 불필요 — 재계산 스캔 빈도↓)
     compute: async () => {
       try {
         return await queryPublicMarkersByField("country", cc);
@@ -192,7 +192,7 @@ export function getContinentPublicMarkers(continent) {
       : [cont];
   return getTimedSnapshot({
     docId: `continent_${cont}`,
-    refreshMs: 60 * 60 * 1000, // 60분 (SEO 목록은 실시간 불필요 — 재계산 읽기 절감)
+    refreshMs: 3 * 60 * 60 * 1000, // 3시간 (SEO 목록은 실시간 불필요 — 재계산 스캔 빈도↓)
     compute: async () => {
       try {
         const list = await queryPublicMarkersByField("continent", inList, true);

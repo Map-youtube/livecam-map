@@ -126,7 +126,7 @@ export default async function sitemap() {
   try {
     const stored = await getTimedSnapshot({
       docId: "sitemap_routes",
-      refreshMs: 60 * 60 * 1000, // 1시간
+      refreshMs: 6 * 60 * 60 * 1000, // 6시간 (사이트맵은 자주 안 바뀜 — 전체 스캔 빈도↓)
       compute: computeDynamicRoutes,
       isEmpty: (v) => !Array.isArray(v) || v.length === 0,
     });

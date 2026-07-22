@@ -65,7 +65,7 @@ export async function getSeoNav() {
     // 30분 시간제 스냅샷: 만료 시에만 전체 스캔, 그 외에는 문서 1개만 읽음.
     const nav = await getTimedSnapshot({
       docId: "seo_nav",
-      refreshMs: 30 * 60 * 1000, // 30분
+      refreshMs: 6 * 60 * 60 * 1000, // 6시간 (헤더 국가 카운트는 거의 안 바뀜 — 전체 스캔 빈도 대폭↓)
       compute: computeSeoNav,
       // 배열이 비었으면(마커 0개 등) 이전 정상값 유지(일시적 실패 방어)
       isEmpty: (v) => !Array.isArray(v) || v.length === 0,
