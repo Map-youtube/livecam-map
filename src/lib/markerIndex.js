@@ -33,6 +33,7 @@
 
 import { cache } from "react";
 import { adminDb } from "@/lib/firebaseAdmin";
+import { hasLocation } from "@/lib/hasLocation";
 
 const COLLECTION = "marker_index";
 const META_DOC = "meta";
@@ -68,15 +69,18 @@ function serializeMarker(id, data) {
   return out;
 }
 
-// ─── 공개 여부 판정 (기존 규칙 그대로) ────────────────────────
+// ─── 공개 여부 판정 (기존 규칙 + 장소 특정 여부) ───────────────
+// ⚠️ hasLocation: continent 가 비어있으면(AI 가 장소를 특정 못 함) 카테고리 트리에
+//    "unknown" 가지를 만들므로 공개 목록에서 제외한다(hasLocation.js 주석 참고).
 function manualVisible(m) {
-  return !!m && m.is_active !== false && m.auto_disabled !== true;
+  return !!m && m.is_active !== false && m.auto_disabled !== true && hasLocation(m);
 }
 function autoVisible(m) {
   return (
     !!m &&
     m.is_live === true &&
     m.is_active !== false &&
+    hasLocation(m) &&
     m.auto_disabled !== true &&
     typeof m.lat === "number" &&
     typeof m.lng === "number"

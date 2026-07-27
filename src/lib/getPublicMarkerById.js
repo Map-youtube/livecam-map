@@ -19,6 +19,7 @@
 
 import { adminDb } from "@/lib/firebaseAdmin";
 import { normalizeContinent } from "@/lib/seoData";
+import { hasLocation } from "@/lib/hasLocation";
 
 // Firestore Timestamp 등 직렬화 불가능한 값을 순수 값으로 변환 (getPublicMarkers.js 와 동일 로직)
 function toPlainValue(value) {
@@ -52,10 +53,14 @@ export async function getPublicMarkerById(id) {
     const manualSnap = await adminDb.collection("markers").doc(id).get();
     if (manualSnap.exists) {
       const data = manualSnap.data() || {};
-      if (data.is_active !== false && data.auto_disabled !== true) {
+      if (
+        data.is_active !== false &&
+        data.auto_disabled !== true &&
+        hasLocation(data) // continent 없으면(장소 특정 안 됨) 공개 페이지에도 노출하지 않음
+      ) {
         return normalizeContinent(serializeMarker(manualSnap.id, data));
       }
-      // 존재하지만 비공개(비활성/재생불가) → 공개 페이지에는 없는 것으로 처리
+      // 존재하지만 비공개(비활성/재생불가/장소 미특정) → 공개 페이지에는 없는 것으로 처리
       return null;
     }
 
@@ -67,6 +72,7 @@ export async function getPublicMarkerById(id) {
         data.is_live === true &&
         data.is_active !== false &&
         data.auto_disabled !== true &&
+        hasLocation(data) &&
         typeof data.lat === "number" &&
         typeof data.lng === "number";
       if (visible) {

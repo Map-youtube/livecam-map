@@ -19,6 +19,7 @@ import { adminDb } from "@/lib/firebaseAdmin";
 import { normalizeContinent } from "@/lib/seoData";
 import { getTimedSnapshot } from "@/lib/liveSnapshot";
 import { getIndexedPublicMarkers } from "@/lib/markerIndex";
+import { hasLocation } from "@/lib/hasLocation";
 
 function toPlainValue(value) {
   try {
@@ -42,14 +43,18 @@ function serializeMarker(id, data) {
   return out;
 }
 
+// ⚠️ hasLocation: continent 가 비어있으면(AI 가 장소를 특정 못 함) 카테고리 트리에
+//    "unknown" 가지를 만들므로 공개 목록에서 제외한다(hasLocation.js 주석 참고).
+//    markerIndex.js 의 동일 필터와 반드시 일치시킬 것(한쪽만 고치면 경로별로 결과가 달라짐).
 function manualVisible(m) {
-  return m && m.is_active !== false && m.auto_disabled !== true;
+  return m && m.is_active !== false && m.auto_disabled !== true && hasLocation(m);
 }
 function autoVisible(m) {
   return (
     m &&
     m.is_live === true &&
     m.is_active !== false &&
+    hasLocation(m) &&
     m.auto_disabled !== true &&
     typeof m.lat === "number" &&
     typeof m.lng === "number"

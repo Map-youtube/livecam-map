@@ -13,6 +13,7 @@
 
 import { unstable_cache } from "next/cache";
 import { adminDb } from "@/lib/firebaseAdmin";
+import { hasLocation } from "@/lib/hasLocation";
 
 // Firestore Timestamp 등 직렬화 불가능한 값을 클라이언트로 넘길 수 있게 변환한다.
 // (Timestamp → epoch millis 숫자, 그 외는 그대로)
@@ -52,10 +53,11 @@ async function fetchActiveMarkers() {
       .where("is_active", "!=", false)
       .get();
 
-    // is_active!=false 로 이미 걸렀지만, 방어적으로 auto_disabled(재생불가/방송종료)도 제외한다.
+    // is_active!=false 로 이미 걸렀지만, 방어적으로 auto_disabled(재생불가/방송종료)와
+    // continent 누락(장소 특정 안 됨 — hasLocation.js 참고)도 함께 제외한다.
     return snapshot.docs
       .map((doc) => serializeMarker(doc.id, doc.data()))
-      .filter((m) => m.auto_disabled !== true);
+      .filter((m) => m.auto_disabled !== true && hasLocation(m));
   } catch (error) {
     console.error("[getPublicMarkers] Firestore 조회 실패:", error); // TODO: 배포 전 제거
     return [];

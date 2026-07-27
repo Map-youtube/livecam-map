@@ -13,6 +13,7 @@
 
 import { unstable_cache } from "next/cache";
 import { adminDb } from "@/lib/firebaseAdmin";
+import { hasLocation } from "@/lib/hasLocation";
 
 function toPlainValue(value) {
   try {
@@ -49,6 +50,7 @@ async function fetchActiveAutoMarkers() {
         (m) =>
           m.is_active !== false &&
           m.auto_disabled !== true &&
+          hasLocation(m) && // continent 없으면(장소 특정 실패) 목록에서 제외 — hasLocation.js 참고
           typeof m.lat === "number" &&
           typeof m.lng === "number"
       );
