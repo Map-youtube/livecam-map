@@ -20,11 +20,7 @@ import {
   citySlug,
 } from "@/lib/seoData";
 import { getCountryPublicMarkers } from "@/lib/queryPublicMarkers";
-import {
-  getRegionDescriptions,
-  cityDescKey,
-  pickRegionText,
-} from "@/lib/regionDescriptions";
+import { cityDescKey, getRegionText } from "@/lib/regionDescriptions";
 import SeoPageShell from "@/components/seo/SeoPageShell";
 import Breadcrumb from "@/components/seo/Breadcrumb";
 import RegionCard from "@/components/seo/RegionCard";
@@ -90,13 +86,12 @@ export async function generateMetadata({ params }) {
     const cityName = markers[0].city || city;
     const countryLabel = COUNTRY_NAME_BY_CODE[countryUpper] || countryUpper;
     // AI 소개(있으면) → 기존 템플릿 fallback (메타 설명)
-    const descs = await getRegionDescriptions();
+    // ⚠️ 컬렉션 전체가 아니라 해당 키 문서 1개만 읽는다(읽기 절감).
     const description =
-      pickRegionText(
-        descs,
+      (await getRegionText(
         cityDescKey(continent, countryUpper, citySlug(cityName)),
         "ko"
-      ) ||
+      )) ||
       `${cityName}(${countryLabel})의 실시간 라이브캠 ${markers.length}곳. 거리·명소·해변을 지금 이 순간 생중계로 감상하세요.`;
     const ogImage = getMarkerThumb(markers[0]);
     const title = `${cityName} 실시간 라이브캠 | TripByClip`;
@@ -140,13 +135,11 @@ export default async function CityPage({ params }) {
   const cityName = markers[0].city || city;
 
   // 도시 소개: AI 소개(있으면) → 기존 템플릿 fallback
-  const descs = await getRegionDescriptions();
   const introText =
-    pickRegionText(
-      descs,
+    (await getRegionText(
       cityDescKey(continent, countryUpper, citySlug(cityName)),
       "ko"
-    ) ||
+    )) ||
     `${cityName}(${countryLabel})의 실시간 라이브캠 ${markers.length}곳입니다. 각 영상을 눌러 상세 정보와 함께 감상해 보세요.`;
 
   const jsonLd = {

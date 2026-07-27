@@ -23,11 +23,7 @@ import {
   citySlug,
 } from "@/lib/seoData";
 import { getCountryPublicMarkers } from "@/lib/queryPublicMarkers";
-import {
-  getRegionDescriptions,
-  countryDescKey,
-  pickRegionText,
-} from "@/lib/regionDescriptions";
+import { countryDescKey, getRegionText } from "@/lib/regionDescriptions";
 import SeoPageShell from "@/components/seo/SeoPageShell";
 import Breadcrumb from "@/components/seo/Breadcrumb";
 import RegionCard from "@/components/seo/RegionCard";
@@ -73,9 +69,9 @@ export async function generateMetadata({ params }) {
     const countryLabel = COUNTRY_NAME_BY_CODE[countryUpper] || countryUpper;
     const markers = await getCountryMarkers(continent, countryUpper);
     // AI 소개(있으면) → 손으로 쓴 주요국 소개 → 데이터 기반 자동 소개 순으로 fallback
-    const descs = await getRegionDescriptions();
+    // ⚠️ 컬렉션 전체가 아니라 해당 키 문서 1개만 읽는다(읽기 절감).
     const description =
-      pickRegionText(descs, countryDescKey(countryUpper), "ko") ||
+      (await getRegionText(countryDescKey(countryUpper), "ko")) ||
       getCountryIntro(countryUpper, {
         countryLabel,
         markerCount: markers.length,
@@ -124,9 +120,8 @@ export default async function CountryPage({ params }) {
     .filter((c) => c && c !== "(도시 미지정)")
     .sort((a, b) => byCity[b].length - byCity[a].length)
     .slice(0, 3);
-  const descs = await getRegionDescriptions();
   const intro =
-    pickRegionText(descs, countryDescKey(countryUpper), "ko") ||
+    (await getRegionText(countryDescKey(countryUpper), "ko")) ||
     getCountryIntro(countryUpper, {
       countryLabel,
       markerCount: markers.length,

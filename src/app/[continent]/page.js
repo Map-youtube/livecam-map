@@ -20,11 +20,7 @@ import {
   groupBy,
 } from "@/lib/seoData";
 import { getContinentPublicMarkers } from "@/lib/queryPublicMarkers";
-import {
-  getRegionDescriptions,
-  continentDescKey,
-  pickRegionText,
-} from "@/lib/regionDescriptions";
+import { continentDescKey, getRegionText } from "@/lib/regionDescriptions";
 import SeoPageShell from "@/components/seo/SeoPageShell";
 import Breadcrumb from "@/components/seo/Breadcrumb";
 import RegionCard from "@/components/seo/RegionCard";
@@ -59,9 +55,9 @@ export async function generateMetadata({ params }) {
     const label = getContinentLabel(continent, "ko");
     const markers = await getContinentMarkers(continent);
     // AI 소개(있으면) → 하드코딩 소개 → 기본 문구 순으로 fallback
-    const descs = await getRegionDescriptions();
+    // ⚠️ 컬렉션 전체(137개)가 아니라 해당 키 문서 1개만 읽는다(읽기 절감).
     const intro =
-      pickRegionText(descs, continentDescKey(continent), "ko") ||
+      (await getRegionText(continentDescKey(continent), "ko")) ||
       CONTINENT_INTRO[continent] ||
       `${label}의 실시간 라이브캠을 지도와 목록으로 만나보세요.`;
     const ogImage = markers.length ? getMarkerThumb(markers[0]) : undefined;
@@ -94,9 +90,8 @@ export default async function ContinentPage({ params }) {
 
   const label = getContinentLabel(continent, "ko");
   // AI 소개(있으면) → 하드코딩 소개 → 기본 문구 순으로 fallback
-  const descs = await getRegionDescriptions();
   const intro =
-    pickRegionText(descs, continentDescKey(continent), "ko") ||
+    (await getRegionText(continentDescKey(continent), "ko")) ||
     CONTINENT_INTRO[continent] ||
     `${label}의 실시간 라이브캠을 지도와 목록으로 만나보세요.`;
   const markers = await getContinentMarkers(continent);
