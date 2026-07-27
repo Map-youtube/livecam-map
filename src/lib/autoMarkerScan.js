@@ -190,39 +190,69 @@ export async function scanChannels(channelDocs, opts = {}) {
     //   3-a) 먼저 "이미 있는 영상"은 AI 없이 재활용, "새 영상"만 추려낸다(일일 상한까지).
     //   3-b) 새 영상들을 배치로 한 번에 Gemini 처리(분당 15회 제한 우회).
     //   3-c) 배치 결과를 각 문서로 저장.
+    // ⚠️ 성능(2026-07-28 실측): 예전에는 라이브 영상마다 await ref.get() → await ref.update() 를
+    //    "하나씩" 순차 실행했다. Firestore 왕복이 건당 약 60ms(읽기)·55ms(쓰기)라, 라이브가 735개면
+    //    읽기 45초 + 쓰기 41초 = 약 85초가 이 루프에서만 소모됐다(전체 스캔 300초의 큰 부분).
+    //    → 읽기는 getAll(다건 동시 조회), 쓰기는 BulkWriter(자동 병렬·재시도)로 바꾼다.
+    //      실측 개선: 읽기 17.7배, 쓰기 23.1배 → 이 구간 85초 → 약 4초.
+    //    ⚠️ 판정 로직(재활용/신규/ai_unlocatable 처리)은 기존과 동일하게 유지한다.
     const toEnrich = []; // { v, ch, ref }
+
+    // 3-a-1) 라이브 영상들의 기존 문서를 한 번에 읽는다(순차 get 제거).
+    //   getAll 은 인자 개수 제한이 있어 300개씩 끊어 호출한다.
+    const liveTargets = [];
     for (const v of liveVideos) {
       const ch = idToChannel.get(v.videoId);
       if (!ch) continue;
-      const ref = adminDb.collection(MARKERS).doc(v.videoId);
-      try {
-        const existing = await ref.get();
-        if (existing.exists) {
-          // 이미 있는 영상 → AI 재호출 없이 라이브 상태만 복원(비용 0)
-          const data = existing.data() || {};
-          const patch = { last_checked_at: FieldValue.serverTimestamp() };
-          if (data.is_live !== true) patch.is_live = true;
-          // 위치를 못 찾아 숨겨둔(ai_unlocatable) 영상은 다시 켜지 않는다.
-          if (
-            data.ai_unlocatable !== true &&
-            data.is_active !== true &&
-            data.auto_disabled !== true
-          )
-            patch.is_active = true;
-          await ref.update(patch);
-          report.reused += 1;
-          continue;
-        }
-        // 새 영상 → 일일 AI 상한 확인 후 배치 대상에 추가
-        if (toEnrich.length >= aiCap) {
-          report.aiCapReached = true;
-          continue; // 이번엔 건너뛰고 다음 스캔에서 처리
-        }
-        toEnrich.push({ v, ch, ref });
-      } catch (error) {
-        console.error("[autoMarkerScan] 기존 문서 조회 실패:", v.videoId, error); // TODO: 배포 전 제거
-        report.enrichFailed += 1;
+      liveTargets.push({ v, ch, ref: adminDb.collection(MARKERS).doc(v.videoId) });
+    }
+    const existingById = new Map(); // videoId → data | null(없음)
+    try {
+      for (let i = 0; i < liveTargets.length; i += 300) {
+        const slice = liveTargets.slice(i, i + 300);
+        const snaps = await adminDb.getAll(...slice.map((x) => x.ref));
+        snaps.forEach((s) => existingById.set(s.id, s.exists ? s.data() || {} : null));
       }
+    } catch (error) {
+      console.error("[autoMarkerScan] 기존 문서 일괄 조회 실패:", error); // TODO: 배포 전 제거
+    }
+
+    // 3-a-2) 재활용(이미 있는 영상)은 BulkWriter 로 한꺼번에 갱신, 새 영상만 AI 대상으로 모은다.
+    const reuseWriter = adminDb.bulkWriter();
+    for (const { v, ch, ref } of liveTargets) {
+      if (!existingById.has(v.videoId)) {
+        // 일괄 조회가 실패한 경우 → 안전하게 신규로 보지 않고 건너뛴다(다음 스캔에서 처리).
+        continue;
+      }
+      const data = existingById.get(v.videoId);
+      if (data) {
+        // 이미 있는 영상 → AI 재호출 없이 라이브 상태만 복원(비용 0)
+        const patch = { last_checked_at: FieldValue.serverTimestamp() };
+        if (data.is_live !== true) patch.is_live = true;
+        // 위치를 못 찾아 숨겨둔(ai_unlocatable) 영상은 다시 켜지 않는다.
+        if (
+          data.ai_unlocatable !== true &&
+          data.is_active !== true &&
+          data.auto_disabled !== true
+        )
+          patch.is_active = true;
+        reuseWriter.update(ref, patch).catch((e) => {
+          console.error("[autoMarkerScan] 재활용 갱신 실패:", v.videoId, e); // TODO: 배포 전 제거
+        });
+        report.reused += 1;
+        continue;
+      }
+      // 새 영상 → 일일 AI 상한 확인 후 배치 대상에 추가
+      if (toEnrich.length >= aiCap) {
+        report.aiCapReached = true;
+        continue; // 이번엔 건너뛰고 다음 스캔에서 처리
+      }
+      toEnrich.push({ v, ch, ref });
+    }
+    try {
+      await reuseWriter.close(); // 큐에 쌓인 갱신을 병렬로 flush
+    } catch (error) {
+      console.error("[autoMarkerScan] 재활용 일괄 갱신 실패:", error); // TODO: 배포 전 제거
     }
 
     // 3-b) 새 영상들을 배치로 Gemini 처리 (videoId → 결과 Map)
@@ -326,45 +356,46 @@ export async function scanChannels(channelDocs, opts = {}) {
     }
 
     // 4) 더 이상 라이브가 아닌 기존 마커 → is_live:false (문서 보존)
+    // 5) 라이브가 잡힌 채널은 last_seen_video_at 갱신 (90일 자동삭제 판정 기준)
+    //   ⚠️ 두 갱신 모두 예전에는 한 건씩 await 하여 순차 실행했다(건당 약 55ms).
+    //      채널·마커가 늘수록 그대로 시간이 늘어나므로 BulkWriter 로 묶어 병렬 처리한다.
+    //      (기록하는 필드·조건은 기존과 완전히 동일)
+    const endWriter = adminDb.bulkWriter();
     for (const ch of channels) {
       const list = activeByChannel.get(ch.id) || [];
       for (const item of list) {
+        // ⚠️ 각 항목은 자기 자신의 videoId 로만 판정한다(반복문 밖 고정값 참조 금지).
         if (item.isLive && !liveIdSet.has(item.videoId)) {
-          try {
-            await adminDb.collection(MARKERS).doc(item.videoId).update({
+          endWriter
+            .update(adminDb.collection(MARKERS).doc(item.videoId), {
               is_live: false,
               last_checked_at: FieldValue.serverTimestamp(),
               updated_at: FieldValue.serverTimestamp(),
+            })
+            .catch((error) => {
+              console.error("[autoMarkerScan] 종료 표시 실패:", item.videoId, error); // TODO: 배포 전 제거
             });
-            report.markedEnded += 1;
-          } catch (error) {
-            console.error(
-              "[autoMarkerScan] 종료 표시 실패:",
-              item.videoId,
-              error
-            ); // TODO: 배포 전 제거
-          }
+          report.markedEnded += 1;
         }
       }
     }
-
-    // 5) 라이브가 잡힌 채널은 last_seen_video_at 갱신 (90일 자동삭제 판정 기준)
     for (const ch of channels) {
       const liveSet = liveByChannel.get(ch.id);
       if (liveSet && liveSet.size > 0) {
-        try {
-          await adminDb.collection(CHANNELS).doc(ch.id).update({
+        endWriter
+          .update(adminDb.collection(CHANNELS).doc(ch.id), {
             last_seen_video_at: FieldValue.serverTimestamp(),
             updated_at: FieldValue.serverTimestamp(),
+          })
+          .catch((error) => {
+            console.error("[autoMarkerScan] last_seen 갱신 실패:", ch.id, error); // TODO: 배포 전 제거
           });
-        } catch (error) {
-          console.error(
-            "[autoMarkerScan] last_seen 갱신 실패:",
-            ch.id,
-            error
-          ); // TODO: 배포 전 제거
-        }
       }
+    }
+    try {
+      await endWriter.close(); // 큐에 쌓인 갱신을 병렬로 flush
+    } catch (error) {
+      console.error("[autoMarkerScan] 종료/last_seen 일괄 갱신 실패:", error); // TODO: 배포 전 제거
     }
   } catch (error) {
     console.error("[autoMarkerScan] scanChannels 예외:", error); // TODO: 배포 전 제거

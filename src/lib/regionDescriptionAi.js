@@ -38,7 +38,13 @@ function parseRetryDelayMs(bodyText) {
   return 0;
 }
 
-// Gemini 배치 호출(JSON, 429 시 지연 후 최대 4회 재시도). 성공 시 파싱 객체 반환.
+// Gemini 배치 호출(JSON, 일시적 오류 시 지연 후 최대 4회 재시도). 성공 시 파싱 객체 반환.
+// ⚠️ 재시도 대상(2026-07-27 장애 대응): 예전에는 429(분당 제한)만 재시도하고 5xx 는 즉시 throw 했다.
+//    Gemini 는 수요가 몰리면 503 UNAVAILABLE 을 자주 돌려주는데 이건 잠깐 뒤 재호출하면 되는
+//    일시 오류다. 즉시 포기하면 그 배치의 지역 설명이 통째로 비어 SEO 페이지 소개글이 안 채워진다.
+//    (autoMarkerAi.js 의 동일 함수와 같은 규칙으로 맞춘다 — 한쪽만 고치면 다른 쪽에서 재발한다.)
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
+
 async function callGeminiBatchJson(apiKey, systemPrompt, userPrompt, maxTokens) {
   let lastErr = null;
   for (let attempt = 1; attempt <= 4; attempt += 1) {
@@ -57,10 +63,16 @@ async function callGeminiBatchJson(apiKey, systemPrompt, userPrompt, maxTokens) 
       }),
     });
 
-    if (res.status === 429) {
+    if (RETRYABLE_STATUS.has(res.status)) {
+      // 429: 분당 제한(응답이 알려준 지연) / 5xx: 일시적 과부하(지수 백오프 2s→4s→8s)
       const t = await res.text().catch(() => "");
-      const wait = parseRetryDelayMs(t) || 13000;
-      lastErr = new Error(`429 rate limit (attempt ${attempt})`);
+      const wait =
+        res.status === 429
+          ? parseRetryDelayMs(t) || 13000
+          : Math.min(2000 * Math.pow(2, attempt - 1), 15000);
+      lastErr = new Error(
+        `Gemini 지역설명 일시 오류 status=${res.status} (attempt ${attempt}): ${t.slice(0, 120)}`
+      );
       if (attempt < 4) {
         await sleep(wait);
         continue;
