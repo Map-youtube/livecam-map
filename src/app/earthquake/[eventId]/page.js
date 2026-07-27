@@ -82,7 +82,14 @@ async function fetchEarthquake(eventId) {
   }
 }
 
-// 날짜 표기(서버에는 사용자 언어가 없으므로 한국 표기로 통일 — 다른 SEO 페이지와 동일 방침)
+// ─── 한글+영어 병기 (이 페이지만 예외 — 지진은 해외 검색량이 압도적이라
+//    영어 검색 매칭을 위해 다른 SEO 페이지(한국어 고정)와 다르게 이중 언어로 렌더한다) ──
+// 짧은 라벨/배지용: "한국어 · English" 한 줄로.
+function bi(ko, en) {
+  return en ? `${ko} · ${en}` : ko;
+}
+
+// 날짜 표기: 한국어 + 영어 두 가지 로캘로 각각 포맷해 나란히 보여준다.
 function formatKo(time) {
   if (time == null) return "";
   try {
@@ -90,6 +97,21 @@ function formatKo(time) {
       timeZone: "UTC",
       year: "numeric",
       month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch (error) {
+    return "";
+  }
+}
+function formatEn(time) {
+  if (time == null) return "";
+  try {
+    return new Date(time).toLocaleString("en-US", {
+      timeZone: "UTC",
+      year: "numeric",
+      month: "short",
       day: "2-digit",
       hour: "2-digit",
       minute: "2-digit",
@@ -126,11 +148,18 @@ export async function generateMetadata({ params }) {
     const mag = magText(eq.magnitude);
     const place = eq.place || "";
     const date = formatDateOnly(eq.time);
-    const title = `규모 ${mag} 지진 · ${place} | TripByClip`;
+    // ⚠️ 이 페이지만 한글+영어 병기(다른 SEO 페이지는 한국어 고정) — 지진은 해외 검색량이
+    //    압도적으로 커서, title/description 에 영어 키워드("Earthquake")가 없으면 "Chile
+    //    earthquake" 같은 영어 검색에 전혀 매칭되지 않는다. place 는 USGS 원문이 이미
+    //    영어라 국가/지명은 자연히 병기된다.
+    const title = `규모 ${mag} 지진 · ${place} | M${mag} Earthquake | TripByClip`;
     const description =
       `${date} ${place}에서 규모 ${mag} 지진이 발생했습니다.` +
       (eq.depthKm != null ? ` 진원 깊이 약 ${Math.round(eq.depthKm)}km.` : "") +
-      " 진앙에서 가장 가까운 실시간 라이브캠을 지도와 함께 확인하세요.";
+      " 진앙에서 가장 가까운 실시간 라이브캠을 지도와 함께 확인하세요." +
+      ` · A magnitude ${mag} earthquake struck ${place} on ${date}` +
+      (eq.depthKm != null ? ` (depth ~${Math.round(eq.depthKm)}km)` : "") +
+      ". View live webcams nearest to the epicenter.";
 
     return {
       title,
@@ -173,23 +202,26 @@ export default async function EarthquakePage({ params }) {
   const mag = magText(eq.magnitude);
   const magColor = getMagnitudeColor(eq.magnitude);
   const pager = pagerAlertStyle(eq.alert);
-  const pagerLabel = pager
-    ? {
-        eqPagerGreen: "피해 거의 없음",
-        eqPagerYellow: "국지적 피해 우려",
-        eqPagerOrange: "지역적 피해 우려",
-        eqPagerRed: "광범위한 피해 우려",
-      }[pager.key]
-    : null;
-  const timeText = formatKo(eq.time);
+  // 한글+영어 병기 (PAGER_LABELS)
+  const PAGER_LABELS = {
+    eqPagerGreen: ["피해 거의 없음", "Minimal impact"],
+    eqPagerYellow: ["국지적 피해 우려", "Local impact expected"],
+    eqPagerOrange: ["지역적 피해 우려", "Regional impact expected"],
+    eqPagerRed: ["광범위한 피해 우려", "Extensive impact expected"],
+  };
+  const pagerLabel = pager ? bi(...PAGER_LABELS[pager.key]) : null;
+  const timeKo = formatKo(eq.time);
+  const timeEn = formatEn(eq.time);
   const dateOnly = formatDateOnly(eq.time);
 
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Article",
-    headline: `규모 ${mag} 지진 · ${eq.place}`,
+    headline: `규모 ${mag} 지진 · ${eq.place} · M${mag} Earthquake`,
     datePublished: eq.time ? new Date(eq.time).toISOString() : undefined,
-    description: `${dateOnly} ${eq.place}에서 규모 ${mag} 지진이 발생했습니다.`,
+    description:
+      `${dateOnly} ${eq.place}에서 규모 ${mag} 지진이 발생했습니다. · ` +
+      `A magnitude ${mag} earthquake struck ${eq.place} on ${dateOnly}.`,
     about: {
       "@type": "Place",
       name: eq.place,
@@ -213,11 +245,11 @@ export default async function EarthquakePage({ params }) {
       <Breadcrumb
         items={[
           { label: "홈", href: "/" },
-          { label: `규모 ${mag} 지진` },
+          { label: bi(`규모 ${mag} 지진`, `M${mag} Earthquake`) },
         ]}
       />
 
-      {/* ── 제목 + 규모 배지 ── */}
+      {/* ── 제목 + 규모 배지 (한글+영어 병기) ── */}
       <div className="flex items-start gap-3">
         <span
           className="mt-1 flex-none rounded-md px-2.5 py-1.5 text-base font-bold text-white"
@@ -228,6 +260,9 @@ export default async function EarthquakePage({ params }) {
         <div className="min-w-0">
           <h1 className="font-display text-2xl font-bold text-ink">
             규모 {mag} 지진
+            <span className="ml-2 text-lg font-normal text-ink-muted">
+              M{mag} Earthquake
+            </span>
           </h1>
           <p className="mt-1 text-sm text-ink-muted">{eq.place}</p>
         </div>
@@ -238,7 +273,7 @@ export default async function EarthquakePage({ params }) {
         <div className="mt-3 flex flex-wrap gap-2">
           {eq.tsunami === 1 && (
             <span className="rounded-full bg-live-light px-2.5 py-1 text-xs font-semibold text-live">
-              🌊 쓰나미 경보 대상 지역
+              🌊 {bi("쓰나미 경보 대상 지역", "Tsunami warning area")}
             </span>
           )}
           {pagerLabel && (
@@ -246,7 +281,7 @@ export default async function EarthquakePage({ params }) {
               className="rounded-full px-2.5 py-1 text-xs font-semibold text-white"
               style={{ backgroundColor: pager.color }}
             >
-              예상 피해: {pagerLabel}
+              {bi("예상 피해", "Expected impact")}: {pagerLabel}
             </span>
           )}
         </div>
@@ -254,37 +289,46 @@ export default async function EarthquakePage({ params }) {
 
       {/* ── 지진 정보 ── */}
       <section className="mt-6">
-        <h2 className="font-display text-lg font-bold text-ink">지진 정보</h2>
+        <h2 className="font-display text-lg font-bold text-ink">
+          {bi("지진 정보", "Earthquake Information")}
+        </h2>
         <dl className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
           <div className="flex justify-between border-b border-border py-1.5">
-            <dt className="text-ink-muted">규모</dt>
+            <dt className="text-ink-muted">{bi("규모", "Magnitude")}</dt>
             <dd className="font-semibold text-ink">M {mag}</dd>
           </div>
           <div className="flex justify-between border-b border-border py-1.5">
-            <dt className="text-ink-muted">발생시각 (UTC)</dt>
-            <dd className="text-ink">{timeText || "-"}</dd>
+            <dt className="text-ink-muted">{bi("발생시각", "Time")} (UTC)</dt>
+            <dd className="text-ink">
+              {timeKo || "-"}
+              {timeEn && (
+                <span className="block text-xs text-ink-muted">{timeEn}</span>
+              )}
+            </dd>
           </div>
           <div className="flex justify-between border-b border-border py-1.5">
-            <dt className="text-ink-muted">진원 깊이</dt>
+            <dt className="text-ink-muted">{bi("진원 깊이", "Depth")}</dt>
             <dd className="text-ink">
               {eq.depthKm != null ? `${Math.round(eq.depthKm)} km` : "-"}
             </dd>
           </div>
           <div className="flex justify-between border-b border-border py-1.5">
-            <dt className="text-ink-muted">진앙 좌표</dt>
+            <dt className="text-ink-muted">{bi("진앙 좌표", "Coordinates")}</dt>
             <dd className="font-mono text-xs text-ink">
               {eq.lat.toFixed(4)}, {eq.lng.toFixed(4)}
             </dd>
           </div>
           {eq.felt != null && (
             <div className="flex justify-between border-b border-border py-1.5">
-              <dt className="text-ink-muted">체감 신고</dt>
-              <dd className="text-ink">{eq.felt.toLocaleString()}건</dd>
+              <dt className="text-ink-muted">
+                {bi("체감 신고", "Felt reports")}
+              </dt>
+              <dd className="text-ink">{eq.felt.toLocaleString()}건 / reports</dd>
             </div>
           )}
         </dl>
         <p className="mt-2 text-xs text-ink-muted">
-          출처: 미국 지질조사국(USGS)
+          {bi("출처: 미국 지질조사국(USGS)", "Source: USGS (U.S. Geological Survey)")}
           {eq.url && (
             <>
               {" · "}
@@ -294,7 +338,7 @@ export default async function EarthquakePage({ params }) {
                 rel="noopener noreferrer"
                 className="text-brand hover:underline"
               >
-                USGS 공식 페이지 ↗
+                USGS ↗
               </a>
             </>
           )}
@@ -304,7 +348,10 @@ export default async function EarthquakePage({ params }) {
       {/* ── 진앙에서 가장 가까운 라이브캠 ── */}
       <section className="mt-8">
         <h2 className="font-display text-lg font-bold text-ink">
-          진앙에서 가장 가까운 실시간 라이브캠
+          {bi(
+            "진앙에서 가장 가까운 실시간 라이브캠",
+            "Nearest Live Cams to the Epicenter"
+          )}
         </h2>
         {nearest.length === 0 ? (
           <p className="mt-2 text-sm text-ink-muted">
@@ -312,12 +359,22 @@ export default async function EarthquakePage({ params }) {
             <Link href="/" className="text-brand hover:underline">
               세계 라이브 지도 보기 →
             </Link>
+            <span className="mt-1 block text-xs">
+              No live cams are registered near this epicenter yet.{" "}
+              <Link href="/" className="text-brand hover:underline">
+                View the world live map →
+              </Link>
+            </span>
           </p>
         ) : (
           <>
             <p className="mt-1 text-sm text-ink-muted">
               진앙에서 가까운 순서로 {nearest.length}곳입니다. 각 영상을 눌러 현재
               모습을 실시간으로 확인해 보세요.
+              <span className="mt-1 block text-xs">
+                {nearest.length} nearest live cams to the epicenter, sorted by
+                distance. Click any video to watch it live.
+              </span>
             </p>
             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {nearest.map((m) => {
@@ -370,6 +427,12 @@ export default async function EarthquakePage({ params }) {
         ⚠️ 이 페이지의 지진 정보는 미국 지질조사국(USGS)이 제공하는 자동 관측 자료이며,
         분석이 진행되면서 규모·깊이 등이 수정될 수 있습니다. 재난 대응은 반드시 각국
         기상·방재 기관의 공식 발표를 따르세요.
+        <span className="mt-1 block">
+          Earthquake data on this page is automated, sourced from the USGS, and
+          may be revised as analysis continues. For disaster response, always
+          follow official announcements from your local meteorological or
+          emergency management agency.
+        </span>
       </p>
     </SeoPageShell>
   );
