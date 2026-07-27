@@ -744,25 +744,27 @@ for (const code of Object.keys(stormMessages)) {
 
 // ─── 푸터 링크 라벨 + 광고(제휴 링크) 라벨 ────────────────────
 // footerTerms/footerPrivacy/footerAffiliate: 공통 푸터의 법적 페이지 링크명
+// footerTakedown: 유튜브 채널 운영자·권리자가 어느 페이지에서든 "영상 게시 중단 요청"
+//   창구(=문의 페이지)를 바로 찾을 수 있도록 모든 페이지 하단에 노출하는 링크명
 // sponsoredLabel: 제휴 배너 위에 표기하는 "제휴 링크" 라벨(공정위 표시지침 이행)
 const legalMessages = {
-  en: { footerTerms: "Terms of Service", footerPrivacy: "Privacy Policy", footerAffiliate: "Affiliate Disclosure", footerAbout: "About", footerContact: "Contact", sponsoredLabel: "Sponsored link" },
-  ko: { footerTerms: "이용약관", footerPrivacy: "개인정보처리방침", footerAffiliate: "제휴 링크 고지", footerAbout: "소개", footerContact: "문의", sponsoredLabel: "제휴 링크" },
-  ja: { footerTerms: "利用規約", footerPrivacy: "プライバシーポリシー", footerAffiliate: "アフィリエイト表示", footerAbout: "概要", footerContact: "お問い合わせ", sponsoredLabel: "提携リンク" },
-  zh: { footerTerms: "服务条款", footerPrivacy: "隐私政策", footerAffiliate: "联盟披露", footerAbout: "关于", footerContact: "联系", sponsoredLabel: "赞助链接" },
-  es: { footerTerms: "Términos de servicio", footerPrivacy: "Política de privacidad", footerAffiliate: "Divulgación de afiliados", footerAbout: "Acerca de", footerContact: "Contacto", sponsoredLabel: "Enlace patrocinado" },
-  fr: { footerTerms: "Conditions d'utilisation", footerPrivacy: "Politique de confidentialité", footerAffiliate: "Divulgation d'affiliation", footerAbout: "À propos", footerContact: "Contact", sponsoredLabel: "Lien sponsorisé" },
-  de: { footerTerms: "Nutzungsbedingungen", footerPrivacy: "Datenschutzerklärung", footerAffiliate: "Affiliate-Hinweis", footerAbout: "Über uns", footerContact: "Kontakt", sponsoredLabel: "Gesponserter Link" },
-  it: { footerTerms: "Termini di servizio", footerPrivacy: "Informativa sulla privacy", footerAffiliate: "Informativa affiliazione", footerAbout: "Chi siamo", footerContact: "Contatti", sponsoredLabel: "Link sponsorizzato" },
-  pt: { footerTerms: "Termos de serviço", footerPrivacy: "Política de privacidade", footerAffiliate: "Divulgação de afiliados", footerAbout: "Sobre", footerContact: "Contato", sponsoredLabel: "Link patrocinado" },
-  ru: { footerTerms: "Условия использования", footerPrivacy: "Политика конфиденциальности", footerAffiliate: "Партнёрское раскрытие", footerAbout: "О сайте", footerContact: "Контакты", sponsoredLabel: "Спонсорская ссылка" },
-  hi: { footerTerms: "सेवा की शर्तें", footerPrivacy: "गोपनीयता नीति", footerAffiliate: "सहबद्ध प्रकटीकरण", footerAbout: "परिचय", footerContact: "संपर्क", sponsoredLabel: "प्रायोजित लिंक" },
-  bn: { footerTerms: "পরিষেবার শর্তাবলী", footerPrivacy: "গোপনীয়তা নীতি", footerAffiliate: "অ্যাফিলিয়েট প্রকাশ", footerAbout: "পরিচিতি", footerContact: "যোগাযোগ", sponsoredLabel: "স্পনসর করা লিঙ্ক" },
-  th: { footerTerms: "ข้อกำหนดในการให้บริการ", footerPrivacy: "นโยบายความเป็นส่วนตัว", footerAffiliate: "การเปิดเผยพันธมิตร", footerAbout: "เกี่ยวกับ", footerContact: "ติดต่อ", sponsoredLabel: "ลิงก์ผู้สนับสนุน" },
-  vi: { footerTerms: "Điều khoản dịch vụ", footerPrivacy: "Chính sách bảo mật", footerAffiliate: "Tiết lộ liên kết", footerAbout: "Giới thiệu", footerContact: "Liên hệ", sponsoredLabel: "Liên kết tài trợ" },
-  id: { footerTerms: "Ketentuan Layanan", footerPrivacy: "Kebijakan Privasi", footerAffiliate: "Pengungkapan Afiliasi", footerAbout: "Tentang", footerContact: "Kontak", sponsoredLabel: "Tautan bersponsor" },
-  ar: { footerTerms: "شروط الخدمة", footerPrivacy: "سياسة الخصوصية", footerAffiliate: "الإفصاح عن الشراكة", footerAbout: "حول", footerContact: "اتصل بنا", sponsoredLabel: "رابط برعاية" },
-  fa: { footerTerms: "شرایط خدمات", footerPrivacy: "سیاست حفظ حریم خصوصی", footerAffiliate: "افشای همکاری", footerAbout: "درباره", footerContact: "تماس", sponsoredLabel: "پیوند حمایت‌شده" },
+  en: { footerTerms: "Terms of Service", footerPrivacy: "Privacy Policy", footerAffiliate: "Affiliate Disclosure", footerAbout: "About", footerContact: "Contact", footerTakedown: "Removal request", sponsoredLabel: "Sponsored link" },
+  ko: { footerTerms: "이용약관", footerPrivacy: "개인정보처리방침", footerAffiliate: "제휴 링크 고지", footerAbout: "소개", footerContact: "문의", footerTakedown: "영상 게시 중단 요청", sponsoredLabel: "제휴 링크" },
+  ja: { footerTerms: "利用規約", footerPrivacy: "プライバシーポリシー", footerAffiliate: "アフィリエイト表示", footerAbout: "概要", footerContact: "お問い合わせ", footerTakedown: "掲載停止のご依頼", sponsoredLabel: "提携リンク" },
+  zh: { footerTerms: "服务条款", footerPrivacy: "隐私政策", footerAffiliate: "联盟披露", footerAbout: "关于", footerContact: "联系", footerTakedown: "下架请求", sponsoredLabel: "赞助链接" },
+  es: { footerTerms: "Términos de servicio", footerPrivacy: "Política de privacidad", footerAffiliate: "Divulgación de afiliados", footerAbout: "Acerca de", footerContact: "Contacto", footerTakedown: "Solicitud de retirada", sponsoredLabel: "Enlace patrocinado" },
+  fr: { footerTerms: "Conditions d'utilisation", footerPrivacy: "Politique de confidentialité", footerAffiliate: "Divulgation d'affiliation", footerAbout: "À propos", footerContact: "Contact", footerTakedown: "Demande de retrait", sponsoredLabel: "Lien sponsorisé" },
+  de: { footerTerms: "Nutzungsbedingungen", footerPrivacy: "Datenschutzerklärung", footerAffiliate: "Affiliate-Hinweis", footerAbout: "Über uns", footerContact: "Kontakt", footerTakedown: "Entfernungsantrag", sponsoredLabel: "Gesponserter Link" },
+  it: { footerTerms: "Termini di servizio", footerPrivacy: "Informativa sulla privacy", footerAffiliate: "Informativa affiliazione", footerAbout: "Chi siamo", footerContact: "Contatti", footerTakedown: "Richiesta di rimozione", sponsoredLabel: "Link sponsorizzato" },
+  pt: { footerTerms: "Termos de serviço", footerPrivacy: "Política de privacidade", footerAffiliate: "Divulgação de afiliados", footerAbout: "Sobre", footerContact: "Contato", footerTakedown: "Pedido de remoção", sponsoredLabel: "Link patrocinado" },
+  ru: { footerTerms: "Условия использования", footerPrivacy: "Политика конфиденциальности", footerAffiliate: "Партнёрское раскрытие", footerAbout: "О сайте", footerContact: "Контакты", footerTakedown: "Запрос на удаление", sponsoredLabel: "Спонсорская ссылка" },
+  hi: { footerTerms: "सेवा की शर्तें", footerPrivacy: "गोपनीयता नीति", footerAffiliate: "सहबद्ध प्रकटीकरण", footerAbout: "परिचय", footerContact: "संपर्क", footerTakedown: "हटाने का अनुरोध", sponsoredLabel: "प्रायोजित लिंक" },
+  bn: { footerTerms: "পরিষেবার শর্তাবলী", footerPrivacy: "গোপনীয়তা নীতি", footerAffiliate: "অ্যাফিলিয়েট প্রকাশ", footerAbout: "পরিচিতি", footerContact: "যোগাযোগ", footerTakedown: "অপসারণের অনুরোধ", sponsoredLabel: "স্পনসর করা লিঙ্ক" },
+  th: { footerTerms: "ข้อกำหนดในการให้บริการ", footerPrivacy: "นโยบายความเป็นส่วนตัว", footerAffiliate: "การเปิดเผยพันธมิตร", footerAbout: "เกี่ยวกับ", footerContact: "ติดต่อ", footerTakedown: "คำขอนำออก", sponsoredLabel: "ลิงก์ผู้สนับสนุน" },
+  vi: { footerTerms: "Điều khoản dịch vụ", footerPrivacy: "Chính sách bảo mật", footerAffiliate: "Tiết lộ liên kết", footerAbout: "Giới thiệu", footerContact: "Liên hệ", footerTakedown: "Yêu cầu gỡ bỏ", sponsoredLabel: "Liên kết tài trợ" },
+  id: { footerTerms: "Ketentuan Layanan", footerPrivacy: "Kebijakan Privasi", footerAffiliate: "Pengungkapan Afiliasi", footerAbout: "Tentang", footerContact: "Kontak", footerTakedown: "Permintaan penghapusan", sponsoredLabel: "Tautan bersponsor" },
+  ar: { footerTerms: "شروط الخدمة", footerPrivacy: "سياسة الخصوصية", footerAffiliate: "الإفصاح عن الشراكة", footerAbout: "حول", footerContact: "اتصل بنا", footerTakedown: "طلب الإزالة", sponsoredLabel: "رابط برعاية" },
+  fa: { footerTerms: "شرایط خدمات", footerPrivacy: "سیاست حفظ حریم خصوصی", footerAffiliate: "افشای همکاری", footerAbout: "درباره", footerContact: "تماس", footerTakedown: "درخواست حذف", sponsoredLabel: "پیوند حمایت‌شده" },
 };
 for (const code of Object.keys(legalMessages)) {
   messages[code] = { ...messages[code], ...legalMessages[code] };

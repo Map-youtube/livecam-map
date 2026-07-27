@@ -61,20 +61,50 @@ export default function TermsArticle() {
             사이트는 정보 제공 및 교육 목적으로 공개된 스트림을 지도 위에 임베드하여
             안내할 뿐이며, 영상을 직접 촬영·편집·재가공하지 않습니다.
           </p>
+          {/* ④ 서비스의 성격 명시 — 영상은 유튜브에 호스팅되고 본 서비스는 임베드 링크만 제공 */}
           <p className={`${P} mt-3`}>
-            사이트는 유튜브가 제공하는 iframe 임베드(embed) 방식으로 영상을 재생할
-            뿐이며, 영상의 저작권·소유권 및 그에 관한 모든 권리는 각 유튜브 채널
-            운영자(또는 정당한 권리자)에게 있습니다. 사이트는 해당 영상에 대한 저작권을
-            주장하지 않습니다.
+            <strong className="text-ink">서비스의 성격.</strong> 모든 영상은{" "}
+            <strong className="text-ink">유튜브(YouTube)에 호스팅</strong>되어 있으며,
+            본 서비스는 그 공개 스트림에 대한{" "}
+            <strong className="text-ink">임베드 링크와 위치 정보만 제공</strong>합니다.
+            영상 데이터는 이용자의 브라우저와 유튜브 서버 사이에서 직접 전송되며, 본
+            서비스의 서버를 거치지 않습니다. 영상의 저작권·소유권 및 그에 관한 모든
+            권리는 각 유튜브 채널 운영자(또는 정당한 권리자)에게 있고, 사이트는 해당
+            영상에 대한 저작권을 주장하지 않습니다.
+          </p>
+          <p className={`${P} mt-3`}>
+            본 서비스는 다음 원칙에 따라 운영됩니다.
           </p>
           <ul className={UL}>
+            {/* ① 공식 임베드 플레이어만 사용 — 복제·다운로드·재호스팅 없음 */}
             <li>
-              채널 운영자가 영상을 비공개로 전환하거나 삭제한 경우, 또는 임베드가
-              차단된 경우 해당 영상은 사이트 목록에서도 자동으로 제외됩니다.
+              <strong className="text-ink">공식 임베드 플레이어만 사용.</strong> 영상은
+              유튜브가 공식 제공하는 임베드 플레이어(iframe)로만 재생합니다. 사이트는
+              영상을 다운로드·복제·저장·재송출(재호스팅)하거나, 광고를 제거하는 등
+              유튜브 플레이어를 우회·변형하지 않습니다. 재생 화면에는 유튜브의 채널명·
+              로고 등 원 출처 표시가 그대로 유지됩니다.
             </li>
+            {/* ② 임베드 비활성화 영상 자동 제외 */}
             <li>
-              특정 영상에 대한 저작권 문제 제기 등 권리자의 요청이 있는 경우, 사이트
-              운영자에게 문의하시면 확인 후 조치합니다.
+              <strong className="text-ink">임베드를 원치 않는 영상은 자동 제외.</strong>{" "}
+              채널 운영자가 퍼가기(임베드)를 허용하지 않은 영상은 사이트 목록에
+              표시되지 않습니다. 영상 정보를 수집하는 단계에서 임베드 비허용 영상을
+              미리 걸러내며, 재생 중 임베드 차단이 확인된 경우에도 해당 영상을 자동으로
+              비활성화합니다. 영상이 비공개로 전환·삭제되거나 라이브가 종료된 경우에도
+              같은 방식으로 목록에서 자동 제외됩니다.
+            </li>
+            {/* ③ 명확한 신고·삭제 창구와 신속 대응 방침 */}
+            <li>
+              <strong className="text-ink">게시 중단(삭제) 요청 창구.</strong> 채널
+              운영자 또는 정당한 권리자가 자신의 영상이 본 사이트에 표시되는 것을 원하지
+              않는 경우,{" "}
+              <Link href="/contact" className="text-brand hover:underline">
+                문의하기
+              </Link>{" "}
+              페이지의 이메일로 해당 영상 링크(또는 채널 주소)와 함께 요청해 주시면
+              됩니다. 별도의 사유 설명을 요구하지 않으며, 확인 후 신속히(통상 영업일
+              기준 며칠 이내) 해당 영상 또는 채널을 목록에서 제외합니다. 저작권 침해
+              주장 등 권리 관련 이의 제기도 같은 창구로 접수합니다.
             </li>
           </ul>
         </section>
@@ -208,21 +238,53 @@ export default function TermsArticle() {
           for informational and educational purposes, and does not itself film,
           edit, or re-compile the footage.
         </p>
+        {/* ④ 서비스의 성격 명시 — 영상은 유튜브에 호스팅되고 본 서비스는 임베드 링크만 제공 */}
         <p className={`${P} mt-3`}>
-          The Site plays videos only through YouTube’s iframe embed feature. The
-          copyright, ownership, and all related rights in the videos belong to each
-          YouTube channel operator (or other rightful owner). The Site does not claim
-          any copyright over these videos.
+          <strong className="text-ink">Nature of the Service.</strong> All videos are{" "}
+          <strong className="text-ink">hosted on YouTube</strong>, and this Service
+          provides only{" "}
+          <strong className="text-ink">
+            embed links to those public streams together with location information
+          </strong>
+          . Video data is transmitted directly between your browser and YouTube&rsquo;s
+          servers and does not pass through our servers. The copyright, ownership, and
+          all related rights in the videos belong to each YouTube channel operator (or
+          other rightful owner), and the Site does not claim any copyright over them.
         </p>
+        <p className={`${P} mt-3`}>The Service operates on the following principles.</p>
         <ul className={UL}>
+          {/* ① 공식 임베드 플레이어만 사용 — 복제·다운로드·재호스팅 없음 */}
           <li>
-            If a channel operator makes a video private or deletes it, or if embedding
-            is disabled, that video is automatically removed from the Site’s listings.
+            <strong className="text-ink">Official embed player only.</strong> Videos are
+            played solely through YouTube&rsquo;s official embedded player (iframe). The
+            Site does not download, copy, store, or re-broadcast (re-host) any footage,
+            and does not bypass or modify the YouTube player, including by removing ads.
+            YouTube&rsquo;s original attribution, such as the channel name and logo,
+            remains visible in the player.
           </li>
+          {/* ② 임베드 비활성화 영상 자동 제외 */}
           <li>
-            If a rights holder raises a copyright concern about a specific video,
-            please contact the Site operator and we will review and take appropriate
-            action.
+            <strong className="text-ink">
+              Videos that disallow embedding are excluded automatically.
+            </strong>{" "}
+            Videos for which the channel operator has not allowed embedding are not shown
+            on the Site. Such videos are filtered out when video information is collected,
+            and any video found to be embed-blocked during playback is automatically
+            disabled. The same applies when a video is made private, deleted, or its live
+            stream ends — it is removed from the listings automatically.
+          </li>
+          {/* ③ 명확한 신고·삭제 창구와 신속 대응 방침 */}
+          <li>
+            <strong className="text-ink">Removal (takedown) channel.</strong> If you are
+            a channel operator or rightful owner and do not want your stream to appear on
+            this Site, please email us the video link (or channel URL) via our{" "}
+            <Link href="/contact" className="text-brand hover:underline">
+              Contact
+            </Link>{" "}
+            page. No explanation is required, and we will remove the video or channel from
+            our listings promptly after verification (typically within a few business
+            days). Copyright infringement claims and other rights-related complaints are
+            accepted through the same channel.
           </li>
         </ul>
       </section>

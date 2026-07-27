@@ -42,6 +42,14 @@ export default function Footer() {
           <span aria-hidden="true" className="text-border">
             |
           </span>
+          {/* 영상 게시 중단 요청 — 유튜브 채널 운영자·권리자가 어느 페이지에서든 창구를
+              바로 찾을 수 있도록 모든 페이지 하단에 노출한다(문의 페이지의 해당 섹션으로 이동). */}
+          <Link href="/contact" className="hover:text-brand hover:underline">
+            {t("footerTakedown")}
+          </Link>
+          <span aria-hidden="true" className="text-border">
+            |
+          </span>
           <Link href="/terms" className="hover:text-brand hover:underline">
             {t("footerTerms")}
           </Link>
