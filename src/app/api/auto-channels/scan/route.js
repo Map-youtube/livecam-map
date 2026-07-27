@@ -24,6 +24,7 @@ import { revalidateTag } from "next/cache";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { verifyAdminRequest } from "@/lib/authUtils";
 import { scanChannels, cleanupStaleChannels } from "@/lib/autoMarkerScan";
+import { syncMarkerIndex } from "@/lib/markerIndex";
 import { runRegionDescriptionFill } from "@/lib/regionDescriptionRun";
 
 export const runtime = "nodejs";
@@ -100,6 +101,16 @@ async function runScan() {
     console.error("[api/auto-channels/scan] 지역 설명 채우기 실패:", regionErr); // TODO: 배포 전 제거
   }
 
+  // 마커 청크 인덱스 동기화(스캔으로 새 마커가 대량 생겼을 수 있으므로 즉시 반영).
+  //   증분이 기본이며, 7일마다 자동으로 전체 재구축된다(markerIndex 참고).
+  //   실패해도 공개 화면은 폴백 경로로 동작하므로 스캔 결과에는 영향을 주지 않는다.
+  let markerIndexResult = null;
+  try {
+    markerIndexResult = await syncMarkerIndex();
+  } catch (indexErr) {
+    console.error("[api/auto-channels/scan] 마커 인덱스 동기화 실패:", indexErr); // TODO: 배포 전 제거
+  }
+
   // 공개 캐시 무효화
   try {
     revalidateTag("auto-markers");
@@ -114,6 +125,7 @@ async function runScan() {
     scan,
     cleanup,
     regionDescriptions,
+    markerIndex: markerIndexResult,
   };
 }
 

@@ -18,6 +18,7 @@
 import { adminDb } from "@/lib/firebaseAdmin";
 import { normalizeContinent } from "@/lib/seoData";
 import { getTimedSnapshot } from "@/lib/liveSnapshot";
+import { getIndexedPublicMarkers } from "@/lib/markerIndex";
 
 function toPlainValue(value) {
   try {
@@ -166,9 +167,38 @@ async function queryPublicMarkersByField(field, value, useIn = false) {
 //    ⚠️ 스냅샷은 revalidateTag 로 즉시 갱신되지 않으므로, 마커 변경은 최대 15분 뒤 SEO 목록에 반영된다
 //       (SEO 페이지는 원래 24h ISR 이라 즉시성이 필요 없음 — 허용되는 지연).
 
-// 같은 국가 공개 마커 (국가별 Firestore 시간제 스냅샷, 15분)
-export function getCountryPublicMarkers(countryUpper) {
+// ⚠️ Firestore 읽기 절감(2026-07-26): 국가/대륙 목록은 이제 "청크 인덱스"(marker_index)에서
+//    걸러 만든다. 인덱스는 렌더당 1회만 읽히므로(React cache), 같은 페이지 안에서 국가·대륙을
+//    여러 번 조회해도 추가 읽기가 없다. 인덱스를 못 쓰면 아래 기존 스냅샷 경로로 폴백한다.
+async function fromIndexByField(field, value) {
+  try {
+    const all = await getIndexedPublicMarkers();
+    if (!Array.isArray(all) || all.length === 0) return null;
+    // 인덱스는 원본 continent 값을 그대로 담고 있으므로, 기존 경로와 동일하게 정규화 후 비교한다.
+    const normalized = all.map((m) => normalizeContinent(m));
+    if (field === "country") {
+      return normalized.filter(
+        (m) => String((m && m.country) || "").trim().toUpperCase() === value
+      );
+    }
+    return normalized.filter(
+      (m) => String((m && m.continent) || "").trim() === value
+    );
+  } catch (error) {
+    console.error("[queryPublicMarkers] 인덱스 필터 실패 → 폴백:", error); // TODO: 배포 전 제거
+    return null;
+  }
+}
+
+// 같은 국가 공개 마커 (인덱스 우선 → 실패 시 국가별 Firestore 시간제 스냅샷)
+export async function getCountryPublicMarkers(countryUpper) {
   const cc = String(countryUpper || "").trim().toUpperCase();
+  const fromIndex = await fromIndexByField("country", cc);
+  if (fromIndex) return fromIndex;
+  return getCountryPublicMarkersSnapshot(cc);
+}
+
+function getCountryPublicMarkersSnapshot(cc) {
   return getTimedSnapshot({
     docId: `country_${cc}`,
     refreshMs: 3 * 60 * 60 * 1000, // 3시간 (SEO 목록은 실시간 불필요 — 재계산 스캔 빈도↓)
@@ -183,8 +213,15 @@ export function getCountryPublicMarkers(countryUpper) {
   });
 }
 
-// 같은 대륙 공개 마커 (legacy "americas" 포함 in 쿼리 후 정규화 continent 로 재확인, 대륙별 스냅샷 15분)
-export function getContinentPublicMarkers(continent) {
+// 같은 대륙 공개 마커 (인덱스 우선 → 실패 시 대륙별 Firestore 시간제 스냅샷)
+export async function getContinentPublicMarkers(continent) {
+  const cont = String(continent || "").trim();
+  const fromIndex = await fromIndexByField("continent", cont);
+  if (fromIndex) return fromIndex;
+  return getContinentPublicMarkersSnapshot(cont);
+}
+
+function getContinentPublicMarkersSnapshot(continent) {
   const cont = String(continent || "").trim();
   const inList =
     cont === "north_america" || cont === "south_america"

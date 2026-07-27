@@ -16,6 +16,7 @@
 
 import { getPublicMarkers } from "@/lib/getPublicMarkers";
 import { getAutoMarkers } from "@/lib/getAutoMarkers";
+import { getIndexedPublicMarkers } from "@/lib/markerIndex";
 
 // 자동 마커 병합 여부 (기본 켬. "false" 로 두면 롤백)
 function autoMarkersEnabled() {
@@ -23,6 +24,21 @@ function autoMarkersEnabled() {
 }
 
 export async function getMapMarkers() {
+  // ⚠️ Firestore 읽기 절감(2026-07-26): 우선 "청크 인덱스"(marker_index)에서 읽는다.
+  //    인덱스는 공개 여부 필터와 전역 중복제거를 이미 적용해 저장하므로 결과가 아래 기존
+  //    경로와 동일하다. 마커가 3만 개여도 읽기는 청크 수(수십 개)로 고정된다.
+  //    ⚠️ 인덱스가 없거나 조회에 실패하면 null 이 오고, 그때는 아래 기존 방식(컬렉션 스캔)으로
+  //       그대로 폴백한다 → 인덱스에 문제가 생겨도 사이트는 평소처럼 동작한다.
+  //    ⚠️ 자동 마커 롤백 스위치가 꺼져 있으면 인덱스를 쓰지 않는다(인덱스는 자동 마커 포함).
+  if (autoMarkersEnabled()) {
+    try {
+      const indexed = await getIndexedPublicMarkers();
+      if (Array.isArray(indexed) && indexed.length > 0) return indexed;
+    } catch (error) {
+      console.error("[getMapMarkers] 인덱스 조회 실패 → 기존 방식 폴백:", error); // TODO: 배포 전 제거
+    }
+  }
+
   try {
     const [manual, auto] = await Promise.all([
       getPublicMarkers().catch(() => []),
