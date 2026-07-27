@@ -116,12 +116,23 @@ export default function AutoChannelForm({ onRegistered }) {
         const name = (data.channel && data.channel.channel_name) || "채널";
         const scan = data.scan || {};
         const made = scan.newEnriched || 0;
-        const failed = scan.enrichFailed || 0;
+        const failed = scan.enrichFailed || 0; // AI 호출 자체가 실패(일시 오류 등)
+        const noLoc = scan.skippedNoLocation || 0; // AI 는 답했지만 위치를 특정 못 함
+        const reused = scan.reused || 0; // 이미 등록돼 있던 영상 재활용
+        const liveCount = scan.liveVideoCount || 0;
+        const candidates = scan.candidateIdCount || 0;
         let detail;
-        if (made > 0) {
-          detail = `현재 라이브 ${made}개를 지도에 추가했습니다.`;
+        if (made > 0 || reused > 0) {
+          detail = `현재 라이브 ${made + reused}개를 지도에 추가했습니다.`;
         } else if (failed > 0) {
-          detail = `라이브를 찾았지만 위치를 특정하지 못했습니다(${failed}개). 다음 스캔에서 재시도합니다.`;
+          // ⚠️ 대부분 Gemini 일시 오류(429 분당제한 / 503 과부하). 영상은 정상이므로 재시도하면 된다.
+          detail = `라이브 ${failed}개를 찾았지만 AI가 일시적으로 응답하지 않아 위치를 못 채웠습니다. 잠시 후 "지금 스캔"을 누르거나, 다음 자동 스캔에서 재시도됩니다.`;
+        } else if (noLoc > 0) {
+          detail = `라이브 ${noLoc}개를 찾았지만 특정 장소가 아닌 영상(여러 지역 모음 등)이라 지도에 올리지 않았습니다.`;
+        } else if (candidates > 0 && liveCount === 0) {
+          // 후보 영상은 있었는데 "현재 라이브"가 0 → 방송 종료 또는 퍼가기(임베드) 차단
+          detail =
+            "지금 재생 가능한 라이브가 없습니다. (방송 중이 아니거나, 채널이 퍼가기(임베드)를 막아둔 영상은 제외됩니다.) 방송이 시작되면 자동으로 추가됩니다.";
         } else {
           detail =
             "지금은 라이브 영상이 없습니다. 이 채널에서 방송이 시작되면 자동으로 추가됩니다.";

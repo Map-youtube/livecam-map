@@ -180,8 +180,17 @@ function normalizeAiItem(parsed, existingTags) {
   };
 }
 
-// ─── Gemini 배치 호출 (JSON, 429 시 지연 후 재시도) ───────────
-// 성공 시 파싱 객체 반환. 429 는 응답이 알려준 지연만큼 기다렸다 최대 4회까지 재시도.
+// ─── Gemini 배치 호출 (JSON, 일시적 오류는 지연 후 재시도) ─────
+// 성공 시 파싱 객체 반환.
+//
+// ⚠️ 재시도 대상(2026-07-27 장애 대응): 예전에는 429(분당 제한)만 재시도하고 그 외 HTTP 오류는
+//    즉시 throw 했다. 그런데 Gemini 는 수요가 몰리면 503 UNAVAILABLE
+//    ("This model is currently experiencing high demand...")을 자주 돌려주는데, 이건 잠깐 뒤
+//    다시 부르면 되는 "일시적" 오류다. 즉시 포기하면 그 배치의 영상 전부가 enrichFailed 가 되어
+//    "라이브를 찾았지만 위치를 특정하지 못했습니다"로 표시되고 마커가 하나도 안 생긴다
+//    (실제로 채널 등록이 안 되는 것처럼 보인 원인). → 429 와 5xx 를 모두 재시도한다.
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
+
 async function callGeminiBatchJson(apiKey, systemPrompt, userPrompt, maxTokens) {
   let lastErr = null;
   for (let attempt = 1; attempt <= 4; attempt += 1) {
@@ -200,11 +209,16 @@ async function callGeminiBatchJson(apiKey, systemPrompt, userPrompt, maxTokens) 
       }),
     });
 
-    if (res.status === 429) {
-      // 분당 제한 → 응답이 알려준 시간만큼 대기 후 재시도
+    if (RETRYABLE_STATUS.has(res.status)) {
+      // 429: 분당 제한(응답이 알려준 지연만큼 대기) / 5xx: 일시적 과부하(지수 백오프)
       const t = await res.text().catch(() => "");
-      const wait = parseRetryDelayMs(t) || 13000;
-      lastErr = new Error(`429 rate limit (attempt ${attempt})`);
+      const wait =
+        res.status === 429
+          ? parseRetryDelayMs(t) || 13000
+          : Math.min(2000 * Math.pow(2, attempt - 1), 15000); // 2s → 4s → 8s
+      lastErr = new Error(
+        `Gemini 일시 오류 status=${res.status} (attempt ${attempt}): ${t.slice(0, 120)}`
+      );
       if (attempt < 4) {
         await sleep(wait);
         continue;

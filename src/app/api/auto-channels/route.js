@@ -20,6 +20,11 @@ import { scanChannels } from "@/lib/autoMarkerScan";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// ⚠️ 등록 직후 그 채널을 즉시 스캔한다(스크래핑 + videos.list + Gemini 배치).
+//    Gemini 배치는 영상 8개 기준 15초 이상 걸리고, 일시 오류(429/503) 시 재시도 대기까지 붙는다.
+//    이 값이 없으면 플랫폼 기본 제한에 걸려 스캔 도중 함수가 끊기고 마커가 안 만들어질 수 있다
+//    (스캔 라우트가 maxDuration=300 을 두는 것과 같은 이유).
+export const maxDuration = 60;
 
 const COLLECTION = "auto_channels";
 
