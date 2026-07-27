@@ -79,6 +79,33 @@ async function computeDynamicRoutes() {
     console.error("[sitemap] 마커 경로 계산 실패:", error); // TODO: 배포 전 제거
   }
 
+  // 지진 상세 경로 (/earthquake/[id]) — 요구사항 6: 큰 지진은 검색량이 폭증하므로
+  //   검색엔진이 우리 지진 페이지를 발견할 수 있게 사이트맵에 넣는다.
+  //   USGS "significant"(주요 지진) 월간 피드만 사용한다 — 규모 4.5+ 전체(하루 20~30건)를
+  //   넣으면 얇은 페이지가 대량 생성돼 SEO 에 오히려 해롭기 때문에, 뉴스가 될 만한 건만.
+  try {
+    const res = await fetch(
+      "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_month.geojson",
+      { next: { revalidate: 3600 } }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      const features = Array.isArray(data.features) ? data.features : [];
+      for (const f of features) {
+        if (!f || !f.id) continue;
+        const p = f.properties || {};
+        routes.push({
+          path: `/earthquake/${f.id}`,
+          lastModifiedMs: typeof p.time === "number" ? p.time : null,
+          changeFrequency: "daily",
+          priority: 0.6,
+        });
+      }
+    }
+  } catch (error) {
+    console.error("[sitemap] 지진 경로 계산 실패:", error); // TODO: 배포 전 제거
+  }
+
   // 라이브 채널 상세 경로 (/channel/[id])
   try {
     const channels = await getLiveChannels();

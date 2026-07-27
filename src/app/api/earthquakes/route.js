@@ -52,6 +52,15 @@ export async function GET() {
           time: typeof p.time === "number" ? p.time : null,
           lat,
           lng,
+          // ─── 알림 팝업(EarthquakeAlert)에서 쓰는 추가 정보 ───────────
+          //   tsunami : 1 이면 쓰나미 경보 발령 대상 지역(USGS 표기)
+          //   alert   : USGS PAGER 예상 피해 등급 (green|yellow|orange|red, 없을 수 있음)
+          //   felt    : 체감 신고 건수 (없으면 null)
+          //   url     : USGS 공식 상세 페이지 (원문 확인용 출처 링크)
+          tsunami: p.tsunami === 1 || p.tsunami === true ? 1 : 0,
+          alert: typeof p.alert === "string" ? p.alert : null,
+          felt: typeof p.felt === "number" ? p.felt : null,
+          url: typeof p.url === "string" ? p.url : "",
         });
       } catch (innerError) {
         // 개별 항목 파싱 실패는 건너뛴다

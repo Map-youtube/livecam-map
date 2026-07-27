@@ -26,6 +26,7 @@ import KlookWidget from "@/components/KlookWidget";
 import CjBanner from "@/components/CjBanner";
 import Footer from "@/components/Footer";
 import MobileDrawer from "@/components/MobileDrawer";
+import EarthquakeAlert from "@/components/EarthquakeAlert";
 import LanguageSelector from "@/components/i18n/LanguageSelector";
 import { useI18n } from "@/components/i18n/LanguageProvider";
 import { useAutoTranslate } from "@/components/i18n/useAutoTranslate";
@@ -324,6 +325,23 @@ export default function MainMapView({
     },
     [expandedMarkerId]
   );
+
+  // ─── 지진 알림: "지도에서 보기" (요구사항 4) ──────────────────
+  // 해당 지진 위치로 이동하고, 지진 원이 보이도록 지진 레이어도 함께 켠다.
+  //   ⚠️ 알림에서 넘어온 그 지진 "자신"의 좌표로만 이동한다.
+  const handleFocusEarthquake = useCallback((pos) => {
+    try {
+      if (!pos || typeof pos.lat !== "number" || typeof pos.lng !== "number") {
+        return;
+      }
+      setEqEnabled(true); // 꺼져 있어도 켜서 지진 원/라벨이 보이게
+      if (mapRef.current) {
+        mapRef.current.flyToLocation({ lat: pos.lat, lng: pos.lng, zoom: 5 });
+      }
+    } catch (error) {
+      console.error("[MainMapView] 지진 위치 이동 실패:", error); // TODO: 배포 전 제거
+    }
+  }, []);
 
   // ─── ISS 위치 갱신 수신 (MapView → 2초마다) ──────────────────
   const handleIssPosition = useCallback((d) => {
@@ -1067,6 +1085,17 @@ export default function MainMapView({
           </AdSlot>
         </div>
       )}
+
+      {/* 지진 발생 알림 팝업 (요구사항 1: 🌍 지진 토글 상태와 무관하게 항상 동작)
+          position:fixed 이라 DOM 위치와 무관하게 화면 위에 뜬다. */}
+      <EarthquakeAlert
+        markers={markerList}
+        onFocusEarthquake={handleFocusEarthquake}
+        /* 지도 위 마커를 클릭한 것과 똑같이 동작시킨다(패널 열기 + 그 영상 재생 + 위치 이동).
+           검증된 기존 흐름을 그대로 재사용해 동작 차이가 생기지 않게 한다. */
+        onSelectMarker={handleMarkerClick}
+        tr={tr}
+      />
 
       {/* 공통 푸터 (h-screen 안에 포함 → 메인에서 스크롤 없이 보이고 지도 영역이 그만큼 줄어듦) */}
       <Footer />

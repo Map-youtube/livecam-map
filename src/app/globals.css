@@ -226,6 +226,35 @@ button:disabled,
 }
 
 /* ─────────────────────────────────────────────────────────────
+   지진 알림 팝업 테두리 — 빨간 경고등처럼 깜빡이는 발광
+   영상 카드(.card-playing)와 같은 방식(box-shadow)이라 레이아웃 시프트가 없고,
+   경고 성격에 맞게 더 굵고 강하게(2.5px + 넓은 확산) 표현한다.
+   ───────────────────────────────────────────────────────────── */
+.eq-alert-blink {
+  animation: eq-alert-glow 1.2s ease-in-out infinite;
+}
+@keyframes eq-alert-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2.5px var(--color-live),
+      0 0 22px 5px rgba(225, 72, 60, 0.75);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2.5px rgba(225, 72, 60, 0.55),
+      0 0 6px 0px rgba(225, 72, 60, 0.2);
+  }
+}
+/* 모션 최소화를 원하는 사용자에게는 깜빡임 없이 "빨간 테두리"만 남긴다(경고는 유지) */
+@media (prefers-reduced-motion: reduce) {
+  .eq-alert-blink {
+    animation: none;
+    box-shadow: 0 0 0 2.5px var(--color-live);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
    지도 마커 상태 표시 (LeafletMap divIcon)
    - 기본: 파란 핀(현재 형식 유지)
    - .lm-red  : 재생 중인 마커 → 빨간 핀 (핀 이미지를 빨강으로 색상 변환)

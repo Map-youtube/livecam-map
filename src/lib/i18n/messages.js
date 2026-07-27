@@ -769,3 +769,36 @@ const legalMessages = {
 for (const code of Object.keys(legalMessages)) {
   messages[code] = { ...messages[code], ...legalMessages[code] };
 }
+
+// ─── 지진 알림 팝업(EarthquakeAlert) 라벨 ─────────────────────
+// eqAlertTitle : 팝업 제목("지진 발생")
+// eqNearbyCams : 지진 위치에서 가까운 라이브캠 목록 제목
+// eqViewOnMap  : 지도에서 그 지진 위치로 이동하는 버튼
+// eqDetails    : 지진 상세 페이지(/earthquake/[id])로 가는 링크
+// eqTsunami    : 쓰나미 경보 배지 (USGS tsunami 플래그)
+// eqNoNearby   : 반경 안에 등록된 라이브캠이 없을 때 안내
+// eqShare      : 공유 버튼
+// eqPager*     : USGS PAGER 예상 피해 등급(green/yellow/orange/red)
+// (규모/깊이/발생일 라벨은 기존 magnitude/depth/dateOccurred 키를 재사용한다)
+const eqAlertMessages = {
+  en: { eqAlertTitle: "Earthquake", eqNearbyCams: "Nearest live cams", eqViewOnMap: "View on map", eqDetails: "Details", eqTsunami: "Tsunami warning", eqNoNearby: "No live cams registered nearby.", eqShare: "Share", eqPagerGreen: "Minimal impact", eqPagerYellow: "Local impact", eqPagerOrange: "Regional impact", eqPagerRed: "Extensive impact" },
+  ko: { eqAlertTitle: "지진 발생", eqNearbyCams: "가장 가까운 라이브캠", eqViewOnMap: "지도에서 보기", eqDetails: "자세히 보기", eqTsunami: "쓰나미 경보", eqNoNearby: "근처에 등록된 라이브캠이 없습니다.", eqShare: "공유", eqPagerGreen: "피해 거의 없음", eqPagerYellow: "국지적 피해 우려", eqPagerOrange: "지역적 피해 우려", eqPagerRed: "광범위한 피해 우려" },
+  ja: { eqAlertTitle: "地震発生", eqNearbyCams: "最も近いライブカメラ", eqViewOnMap: "地図で見る", eqDetails: "詳細を見る", eqTsunami: "津波警報", eqNoNearby: "近くに登録されたライブカメラはありません。", eqShare: "共有", eqPagerGreen: "被害はほぼなし", eqPagerYellow: "局地的な被害の恐れ", eqPagerOrange: "地域的な被害の恐れ", eqPagerRed: "広範囲な被害の恐れ" },
+  zh: { eqAlertTitle: "发生地震", eqNearbyCams: "最近的实时摄像头", eqViewOnMap: "在地图上查看", eqDetails: "查看详情", eqTsunami: "海啸警报", eqNoNearby: "附近没有已登记的实时摄像头。", eqShare: "分享", eqPagerGreen: "影响极小", eqPagerYellow: "局部影响", eqPagerOrange: "区域性影响", eqPagerRed: "大范围影响" },
+  es: { eqAlertTitle: "Terremoto", eqNearbyCams: "Cámaras en vivo más cercanas", eqViewOnMap: "Ver en el mapa", eqDetails: "Ver detalles", eqTsunami: "Alerta de tsunami", eqNoNearby: "No hay cámaras en vivo registradas cerca.", eqShare: "Compartir", eqPagerGreen: "Impacto mínimo", eqPagerYellow: "Impacto local", eqPagerOrange: "Impacto regional", eqPagerRed: "Impacto extenso" },
+  fr: { eqAlertTitle: "Séisme", eqNearbyCams: "Webcams les plus proches", eqViewOnMap: "Voir sur la carte", eqDetails: "Détails", eqTsunami: "Alerte au tsunami", eqNoNearby: "Aucune webcam enregistrée à proximité.", eqShare: "Partager", eqPagerGreen: "Impact minime", eqPagerYellow: "Impact local", eqPagerOrange: "Impact régional", eqPagerRed: "Impact étendu" },
+  de: { eqAlertTitle: "Erdbeben", eqNearbyCams: "Nächstgelegene Live-Cams", eqViewOnMap: "Auf der Karte ansehen", eqDetails: "Details", eqTsunami: "Tsunami-Warnung", eqNoNearby: "Keine Live-Cams in der Nähe registriert.", eqShare: "Teilen", eqPagerGreen: "Minimale Auswirkungen", eqPagerYellow: "Lokale Auswirkungen", eqPagerOrange: "Regionale Auswirkungen", eqPagerRed: "Weitreichende Auswirkungen" },
+  it: { eqAlertTitle: "Terremoto", eqNearbyCams: "Webcam più vicine", eqViewOnMap: "Vedi sulla mappa", eqDetails: "Dettagli", eqTsunami: "Allerta tsunami", eqNoNearby: "Nessuna webcam registrata nelle vicinanze.", eqShare: "Condividi", eqPagerGreen: "Impatto minimo", eqPagerYellow: "Impatto locale", eqPagerOrange: "Impatto regionale", eqPagerRed: "Impatto esteso" },
+  pt: { eqAlertTitle: "Terremoto", eqNearbyCams: "Câmeras ao vivo mais próximas", eqViewOnMap: "Ver no mapa", eqDetails: "Detalhes", eqTsunami: "Alerta de tsunami", eqNoNearby: "Nenhuma câmera ao vivo registrada por perto.", eqShare: "Compartilhar", eqPagerGreen: "Impacto mínimo", eqPagerYellow: "Impacto local", eqPagerOrange: "Impacto regional", eqPagerRed: "Impacto extenso" },
+  ru: { eqAlertTitle: "Землетрясение", eqNearbyCams: "Ближайшие веб-камеры", eqViewOnMap: "Показать на карте", eqDetails: "Подробнее", eqTsunami: "Предупреждение о цунами", eqNoNearby: "Поблизости нет зарегистрированных веб-камер.", eqShare: "Поделиться", eqPagerGreen: "Минимальный ущерб", eqPagerYellow: "Локальный ущерб", eqPagerOrange: "Региональный ущерб", eqPagerRed: "Обширный ущерб" },
+  hi: { eqAlertTitle: "भूकंप", eqNearbyCams: "निकटतम लाइव कैमरे", eqViewOnMap: "मानचित्र पर देखें", eqDetails: "विवरण", eqTsunami: "सुनामी चेतावनी", eqNoNearby: "आस-पास कोई लाइव कैमरा पंजीकृत नहीं है।", eqShare: "साझा करें", eqPagerGreen: "न्यूनतम प्रभाव", eqPagerYellow: "स्थानीय प्रभाव", eqPagerOrange: "क्षेत्रीय प्रभाव", eqPagerRed: "व्यापक प्रभाव" },
+  bn: { eqAlertTitle: "ভূমিকম্প", eqNearbyCams: "নিকটতম লাইভ ক্যামেরা", eqViewOnMap: "মানচিত্রে দেখুন", eqDetails: "বিস্তারিত", eqTsunami: "সুনামি সতর্কতা", eqNoNearby: "কাছাকাছি কোনো লাইভ ক্যামেরা নিবন্ধিত নেই।", eqShare: "শেয়ার", eqPagerGreen: "সামান্য প্রভাব", eqPagerYellow: "স্থানীয় প্রভাব", eqPagerOrange: "আঞ্চলিক প্রভাব", eqPagerRed: "ব্যাপক প্রভাব" },
+  th: { eqAlertTitle: "เกิดแผ่นดินไหว", eqNearbyCams: "กล้องถ่ายทอดสดที่ใกล้ที่สุด", eqViewOnMap: "ดูบนแผนที่", eqDetails: "ดูรายละเอียด", eqTsunami: "คำเตือนสึนามิ", eqNoNearby: "ไม่มีกล้องถ่ายทอดสดที่ลงทะเบียนอยู่ใกล้เคียง", eqShare: "แชร์", eqPagerGreen: "ผลกระทบน้อยมาก", eqPagerYellow: "ผลกระทบเฉพาะพื้นที่", eqPagerOrange: "ผลกระทบระดับภูมิภาค", eqPagerRed: "ผลกระทบเป็นวงกว้าง" },
+  vi: { eqAlertTitle: "Động đất", eqNearbyCams: "Camera trực tiếp gần nhất", eqViewOnMap: "Xem trên bản đồ", eqDetails: "Chi tiết", eqTsunami: "Cảnh báo sóng thần", eqNoNearby: "Không có camera trực tiếp nào được đăng ký gần đó.", eqShare: "Chia sẻ", eqPagerGreen: "Tác động tối thiểu", eqPagerYellow: "Tác động cục bộ", eqPagerOrange: "Tác động khu vực", eqPagerRed: "Tác động trên diện rộng" },
+  id: { eqAlertTitle: "Gempa Bumi", eqNearbyCams: "Kamera langsung terdekat", eqViewOnMap: "Lihat di peta", eqDetails: "Detail", eqTsunami: "Peringatan tsunami", eqNoNearby: "Tidak ada kamera langsung terdaftar di dekat sini.", eqShare: "Bagikan", eqPagerGreen: "Dampak minimal", eqPagerYellow: "Dampak lokal", eqPagerOrange: "Dampak regional", eqPagerRed: "Dampak luas" },
+  ar: { eqAlertTitle: "زلزال", eqNearbyCams: "أقرب كاميرات مباشرة", eqViewOnMap: "عرض على الخريطة", eqDetails: "التفاصيل", eqTsunami: "تحذير من تسونامي", eqNoNearby: "لا توجد كاميرات مباشرة مسجلة بالقرب من هنا.", eqShare: "مشاركة", eqPagerGreen: "تأثير ضئيل", eqPagerYellow: "تأثير محلي", eqPagerOrange: "تأثير إقليمي", eqPagerRed: "تأثير واسع النطاق" },
+  fa: { eqAlertTitle: "زمین‌لرزه", eqNearbyCams: "نزدیک‌ترین دوربین‌های زنده", eqViewOnMap: "نمایش روی نقشه", eqDetails: "جزئیات", eqTsunami: "هشدار سونامی", eqNoNearby: "هیچ دوربین زنده‌ای در نزدیکی ثبت نشده است.", eqShare: "اشتراک‌گذاری", eqPagerGreen: "اثر بسیار کم", eqPagerYellow: "اثر محلی", eqPagerOrange: "اثر منطقه‌ای", eqPagerRed: "اثر گسترده" },
+};
+for (const code of Object.keys(eqAlertMessages)) {
+  messages[code] = { ...messages[code], ...eqAlertMessages[code] };
+}
