@@ -56,6 +56,51 @@ function buildPopupHtml(eq, t, locale) {
   return `<div style="font-size:12px;line-height:1.5;">${rows.join("")}</div>`;
 }
 
+// HTML 삽입 전 최소 이스케이프 (외부 API 텍스트를 innerHTML 로 넣으므로 방어적으로 처리)
+function escapeHtml(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// ─── 상시 라벨(클릭 없이 항상 보임): 규모 + 발생시각 + 장소 ────
+// ⚠️ 클릭 시 뜨는 팝업(buildPopupHtml)에는 이미 규모/깊이/시각/장소가 다 있지만,
+//    지도를 보자마자 보이는 이 라벨은 규모만 표시돼 있었다. 클릭 없이도 언제/어디서
+//    발생했는지 바로 알 수 있도록 발생시각·장소를 함께 보여준다.
+function buildLabelHtml(eq, t, locale) {
+  const magText = typeof eq.magnitude === "number" ? eq.magnitude.toFixed(1) : "-";
+  const lines = [`<div style="font-weight:700;">🌍 ${t("magnitude")} M${magText}</div>`];
+  if (eq.time != null) {
+    let timeText = "";
+    try {
+      timeText = new Date(eq.time).toLocaleString(locale, {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch (e) {
+      timeText = "";
+    }
+    if (timeText) {
+      lines.push(
+        `<div style="font-weight:400;font-size:11px;">🕒 ${escapeHtml(timeText)}</div>`
+      );
+    }
+  }
+  if (eq.place) {
+    lines.push(
+      `<div style="font-weight:400;font-size:11px;white-space:normal;max-width:200px;">📍 ${escapeHtml(
+        eq.place
+      )}</div>`
+    );
+  }
+  return lines.join("");
+}
+
 export default function EarthquakeLayer({ map, enabled = false }) {
   // 그려진 원 레이어들 보관 (재조회 시 전부 제거용)
   const circlesRef = useRef([]);
@@ -100,10 +145,6 @@ export default function EarthquakeLayer({ map, enabled = false }) {
               continue;
             }
             const color = getMagnitudeColor(eq.magnitude);
-            const magText =
-              typeof eq.magnitude === "number"
-                ? eq.magnitude.toFixed(1)
-                : "-";
             const circle = L.circle([eq.lat, eq.lng], {
               // 반경(km) → 미터로 변환
               radius: getMagnitudeRadiusKm(eq.magnitude) * 1000,
@@ -114,8 +155,8 @@ export default function EarthquakeLayer({ map, enabled = false }) {
               fillOpacity: 0.35,
             });
             circle.bindPopup(buildPopupHtml(eq, t, locale));
-            // 규모 상시 라벨 (클릭 없이도 항상 표시)
-            circle.bindTooltip(`🌍 ${t("magnitude")} M${magText}`, {
+            // 상시 라벨 (클릭 없이도 항상 표시): 규모 + 발생시각 + 장소
+            circle.bindTooltip(buildLabelHtml(eq, t, locale), {
               permanent: true,
               direction: "top",
               className: "eq-label",

@@ -708,6 +708,27 @@ export default function CesiumMapView({
               typeof eq.magnitude === "number"
                 ? eq.magnitude.toFixed(1)
                 : "-";
+            // 상시 라벨(클릭 없이도 보임): 규모 + 발생시각 + 장소.
+            //   ⚠️ 클릭 시 뜨는 정보 오버레이(아래 InfoOverlay)에는 이미 규모/깊이/시각/장소가
+            //      다 있었지만, 이 라벨은 규모만 표시돼 있었다. 클릭 없이도 언제/어디서
+            //      발생했는지 바로 보이도록 발생시각·장소를 함께 넣는다(Cesium Label 은
+            //      "\n" 로 여러 줄 표시 가능).
+            const labelLines = [`🌍 ${t("magnitude")} M${magText}`];
+            if (eq.time != null) {
+              try {
+                const timeText = new Date(eq.time).toLocaleString(locale, {
+                  year: "numeric",
+                  month: "2-digit",
+                  day: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                });
+                if (timeText) labelLines.push(`🕒 ${timeText}`);
+              } catch (e) {
+                /* 시각 포맷 실패 시 해당 줄만 생략 */
+              }
+            }
+            if (eq.place) labelLines.push(`📍 ${eq.place}`);
             const ent = viewer.entities.add({
               position: toCesiumCoordRaw(Cesium, lat, lng, 0),
               ellipse: {
@@ -720,9 +741,8 @@ export default function CesiumMapView({
                 outlineWidth: 2,
                 height: 0,
               },
-              // 규모 상시 라벨 (클릭 없이도 보임, 원과 겹치지 않게 위로 띄움)
               label: {
-                text: `🌍 ${t("magnitude")} M${magText}`,
+                text: labelLines.join("\n"),
                 font: "bold 12px sans-serif",
                 fillColor: Cesium.Color.WHITE,
                 outlineColor: Cesium.Color.BLACK,
