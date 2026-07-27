@@ -57,6 +57,33 @@ export default function ContactArticle() {
           </ul>
         </section>
 
+        {/* 영상 게시 중단 요청 — 채널 운영자/권리자가 바로 찾을 수 있도록 별도 섹션으로 강조.
+            (이용약관 제3조의 "권리자 요청 시 조치" 조항과 내용을 일치시킨다) */}
+        <section>
+          <h2 className={H2}>영상 게시 중단(삭제) 요청</h2>
+          <p className={P}>
+            본 사이트는 유튜브가 제공하는 임베드(iframe) 기능으로 공개 라이브 스트림을
+            지도 위에 안내할 뿐이며, 영상의 모든 권리는 각 유튜브 채널 운영자에게 있습니다.
+            <strong className="text-ink">
+              {" "}
+              채널 운영자 또는 정당한 권리자께서 자신의 영상이 본 사이트에 표시되는 것을
+              원하지 않으시면, 아래 이메일로 해당 영상 링크(또는 채널 주소)와 함께 요청해
+              주시기 바랍니다. 확인 후 신속히 목록에서 제외하겠습니다.
+            </strong>{" "}
+            별도의 사유 설명은 필요하지 않습니다.
+          </p>
+          <p className="mt-2 text-sm">
+            <a
+              href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(
+                "[영상 게시 중단 요청] TripByClip"
+              )}`}
+              className="font-semibold text-brand hover:underline"
+            >
+              {CONTACT_EMAIL} 로 게시 중단 요청하기
+            </a>
+          </p>
+        </section>
+
         <section>
           <h2 className={H2}>답변 안내</h2>
           <p className={P}>
@@ -103,6 +130,34 @@ export default function ContactArticle() {
             </Link>
           </li>
         </ul>
+      </section>
+
+      {/* Takedown request — 채널 운영자/권리자가 바로 찾을 수 있도록 별도 섹션으로 강조.
+          (이용약관 제3조의 "권리자 요청 시 조치" 조항과 내용을 일치시킨다) */}
+      <section>
+        <h2 className={H2}>Removal (takedown) requests</h2>
+        <p className={P}>
+          This site only embeds publicly available YouTube live streams via YouTube&rsquo;s
+          official iframe player and maps them by location. All rights in the footage
+          belong to the respective YouTube channel owners.
+          <strong className="text-ink">
+            {" "}
+            If you are the channel owner or rights holder and you do not want your stream
+            to appear on this site, please email us the video link (or channel URL) and we
+            will remove it from our listings promptly.
+          </strong>{" "}
+          No explanation is required.
+        </p>
+        <p className="mt-2 text-sm">
+          <a
+            href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(
+              "[Takedown request] TripByClip"
+            )}`}
+            className="font-semibold text-brand hover:underline"
+          >
+            Send a removal request to {CONTACT_EMAIL}
+          </a>
+        </p>
       </section>
 
       <section>
