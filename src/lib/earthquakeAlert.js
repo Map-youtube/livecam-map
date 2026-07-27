@@ -53,13 +53,22 @@ export function distanceKm(lat1, lng1, lat2, lng2) {
   }
 }
 
+// ─── 근접 구간 기준 (km) ──────────────────────────────────────
+// 지진 진앙에서 "실제로 의미 있는" 거리만 보여주기 위한 2단계 구간.
+//   500km 이내  : 진짜 인근 — 흔들림/피해가 있을 수 있는 범위
+//   1,000km 이내: 같은 권역 — 참고할 만한 범위
+//   1,000km 초과: 보여주지 않는다("가까운 지역 영상 없음"으로 안내)
+export const NEAR_TIER_1_KM = 500;
+export const NEAR_TIER_2_KM = 1000;
+
 // ─── 지진 위치에서 가장 가까운 마커 N개 (요구사항 2·3) ─────────
 // 반환: [{ ...marker, distanceKm }] — 가까운 순.
 // ⚠️ maxKm: 지진이 대양 한가운데서 나면 "가장 가까운" 곳도 수천 km 떨어져 무의미하므로
-//    기본 3,000km 를 넘는 곳은 제외한다(없으면 빈 배열 → UI 가 "근처 없음"으로 안내).
+//    기본 1,000km 를 넘는 곳은 제외한다(없으면 빈 배열 → UI 가 "근처 없음"으로 안내).
 export function findNearestMarkers(markers, lat, lng, options = {}) {
   const limit = typeof options.limit === "number" ? options.limit : 5;
-  const maxKm = typeof options.maxKm === "number" ? options.maxKm : 3000;
+  const maxKm =
+    typeof options.maxKm === "number" ? options.maxKm : NEAR_TIER_2_KM;
   try {
     const eqLat = Number(lat);
     const eqLng = Number(lng);
@@ -89,51 +98,70 @@ export function formatDistanceKm(km) {
   return `${Math.round(n).toLocaleString()} km`;
 }
 
-// ─── 이미 본 지진 기록 (localStorage) ─────────────────────────
-// { [지진id]: 본 시각(ms) } 형태. 오래된 항목은 읽을 때 정리한다(6일 초과 = 최장 유지기간보다 김).
-const SEEN_KEY = "livecam_eq_seen";
-const SEEN_TTL_MS = 6 * DAY_MS;
+// ─── 거리 구간별 분류 (500km 이내 / 1,000km 이내) ─────────────
+// 반환: { within500, within1000, hasAny }
+//   within500  : 진앙 500km 이내 (가까운 순)
+//   within1000 : 500km 초과 ~ 1,000km 이내 (가까운 순)
+//   hasAny     : 둘 중 하나라도 있으면 true. false 면 UI 가 "가까운 지역 영상 없음"을 보여준다.
+// ⚠️ 1,000km 를 넘는 곳은 "가까운 영상"이라 부를 수 없으므로 아예 제외한다.
+export function groupNearestByDistance(markers, lat, lng, options = {}) {
+  const limit = typeof options.limit === "number" ? options.limit : 6;
+  const list = findNearestMarkers(markers, lat, lng, {
+    limit,
+    maxKm: NEAR_TIER_2_KM,
+  });
+  const within500 = list.filter((m) => m.distanceKm <= NEAR_TIER_1_KM);
+  const within1000 = list.filter((m) => m.distanceKm > NEAR_TIER_1_KM);
+  return {
+    within500,
+    within1000,
+    hasAny: within500.length > 0 || within1000.length > 0,
+  };
+}
 
-export function loadSeenIds(now = Date.now()) {
+// ─── "오늘 하루 보지 않기" (localStorage) ─────────────────────
+// ⚠️ 노출 규칙(사용자 요구):
+//   - 접속 중 + 새로고침/재접속(= 신규 접속)에는 다시 보인다 → 닫기(✕)는 "이번 화면에서만" 닫는다
+//     (그래서 닫힘 기록은 저장하지 않고 컴포넌트 메모리에만 둔다).
+//   - 다시 안 보고 싶은 사람을 위해 "오늘 하루 보지 않기" 버튼을 두고, 누르면 24시간 동안
+//     모든 지진 알림을 숨긴다(특정 지진 1건이 아니라 전체 음소거).
+const MUTE_KEY = "livecam_eq_mute_until";
+const MUTE_MS = DAY_MS; // 24시간
+
+export function isAlertMuted(now = Date.now()) {
   try {
-    if (typeof window === "undefined") return {};
-    const raw = window.localStorage.getItem(SEEN_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return {};
-    // 만료 항목 제거(무한 증가 방지)
-    const out = {};
-    for (const [id, ts] of Object.entries(parsed)) {
-      const t = Number(ts);
-      if (Number.isFinite(t) && now - t < SEEN_TTL_MS) out[id] = t;
-    }
-    return out;
+    if (typeof window === "undefined") return false;
+    const raw = window.localStorage.getItem(MUTE_KEY);
+    if (!raw) return false;
+    const until = Number(raw);
+    return Number.isFinite(until) && now < until;
   } catch (error) {
-    return {};
+    return false;
   }
 }
 
-export function markSeenIds(ids, now = Date.now()) {
+export function muteAlertsForDay(now = Date.now()) {
   try {
     if (typeof window === "undefined") return;
-    const current = loadSeenIds(now);
-    for (const id of Array.isArray(ids) ? ids : [ids]) {
-      if (id) current[String(id)] = now;
-    }
-    window.localStorage.setItem(SEEN_KEY, JSON.stringify(current));
+    window.localStorage.setItem(MUTE_KEY, String(now + MUTE_MS));
   } catch (error) {
-    // 저장 실패(사생활 보호 모드 등)는 무시 — 이번 세션에만 다시 뜰 수 있을 뿐
+    // 저장 실패(사생활 보호 모드 등)는 무시 — 음소거가 안 될 뿐 화면은 정상
   }
 }
 
 // ─── 지금 띄울 지진 선정 ──────────────────────────────────────
-// 조건: 규모 4.5 이상 && (지금 - 발생시각) < 규모별 유지기간 && 아직 안 본 것.
+// 조건: 규모 4.5 이상 && (지금 - 발생시각) < 규모별 유지기간 && 이번 화면에서 아직 안 닫은 것.
 // 여러 건이 해당되면 "가장 큰 규모"(같으면 더 최근) 1건만 띄운다.
 //   ⚠️ 4.5+ 지진은 하루 20~30건이라 전부 띄우면 팝업 폭탄이 된다. 그래서 한 번에 1건만 보여주고,
-//      사용자가 닫으면(=현재 상황을 확인함) 그 시점에 조건을 만족하던 나머지도 함께 "본 것"으로
-//      처리한다(EarthquakeAlert 의 닫기 처리). 닫은 뒤 "새로" 발생한 지진은 다시 알린다.
+//      사용자가 닫으면 그 시점에 조건을 만족하던 나머지도 함께 "이번 화면에서 닫음"으로 처리한다.
+//   ⚠️ dismissed 는 localStorage 가 아니라 "컴포넌트 메모리"다 → 새로고침/재접속하면 다시 보인다
+//      (사용자 요구: 신규 접속 = 새로고침·재접속 포함). 완전히 끄려면 "오늘 하루 보지 않기".
 // 반환: { target, eligibleIds } — target 이 null 이면 띄울 것 없음.
-export function pickAlertEarthquake(earthquakes, seen = {}, now = Date.now()) {
+export function pickAlertEarthquake(
+  earthquakes,
+  dismissed = {},
+  now = Date.now()
+) {
   const eligible = [];
   try {
     for (const eq of Array.isArray(earthquakes) ? earthquakes : []) {
@@ -145,7 +173,7 @@ export function pickAlertEarthquake(earthquakes, seen = {}, now = Date.now()) {
       const win = alertWindowMs(mag);
       if (win <= 0) continue;
       if (now - time > win) continue; // 유지 기간 지남 → 노출 중지
-      if (seen && seen[eq.id]) continue; // 이미 본 지진
+      if (dismissed && dismissed[eq.id]) continue; // 이번 화면에서 이미 닫은 지진
       eligible.push(eq);
     }
     // 규모 큰 순 → 같으면 최근 순

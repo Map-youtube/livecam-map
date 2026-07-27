@@ -23,8 +23,10 @@ import SeoPageShell from "@/components/seo/SeoPageShell";
 import Breadcrumb from "@/components/seo/Breadcrumb";
 import { getMapMarkers } from "@/lib/getMapMarkers";
 import {
-  findNearestMarkers,
   formatDistanceKm,
+  groupNearestByDistance,
+  NEAR_TIER_1_KM,
+  NEAR_TIER_2_KM,
   pagerAlertStyle,
 } from "@/lib/earthquakeAlert";
 import { getMagnitudeColor } from "@/lib/earthquakeUtils";
@@ -186,18 +188,16 @@ export default async function EarthquakePage({ params }) {
     notFound();
   }
 
-  // 진앙에서 가장 가까운 공개 라이브캠 (요구사항 2·3 과 동일 기준)
-  let nearest = [];
+  // 진앙에서 가까운 공개 라이브캠 — 알림 팝업과 동일하게 500km / 1,000km 구간으로 나눈다.
+  //   1,000km 를 넘는 곳은 "가까운 영상"이 아니므로 제외한다(둘 다 없으면 안내 문구만 표시).
+  let nearby = { within500: [], within1000: [], hasAny: false };
   try {
     const markers = await getMapMarkers();
-    nearest = findNearestMarkers(markers, eq.lat, eq.lng, {
-      limit: 8,
-      maxKm: 3000,
-    });
+    nearby = groupNearestByDistance(markers, eq.lat, eq.lng, { limit: 8 });
   } catch (error) {
     console.error("[earthquake] 인근 마커 조회 실패:", error); // TODO: 배포 전 제거
-    nearest = [];
   }
+  const nearestCount = nearby.within500.length + nearby.within1000.length;
 
   const mag = magText(eq.magnitude);
   const magColor = getMagnitudeColor(eq.magnitude);
@@ -353,14 +353,16 @@ export default async function EarthquakePage({ params }) {
             "Nearest Live Cams to the Epicenter"
           )}
         </h2>
-        {nearest.length === 0 ? (
+        {!nearby.hasAny ? (
           <p className="mt-2 text-sm text-ink-muted">
-            이 지진의 진앙 주변에는 아직 등록된 라이브캠이 없습니다.{" "}
+            진앙에서 {NEAR_TIER_2_KM.toLocaleString()}km 이내에는 등록된
+            라이브캠이 없습니다.{" "}
             <Link href="/" className="text-brand hover:underline">
               세계 라이브 지도 보기 →
             </Link>
             <span className="mt-1 block text-xs">
-              No live cams are registered near this epicenter yet.{" "}
+              No live cams are registered within{" "}
+              {NEAR_TIER_2_KM.toLocaleString()} km of this epicenter.{" "}
               <Link href="/" className="text-brand hover:underline">
                 View the world live map →
               </Link>
@@ -369,56 +371,83 @@ export default async function EarthquakePage({ params }) {
         ) : (
           <>
             <p className="mt-1 text-sm text-ink-muted">
-              진앙에서 가까운 순서로 {nearest.length}곳입니다. 각 영상을 눌러 현재
+              진앙에서 가까운 순서로 {nearestCount}곳입니다. 각 영상을 눌러 현재
               모습을 실시간으로 확인해 보세요.
               <span className="mt-1 block text-xs">
-                {nearest.length} nearest live cams to the epicenter, sorted by
+                {nearestCount} nearest live cams to the epicenter, sorted by
                 distance. Click any video to watch it live.
               </span>
             </p>
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {nearest.map((m) => {
-                // ⚠️ 각 카드는 자기 자신(m)의 데이터·거리만 참조한다.
-                const thumb = getMarkerThumb(m);
-                return (
-                  <Link
-                    key={m.id}
-                    href={`/marker/${m.id}`}
-                    className="group block overflow-hidden rounded-lg border border-border bg-surface shadow-card transition duration-150 hover:-translate-y-0.5"
-                  >
-                    <div className="relative aspect-video w-full overflow-hidden bg-ink/5">
-                      {thumb ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={thumb}
-                          alt={m.location || "라이브캠 썸네일"}
-                          className="h-full w-full object-cover"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-xs text-ink-muted">
-                          이미지 없음
-                        </div>
-                      )}
-                      {/* 진앙으로부터의 거리 (요구사항 3) */}
-                      <span className="absolute left-2 top-2 rounded-full bg-ink/75 px-2 py-0.5 text-[11px] font-semibold text-white">
-                        📍 {formatDistanceKm(m.distanceKm)}
-                      </span>
-                    </div>
-                    <div className="p-3">
-                      <h3 className="line-clamp-2 font-display text-sm font-semibold leading-snug text-ink">
-                        {m.location || "(장소명 없음)"}
-                      </h3>
-                      {(m.city || m.country) && (
-                        <p className="mt-1 text-xs text-ink-muted">
-                          {[m.city, m.country].filter(Boolean).join(", ")}
-                        </p>
-                      )}
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
+
+            {/* ⚠️ 각 구간은 자기 목록만 렌더한다(500km 이내 / 1,000km 이내) */}
+            {[
+              {
+                key: "t1",
+                ko: `${NEAR_TIER_1_KM}km 이내`,
+                en: `Within ${NEAR_TIER_1_KM} km`,
+                list: nearby.within500,
+              },
+              {
+                key: "t2",
+                ko: `${NEAR_TIER_2_KM.toLocaleString()}km 이내`,
+                en: `Within ${NEAR_TIER_2_KM.toLocaleString()} km`,
+                list: nearby.within1000,
+              },
+            ]
+              .filter((g) => g.list.length > 0)
+              .map((group) => (
+                <div key={group.key} className="mt-5">
+                  <h3 className="font-display text-sm font-bold text-ink">
+                    {bi(group.ko, group.en)}
+                    <span className="ml-1.5 font-normal text-ink-muted">
+                      ({group.list.length})
+                    </span>
+                  </h3>
+                  <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                    {group.list.map((m) => {
+                      // ⚠️ 각 카드는 자기 자신(m)의 데이터·거리만 참조한다.
+                      const thumb = getMarkerThumb(m);
+                      return (
+                        <Link
+                          key={m.id}
+                          href={`/marker/${m.id}`}
+                          className="group block overflow-hidden rounded-lg border border-border bg-surface shadow-card transition duration-150 hover:-translate-y-0.5"
+                        >
+                          <div className="relative aspect-video w-full overflow-hidden bg-ink/5">
+                            {thumb ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={thumb}
+                                alt={m.location || "라이브캠 썸네일"}
+                                className="h-full w-full object-cover"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-xs text-ink-muted">
+                                이미지 없음
+                              </div>
+                            )}
+                            {/* 진앙으로부터의 거리 (요구사항 3) */}
+                            <span className="absolute left-2 top-2 rounded-full bg-ink/75 px-2 py-0.5 text-[11px] font-semibold text-white">
+                              📍 {formatDistanceKm(m.distanceKm)}
+                            </span>
+                          </div>
+                          <div className="p-3">
+                            <h4 className="line-clamp-2 font-display text-sm font-semibold leading-snug text-ink">
+                              {m.location || "(장소명 없음)"}
+                            </h4>
+                            {(m.city || m.country) && (
+                              <p className="mt-1 text-xs text-ink-muted">
+                                {[m.city, m.country].filter(Boolean).join(", ")}
+                              </p>
+                            )}
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
           </>
         )}
       </section>

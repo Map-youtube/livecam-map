@@ -23,10 +23,12 @@ import Link from "next/link";
 import { useI18n } from "@/components/i18n/LanguageProvider";
 import { getMagnitudeColor } from "@/lib/earthquakeUtils";
 import {
-  findNearestMarkers,
   formatDistanceKm,
-  loadSeenIds,
-  markSeenIds,
+  groupNearestByDistance,
+  isAlertMuted,
+  muteAlertsForDay,
+  NEAR_TIER_1_KM,
+  NEAR_TIER_2_KM,
   pagerAlertStyle,
   pickAlertEarthquake,
 } from "@/lib/earthquakeAlert";
@@ -58,8 +60,12 @@ export default function EarthquakeAlert({
 
   const [mounted, setMounted] = useState(false);
   const [target, setTarget] = useState(null); // 지금 띄울 지진 1건
-  // 이번에 함께 "본 것"으로 처리할 지진 id 목록(닫을 때 한 번에 기록 → 팝업 연쇄 노출 방지)
+  // 이번에 함께 닫음 처리할 지진 id 목록(닫을 때 한 번에 기록 → 팝업 연쇄 노출 방지)
   const eligibleIdsRef = useRef([]);
+  // ⚠️ "이번 화면에서 닫은" 지진 목록 — localStorage 가 아니라 메모리에만 둔다.
+  //    새로고침/재접속하면 초기화되어 다시 보인다(사용자 요구: 신규 접속에는 다시 노출).
+  //    영구히 끄고 싶으면 "오늘 하루 보지 않기" 버튼(24시간 전체 음소거)을 쓴다.
+  const dismissedRef = useRef({});
 
   const trFn = typeof tr === "function" ? tr : (x) => x;
 
@@ -75,12 +81,19 @@ export default function EarthquakeAlert({
 
     async function load() {
       try {
+        // "오늘 하루 보지 않기"를 누른 상태면 아예 조회/표시하지 않는다.
+        if (isAlertMuted()) {
+          setTarget(null);
+          return;
+        }
         const res = await fetch("/api/earthquakes", { cache: "no-store" });
         const data = await res.json();
         if (cancelled) return;
         const list = Array.isArray(data.earthquakes) ? data.earthquakes : [];
-        const seen = loadSeenIds();
-        const { target: next, eligibleIds } = pickAlertEarthquake(list, seen);
+        const { target: next, eligibleIds } = pickAlertEarthquake(
+          list,
+          dismissedRef.current
+        );
         // 이미 같은 지진이 떠 있으면 그대로 둔다(사용자가 읽는 중에 깜빡이며 교체되지 않게).
         setTarget((prev) => {
           if (prev && next && prev.id === next.id) return prev;
@@ -100,24 +113,34 @@ export default function EarthquakeAlert({
     };
   }, [mounted]);
 
-  // ─── 닫기: 지금 조건을 만족하던 지진들을 "본 것"으로 기록 ──────
+  // ─── 닫기(✕): "이번 화면에서만" 닫는다 ───────────────────────
+  //   메모리에만 기록하므로 새로고침/재접속하면 다시 보인다(사용자 요구).
   const handleClose = useCallback(() => {
     try {
       const ids = eligibleIdsRef.current;
-      markSeenIds(ids && ids.length > 0 ? ids : target ? [target.id] : []);
+      const list = ids && ids.length > 0 ? ids : target ? [target.id] : [];
+      for (const id of list) dismissedRef.current[id] = Date.now();
     } catch (error) {
-      // 기록 실패는 무시(다음에 다시 뜰 수 있을 뿐)
+      // 기록 실패는 무시
     }
     setTarget(null);
   }, [target]);
 
-  // ─── 지진 위치에서 가장 가까운 라이브캠 5곳 (거리 포함) ────────
-  const nearest = useMemo(() => {
-    if (!target) return [];
-    return findNearestMarkers(markers, target.lat, target.lng, {
-      limit: 5,
-      maxKm: 3000,
-    });
+  // ─── "오늘 하루 보지 않기": 24시간 동안 모든 지진 알림 숨김 ────
+  const handleMuteToday = useCallback(() => {
+    try {
+      muteAlertsForDay();
+    } catch (error) {
+      // 저장 실패는 무시
+    }
+    setTarget(null);
+  }, []);
+
+  // ─── 진앙 기준 거리 구간별 라이브캠 (500km / 1,000km) ──────────
+  //   1,000km 를 넘는 곳은 제외 → 둘 다 비면 "가까운 지역 영상 없음"을 보여준다.
+  const nearby = useMemo(() => {
+    if (!target) return { within500: [], within1000: [], hasAny: false };
+    return groupNearestByDistance(markers, target.lat, target.lng, { limit: 6 });
   }, [target, markers]);
 
   // ─── "지도에서 보기" ─────────────────────────────────────────
@@ -243,50 +266,70 @@ export default function EarthquakeAlert({
           </div>
         </div>
 
-        {/* ── 가장 가까운 라이브캠 (거리 표기) ── */}
+        {/* ── 가장 가까운 라이브캠 (500km 이내 / 1,000km 이내로 구분) ── */}
         <div className="border-t border-border px-3 py-2">
           <p className="mb-1.5 text-[11px] font-semibold text-ink-muted">
             {t("eqNearbyCams")}
           </p>
-          {nearest.length === 0 ? (
+          {!nearby.hasAny ? (
+            // 1,000km 안에 아무것도 없으면 "가까운 지역 영상 없음"
             <p className="py-1 text-xs text-ink-muted">{t("eqNoNearby")}</p>
           ) : (
-            <ul className="max-h-44 space-y-1 overflow-y-auto overscroll-contain">
-              {nearest.map((m) => {
-                // ⚠️ 각 항목은 자기 자신(m)의 데이터만 참조한다.
-                const thumb = getThumb(m);
-                return (
-                  <li key={m.id}>
-                    <button
-                      type="button"
-                      onClick={() => handleCardClick(m)}
-                      className="flex w-full items-center gap-2 rounded-md p-1 text-left transition hover:bg-secondary"
-                    >
-                      <span className="relative block h-9 w-16 flex-none overflow-hidden rounded bg-ink/5">
-                        {thumb ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={thumb}
-                            alt=""
-                            className="h-full w-full object-cover"
-                            loading="lazy"
-                          />
-                        ) : null}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-xs font-medium text-ink">
-                          {trFn(m.location || "")}
-                        </span>
-                        <span className="block truncate text-[11px] text-ink-muted">
-                          📍 {formatDistanceKm(m.distanceKm)}
-                          {m.city ? ` · ${trFn(m.city)}` : ""}
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+            <div className="max-h-44 space-y-2 overflow-y-auto overscroll-contain">
+              {/* ⚠️ 각 구간은 자기 목록만 렌더한다(구간 라벨 + 그 구간 마커들) */}
+              {[
+                { key: "t1", label: `${NEAR_TIER_1_KM}km`, list: nearby.within500 },
+                {
+                  key: "t2",
+                  label: `${NEAR_TIER_2_KM.toLocaleString()}km`,
+                  list: nearby.within1000,
+                },
+              ]
+                .filter((g) => g.list.length > 0)
+                .map((group) => (
+                  <div key={group.key}>
+                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+                      {t("eqWithin").replace("{d}", group.label)}
+                    </p>
+                    <ul className="space-y-1">
+                      {group.list.map((m) => {
+                        // ⚠️ 각 항목은 자기 자신(m)의 데이터만 참조한다.
+                        const thumb = getThumb(m);
+                        return (
+                          <li key={m.id}>
+                            <button
+                              type="button"
+                              onClick={() => handleCardClick(m)}
+                              className="flex w-full items-center gap-2 rounded-md p-1 text-left transition hover:bg-secondary"
+                            >
+                              <span className="relative block h-9 w-16 flex-none overflow-hidden rounded bg-ink/5">
+                                {thumb ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={thumb}
+                                    alt=""
+                                    className="h-full w-full object-cover"
+                                    loading="lazy"
+                                  />
+                                ) : null}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-xs font-medium text-ink">
+                                  {trFn(m.location || "")}
+                                </span>
+                                <span className="block truncate text-[11px] text-ink-muted">
+                                  📍 {formatDistanceKm(m.distanceKm)}
+                                  {m.city ? ` · ${trFn(m.city)}` : ""}
+                                </span>
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ))}
+            </div>
           )}
         </div>
 
@@ -313,6 +356,18 @@ export default function EarthquakeAlert({
             className="tap-target rounded-md border border-border px-2.5 py-1.5 text-xs text-ink transition hover:bg-secondary"
           >
             🔗
+          </button>
+        </div>
+
+        {/* ── 오늘 하루 보지 않기 (24시간 전체 음소거) ──
+            ✕ 닫기는 새로고침하면 다시 뜨므로, 완전히 끄고 싶은 사용자를 위한 출구. */}
+        <div className="border-t border-border px-3 py-1.5 text-center">
+          <button
+            type="button"
+            onClick={handleMuteToday}
+            className="text-[11px] text-ink-muted underline-offset-2 transition hover:text-ink hover:underline"
+          >
+            {t("eqMuteToday")}
           </button>
         </div>
       </div>
