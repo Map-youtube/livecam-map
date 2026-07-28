@@ -54,11 +54,15 @@ export async function generateMetadata({ params }) {
     }
     const label = getContinentLabel(continent, "ko");
     const markers = await getContinentMarkers(continent);
-    // AI 소개(있으면) → 하드코딩 소개 → 기본 문구 순으로 fallback
+    // ⚠️ 우선순위(2026-07-28 변경): 손으로 쓴 소개 → AI 소개 → 기본 문구.
+    //    예전에는 AI 소개가 손글을 덮어써서, 애써 써둔 서비스 특화 문구 대신 백과사전식
+    //    일반 설명이 노출됐다. 애드센스 심사에서 "자동 생성 콘텐츠"로 보일 위험이 있고,
+    //    실제로도 손글이 더 구체적이다(예: 도쿄 시부야·서울 한강 등 실제 콘텐츠 언급).
+    //    → 사람이 쓴 글이 있으면 그것을 우선하고, 없는 지역만 AI 소개로 채운다.
     // ⚠️ 컬렉션 전체(137개)가 아니라 해당 키 문서 1개만 읽는다(읽기 절감).
     const intro =
-      (await getRegionText(continentDescKey(continent), "ko")) ||
       CONTINENT_INTRO[continent] ||
+      (await getRegionText(continentDescKey(continent), "ko")) ||
       `${label}의 실시간 라이브캠을 지도와 목록으로 만나보세요.`;
     const ogImage = markers.length ? getMarkerThumb(markers[0]) : undefined;
     const title = `${label} 실시간 라이브캠 | TripByClip`;
@@ -89,10 +93,10 @@ export default async function ContinentPage({ params }) {
   }
 
   const label = getContinentLabel(continent, "ko");
-  // AI 소개(있으면) → 하드코딩 소개 → 기본 문구 순으로 fallback
+  // 손으로 쓴 소개 → AI 소개 → 기본 문구 (generateMetadata 와 동일 우선순위)
   const intro =
-    (await getRegionText(continentDescKey(continent), "ko")) ||
     CONTINENT_INTRO[continent] ||
+    (await getRegionText(continentDescKey(continent), "ko")) ||
     `${label}의 실시간 라이브캠을 지도와 목록으로 만나보세요.`;
   const markers = await getContinentMarkers(continent);
 

@@ -17,6 +17,7 @@ import { COUNTRY_NAME_BY_CODE } from "@/lib/countryList";
 import { getContinentByCountry } from "@/lib/continentUtils";
 import {
   VALID_CONTINENTS,
+  COUNTRY_INTRO,
   getMarkerThumb,
   getCountryIntro,
   groupBy,
@@ -68,9 +69,12 @@ export async function generateMetadata({ params }) {
 
     const countryLabel = COUNTRY_NAME_BY_CODE[countryUpper] || countryUpper;
     const markers = await getCountryMarkers(continent, countryUpper);
-    // AI 소개(있으면) → 손으로 쓴 주요국 소개 → 데이터 기반 자동 소개 순으로 fallback
+    // ⚠️ 우선순위(2026-07-28 변경): 손으로 쓴 소개 → AI 소개 → 데이터 기반 자동 소개.
+    //    예전에는 AI 소개가 손글을 덮어써서, 주요 35개국에 써둔 서비스 특화 문구가 안 보이고
+    //    백과사전식 일반 설명이 노출됐다(애드센스 "자동 생성 콘텐츠" 리스크).
     // ⚠️ 컬렉션 전체가 아니라 해당 키 문서 1개만 읽는다(읽기 절감).
     const description =
+      COUNTRY_INTRO[countryUpper] ||
       (await getRegionText(countryDescKey(countryUpper), "ko")) ||
       getCountryIntro(countryUpper, {
         countryLabel,
@@ -115,12 +119,14 @@ export default async function CountryPage({ params }) {
   const byCity = groupBy(markers, (m) => m.city || "(도시 미지정)");
   const cityNames = Object.keys(byCity).sort((a, b) => a.localeCompare(b, "ko"));
 
-  // 국가 소개문: AI 소개(있으면) → 손으로 쓴 주요국 소개 → 마커수·상위도시 자동 구성.
+  // 국가 소개문: 손으로 쓴 소개 → AI 소개 → 마커수·상위도시 자동 구성
+  //   (generateMetadata 와 동일 우선순위 — 사람이 쓴 글을 최우선)
   const topCities = Object.keys(byCity)
     .filter((c) => c && c !== "(도시 미지정)")
     .sort((a, b) => byCity[b].length - byCity[a].length)
     .slice(0, 3);
   const intro =
+    COUNTRY_INTRO[countryUpper] ||
     (await getRegionText(countryDescKey(countryUpper), "ko")) ||
     getCountryIntro(countryUpper, {
       countryLabel,
