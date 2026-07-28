@@ -161,6 +161,44 @@ function SectionTitle({ children, desc }) {
   );
 }
 
+// 분류값 집계 맵({키: 개수})을 "많은 순" 막대 목록으로 표시.
+//   labels: 내부 키를 한국어 라벨로 바꾸는 표(없으면 키 그대로 표시).
+function BreakdownList({ title, data, labels = {} }) {
+  const entries = Object.entries(data && typeof data === "object" ? data : {})
+    .map(([k, n]) => ({ key: k, count: Number(n) || 0 }))
+    .filter((e) => e.count > 0)
+    .sort((a, b) => b.count - a.count);
+  const max = Math.max(1, ...entries.map((e) => e.count));
+  return (
+    <div>
+      <p className="mb-1.5 text-[11px] font-semibold text-ink-muted">{title}</p>
+      {entries.length === 0 ? (
+        <p className="py-2 text-center text-[11px] text-ink-muted">데이터 없음</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {entries.map((e) => (
+            // ⚠️ 각 항목은 자기 자신(e)의 값으로만 막대 너비를 계산한다.
+            <li key={e.key} className="flex items-center gap-2 text-xs">
+              <span className="w-20 flex-none truncate text-ink">
+                {labels[e.key] || e.key}
+              </span>
+              <span className="h-3 flex-1 overflow-hidden rounded bg-bg">
+                <span
+                  className="block h-full rounded bg-brand"
+                  style={{ width: `${Math.round((e.count / max) * 100)}%` }}
+                />
+              </span>
+              <span className="w-10 flex-none text-right font-mono tabular-nums text-ink-muted">
+                {e.count.toLocaleString()}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export default function AdminDashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -541,6 +579,76 @@ export default function AdminDashboard() {
             )}
           </ul>
         </div>
+      </div>
+
+      {/* 실사용자 vs 봇 / 진입 페이지 / 유입 경로 (2026-07-28 추가) */}
+      <div className="rounded-xl border border-border bg-surface p-4">
+        <SectionTitle desc="방문자 중 검색·광고 크롤러(봇)를 걸러낸 실제 사용자 수와, 어디로 어떻게 들어왔는지 (이 기능이 추가된 2026-07-28 이후 방문부터 집계)">
+          실사용자 · 유입 분석
+        </SectionTitle>
+        {v.humanTotal == null || (v.humanTotal === 0 && v.botTotal === 0) ? (
+          <p className="py-4 text-center text-xs text-ink-muted">
+            아직 데이터가 없습니다. (2026-07-28 이후 새 방문부터 쌓입니다)
+          </p>
+        ) : (
+          <>
+            {/* 실사용자 / 봇 요약 */}
+            <div className="mb-4 grid grid-cols-2 gap-3">
+              <div className="rounded-lg border border-border bg-bg p-3">
+                <p className="text-[11px] text-ink-muted">실제 사용자</p>
+                <p className="font-display text-xl font-bold text-brand">
+                  {fmtInt(v.humanTotal || 0)}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border bg-bg p-3">
+                <p className="text-[11px] text-ink-muted">
+                  봇(구글·애드센스 크롤러 등)
+                </p>
+                <p className="font-display text-xl font-bold text-ink-muted">
+                  {fmtInt(v.botTotal || 0)}
+                </p>
+              </div>
+            </div>
+
+            {/* 3분할: 봇 종류 / 진입 페이지 / 유입 경로 */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <BreakdownList
+                title="봇 종류"
+                data={v.botTotals}
+                labels={{
+                  human: "사람",
+                  googlebot: "구글 검색봇",
+                  adsbot: "애드센스 심사봇",
+                  otherbot: "기타 봇",
+                  unknown: "미상",
+                }}
+              />
+              <BreakdownList
+                title="처음 들어온 페이지"
+                data={v.pageTypeTotals}
+                labels={{
+                  home: "홈(지도)",
+                  region: "지역 목록",
+                  marker: "영상 상세",
+                  earthquake: "지진 상세",
+                  channel: "채널 상세",
+                  other: "기타",
+                }}
+              />
+              <BreakdownList
+                title="유입 경로"
+                data={v.sourceTotals}
+                labels={{
+                  google: "구글 검색",
+                  naver: "네이버 검색",
+                  direct: "직접 방문",
+                  internal: "사이트 내 이동",
+                  other: "기타 사이트",
+                }}
+              />
+            </div>
+          </>
+        )}
       </div>
 
       {/* 도시별 방문자 (추적 재활성화 후 쌓임) */}

@@ -48,12 +48,18 @@ export async function GET(request) {
       }
       if (!DATE_RE.test(d.id)) continue;
       const data = d.data() || {};
+      const asMap = (v) => (v && typeof v === "object" ? v : {});
       visitorsDaily.push({
         date: d.id,
         visitors: num(data.daily_visitors),
         mapClicks: num(data.daily_map_clicks),
-        countries: data.countries && typeof data.countries === "object" ? data.countries : {},
-        cities: data.cities && typeof data.cities === "object" ? data.cities : {},
+        countries: asMap(data.countries),
+        cities: asMap(data.cities),
+        // ↓ 2026-07-28 추가: 봇/사람 구분, 진입 페이지 종류, 유입 경로, 시간대
+        bots: asMap(data.bots),
+        pageTypes: asMap(data.pageTypes),
+        sources: asMap(data.sources),
+        hours: asMap(data.hours),
       });
     }
     visitorsDaily.sort((a, b) => a.date.localeCompare(b.date));
@@ -87,6 +93,30 @@ export async function GET(request) {
     const byCity = Object.entries(cityTotals)
       .map(([city, count]) => ({ city, count: num(count) }))
       .sort((a, b) => b.count - a.count);
+
+    // ─── 봇/페이지종류/유입경로 누적 (2026-07-28 추가) ──────────
+    //   _summary 에 있으면 그것을 쓰고, 없으면(과거 데이터) 일별 합산으로 만든다.
+    function totalsOf(key) {
+      if (summary && summary[key] && typeof summary[key] === "object") {
+        const out = {};
+        for (const [k, v] of Object.entries(summary[key])) out[k] = num(v);
+        return out;
+      }
+      const out = {};
+      for (const day of visitorsDaily) {
+        for (const [k, v] of Object.entries(day[key] || {})) {
+          out[k] = (out[k] || 0) + num(v);
+        }
+      }
+      return out;
+    }
+    const botTotals = totalsOf("bots");
+    const pageTypeTotals = totalsOf("pageTypes");
+    const sourceTotals = totalsOf("sources");
+    // "사람"으로 분류된 방문만 따로 — 봇(구글/애드센스 크롤러)이 방문자 수를 부풀리므로.
+    const humanTotal = num(botTotals.human);
+    const botTotal =
+      num(botTotals.googlebot) + num(botTotals.adsbot) + num(botTotals.otherbot);
 
     const totalVisitors =
       summary && summary.total_visitors != null
@@ -203,16 +233,28 @@ export async function GET(request) {
       {
         ok: true,
         visitors: {
-          daily: visitorsDaily.map(({ date, visitors, mapClicks }) => ({
-            date,
-            visitors,
-            mapClicks,
-          })),
+          daily: visitorsDaily.map(
+            ({ date, visitors, mapClicks, bots, pageTypes, sources, hours }) => ({
+              date,
+              visitors,
+              mapClicks,
+              bots,
+              pageTypes,
+              sources,
+              hours,
+            })
+          ),
           totalVisitors,
           totalMapClicks,
           byCountry,
           byCity,
           latestDate: latestVisitorDate,
+          // 2026-07-28 추가 — 봇 걸러낸 실사용자 파악용
+          botTotals,
+          pageTypeTotals,
+          sourceTotals,
+          humanTotal,
+          botTotal,
         },
         api: {
           daily: apiDaily,

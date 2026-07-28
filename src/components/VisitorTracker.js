@@ -26,7 +26,13 @@ export default function VisitorTracker() {
       fetch("/api/track", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "visit" }),
+        body: JSON.stringify({
+          type: "visit",
+          // ⚠️ 서버가 "종류"로만 축약해 저장한다(경로 원문은 저장하지 않음 — 문서 무한증가 방지).
+          //    개인정보가 아니라 페이지 종류·유입 경로 분류에만 쓰인다.
+          path: window.location.pathname,
+          referrer: document.referrer || "",
+        }),
         keepalive: true, // 페이지 이탈 중에도 전송 시도
       }).catch(() => {});
     } catch (error) {
