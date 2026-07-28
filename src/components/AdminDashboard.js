@@ -74,24 +74,42 @@ function bucketize(daily, period) {
 }
 
 // 세로 막대 미니 차트 (값 배열 → 막대). 라이브러리 없이 CSS 로.
-function BarChart({ items, valueKey, color = "bg-brand", label }) {
+//   ⚠️ 가독성(2026-07-28): 예전에는 최댓값만 100% 로 잡아, 하루만 값이 크면 나머지 막대가
+//      2~3% 높이(3px)로 뭉개져 "차트가 안 나온다"처럼 보였다. 그래서
+//      (1) 최댓값을 축 라벨로 표시하고 (2) 값이 0 이 아니면 최소 8% 높이를 보장하며
+//      (3) 값이 전부 0 이면 그 사실을 문구로 알려준다.
+function BarChart({ items, valueKey, color = "bg-brand", label, format }) {
   const rows = Array.isArray(items) ? items.slice(-16) : []; // 최근 16개 버킷
-  const max = Math.max(1, ...rows.map((r) => Number(r[valueKey] || 0)));
+  const values = rows.map((r) => Number(r[valueKey] || 0));
+  const max = Math.max(0, ...values);
+  const fmt = typeof format === "function" ? format : fmtInt;
   if (rows.length === 0) {
     return <p className="py-6 text-center text-xs text-ink-muted">데이터 없음</p>;
   }
+  const allZero = max === 0;
   return (
     <div>
+      {/* 세로축 최댓값 — 막대 크기를 가늠할 기준 */}
+      <div className="mb-1 flex items-center justify-between text-[10px] text-ink-muted">
+        <span>최대 {fmt(max)}</span>
+        <span>최근 {rows.length}개</span>
+      </div>
       <div className="flex h-32 items-end gap-1">
         {rows.map((r) => {
+          // ⚠️ 각 막대는 자기 자신(r)의 값으로만 높이를 계산한다.
           const v = Number(r[valueKey] || 0);
-          const h = Math.round((v / max) * 100);
+          const ratio = max > 0 ? v / max : 0;
+          // 0 이면 바닥선만(2%), 0 보다 크면 최소 8% 는 보이게 해 작은 값도 눈에 띄게 한다.
+          const h = v === 0 ? 2 : Math.max(8, Math.round(ratio * 100));
           return (
-            <div key={r.date} className="group flex flex-1 flex-col items-center justify-end">
+            <div
+              key={r.date}
+              className="group flex flex-1 flex-col items-center justify-end"
+            >
               <div
-                className={`w-full rounded-t ${color}`}
-                style={{ height: `${Math.max(2, h)}%` }}
-                title={`${r.date} · ${label}: ${fmtInt(v)}`}
+                className={`w-full rounded-t ${v === 0 ? "bg-border" : color}`}
+                style={{ height: `${h}%` }}
+                title={`${r.date} · ${label}: ${fmt(v)}`}
               />
             </div>
           );
@@ -101,6 +119,11 @@ function BarChart({ items, valueKey, color = "bg-brand", label }) {
         <span>{rows[0].date}</span>
         <span>{rows[rows.length - 1].date}</span>
       </div>
+      {allZero && (
+        <p className="mt-1.5 text-center text-[11px] text-ink-muted">
+          이 기간에는 값이 모두 0 입니다.
+        </p>
+      )}
     </div>
   );
 }
@@ -683,10 +706,16 @@ export default function AdminDashboard() {
       {/* API 비용/사용량 */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="rounded-xl border border-border bg-surface p-4">
-          <SectionTitle desc="일/주/월 추정 API 비용(YouTube·AI·Places 등 합산)">
-            API 비용 추이(추정)
+          <SectionTitle desc="실제로 돈이 나가는 항목 기준 — GCP 실측 Firestore 무료한도 초과분 + 추정 API 비용. YouTube·Gemini 는 무료 한도 내라 0 이 정상입니다.">
+            API 비용 추이
           </SectionTitle>
-          <BarChart items={apiBuckets} valueKey="cost" color="bg-live" label="비용($)" />
+          <BarChart
+            items={apiBuckets}
+            valueKey="cost"
+            color="bg-live"
+            label="비용"
+            format={(v) => `$${Number(v || 0).toFixed(3)}`}
+          />
         </div>
         <div className="rounded-xl border border-border bg-surface p-4">
           <SectionTitle desc="Monitoring 이 안 잡는 항목(번역·Gemini)만 — YouTube·Firestore 는 위 '실측 사용량' 참고">

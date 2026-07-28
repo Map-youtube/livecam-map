@@ -229,6 +229,43 @@ export async function GET(request) {
       usage = { ok: false, error: "사용량 조회 중 오류", daily: [] };
     }
 
+    // ── 비용 추이 보정 (2026-07-28) ────────────────────────────
+    // 문제: api_usage 의 total_estimated_cost_usd 를 지금은 아무도 기록하지 않아(usageRecorder 가
+    //       유닛/토큰만 증가시킴) 최근 날짜의 cost 가 전부 0 → "API 비용 추이" 막대가 평평했다.
+    // 사실: YouTube·Gemini 는 무료 한도 내라 실제 청구 비용이 0 인 게 맞다. 지금 실제로 돈이
+    //       나가는 항목은 Firestore 무료 한도 초과분이고, 그건 GCP Monitoring 실측값
+    //       (usage.daily[].firestoreCost)으로 이미 계산해 두었다.
+    // → 추정치(api_usage) + 실측 Firestore 초과비용을 합쳐 "실제에 가까운" 비용 추이를 만든다.
+    //   usage 에만 있는 날짜(api_usage 문서가 없는 날)도 항목으로 추가해 그래프가 끊기지 않게 한다.
+    const costByDate = new Map();
+    for (const d of apiDaily) costByDate.set(d.date, d);
+    for (const u of Array.isArray(usage.daily) ? usage.daily : []) {
+      const measured = num(u.firestoreCost);
+      const cur = costByDate.get(u.date);
+      if (cur) {
+        cur.measuredCost = measured;
+        cur.cost = num(cur.cost) + measured;
+      } else {
+        costByDate.set(u.date, {
+          date: u.date,
+          cost: measured,
+          measuredCost: measured,
+          youtubeUnits: num(u.youtubeUnits),
+          youtubeLimit: 10000,
+          aiTokens: 0,
+          aiCost: 0,
+          placesCalls: 0,
+        });
+      }
+    }
+    const apiDailyMerged = [...costByDate.values()].sort((a, b) =>
+      a.date.localeCompare(b.date)
+    );
+    const totalCostMerged = apiDailyMerged.reduce((s, d) => s + num(d.cost), 0);
+    const monthApiCostMerged = apiDailyMerged
+      .filter((d) => d.date.slice(0, 7) === monthStr)
+      .reduce((s, d) => s + num(d.cost), 0);
+
     return Response.json(
       {
         ok: true,
@@ -257,8 +294,9 @@ export async function GET(request) {
           botTotal,
         },
         api: {
-          daily: apiDaily,
-          totalCost,
+          // 추정치 + GCP 실측 Firestore 초과비용을 합친 목록(비용 추이 차트용)
+          daily: apiDailyMerged,
+          totalCost: totalCostMerged,
           totalYoutubeUnits, // 전체 누적(KPI 카드용)
           today: {
             date: todayStr,
@@ -272,7 +310,7 @@ export async function GET(request) {
             monthCharacters: monthTranslateChars, // 이번 달(무료 한도 비교용)
             monthCalls: monthTranslateCalls,
           },
-          monthCost: monthApiCost, // 이번 달 API 비용(손익용)
+          monthCost: monthApiCostMerged, // 이번 달 API 비용(추정+실측, 손익용)
           latestDate: latestApiDate,
         },
         finance: {
