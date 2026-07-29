@@ -231,15 +231,47 @@ function InitialWorldFit({ enabled }) {
       // 컨테이너 크기가 확정된 뒤 실행되도록 whenReady 사용
       map.whenReady(() => {
         try {
-          map.fitBounds(
-            [
-              [-56, -180], // 남서: 남미 남단 부근 ~ 태평양 서쪽 끝(±180)
-              [74, 180], // 북동: 알래스카/러시아 북단 위 ~ 태평양 동쪽 끝(±180)
-            ],
-            { animate: false }
-          );
+          const bounds = [
+            [-56, -180], // 남서: 남미 남단 부근 ~ 태평양 서쪽 끝(±180)
+            [74, 180], // 북동: 알래스카/러시아 북단 위 ~ 태평양 동쪽 끝(±180)
+          ];
+
+          // ─── 세로가 남는 화면(모바일)에서는 "채우기" 모드 ───────────────
+          // 왜: fitBounds 는 지정 범위가 화면에 "전부 들어가도록" 축소한다. 세로로 긴
+          //     모바일(390×724)에서는 가로(경도 360°)가 기준이 되어 세계지도가 390×390
+          //     정사각형이 되고, 위·아래로 각각 167px 씩 빈 영역이 남았다(실측).
+          // 어떻게: 이 줌에서의 "전체 세계 높이(px)"가 지도 영역 높이보다 작으면 세로가
+          //     남는다는 뜻이므로, 세계 높이가 화면 높이와 같아지는 줌으로 올려 꽉 채운다.
+          //     (경도는 화면 밖으로 넘어가고, 사용자가 좌우로 밀어 볼 수 있다.)
+          // ⚠️ 데스크톱은 가로가 넓어 이 조건에 걸리지 않으므로 기존 fitBounds 그대로다.
+          //    즉 화면 비율에 따라 자동 판별되며, 폭 기준 하드코딩(breakpoint)이 없다.
+          // ⚠️ zoomSnap=0(아래 MapContainer)이라 소수 줌이 가능해 정확히 맞아떨어진다.
+          const size = map.getSize();
+          const containZoom = map.getBoundsZoom(bounds, false);
+          const worldPx = 256 * Math.pow(2, containZoom); // 전체 세계(위도 ±85°)의 픽셀 높이
+          const hasVerticalGap = size && size.y > 0 && worldPx < size.y;
+
+          if (hasVerticalGap) {
+            // 세계 높이 == 화면 높이가 되는 줌. 위도는 전 범위가 딱 들어차고, 경도만 잘린다.
+            const fillZoom = Math.log2(size.y / 256);
+            map.setView([0, 0], fillZoom, { animate: false });
+          } else {
+            map.fitBounds(bounds, { animate: false });
+          }
         } catch (innerError) {
-          console.error("[LeafletMap] 초기 월드뷰 fitBounds 실패:", innerError); // TODO: 배포 전 제거
+          console.error("[LeafletMap] 초기 월드뷰 설정 실패:", innerError); // TODO: 배포 전 제거
+          // 어떤 이유로든 계산이 실패하면 기존 방식으로라도 맞춘다(무회귀).
+          try {
+            map.fitBounds(
+              [
+                [-56, -180],
+                [74, 180],
+              ],
+              { animate: false }
+            );
+          } catch (fallbackError) {
+            /* 마지막 폴백도 실패하면 Leaflet 기본 뷰 유지 */
+          }
         }
       });
     } catch (error) {

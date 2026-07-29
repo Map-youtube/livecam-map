@@ -50,16 +50,10 @@ const CHANNEL_MAJOR_ICON = {
   우주: { e: "🛰️", g: "from-[#9C8CF8] to-[#6D5EF0]" },
 };
 const DEFAULT_MAJOR_ICON = { e: "📡", g: "from-[#94A3B8] to-[#64748B]" };
-// 태그 앞 컬러 점 팔레트 (index 순환)
-const TAG_DOT = [
-  "#4F8BFF",
-  "#34C77B",
-  "#F59E0B",
-  "#14B8A6",
-  "#F43F5E",
-  "#A855F7",
-  "#FB923C",
-];
+// (2026-07-29) 태그 앞 컬러 점 팔레트(TAG_DOT)는 제거했다.
+//   index 순환이라 색에 아무 의미가 없었고("#강"은 파랑, "#공원"은 주황… 순서일 뿐),
+//   태그를 인라인으로 이어쓰는 형태로 바꾸면서 시각적 소음만 됐다.
+//   대륙/대분류 아이콘의 다색 팔레트는 "장식용 예외"로 의도된 것이라 그대로 둔다(위 주석 참고).
 
 // 국가 국기 — SVG(flagcdn, 무료 CDN). 이모지와 달리 Windows 포함 모든 기기에서
 // 실제 국기 그림으로 렌더된다.
@@ -572,35 +566,54 @@ export default function MainCategoryTree({
         {visibleTags.length === 0 ? (
           <p className="px-1 text-xs text-ink-muted">{t("noTags")}</p>
         ) : (
-          <div className="flex flex-col">
+          // ⚠️ 2026-07-29 변경: 한 줄에 하나씩 세로로 나열하던 것을 "#강(40), #공사현장(6), …"
+          //    형태의 이어쓰기(줄바꿈되는 인라인)로 바꿨다.
+          //    - 태그가 52개라 세로 나열은 사이드바 스크롤이 과도하게 길었다.
+          //    - 앞에 붙던 컬러 점은 "index 순환 팔레트"라 색에 아무 의미가 없었고
+          //      (디자인 시스템: 색은 상태·행동을 알릴 때만), 인라인에서는 시각적 소음이
+          //      더 커지므로 제거했다. 선택 상태는 브랜드색 배경으로 표시한다.
+          //    - 데스크톱 사이드바와 모바일 드로어가 같은 컴포넌트라 양쪽에 함께 적용된다.
+          <div className="flex flex-wrap items-baseline gap-x-0.5 gap-y-1 px-1 text-xs">
             {visibleTags.map((tag, i) => {
               // 각 태그는 자신의 고유 id 를 key 로, 자신의 name 을 콜백에 넘긴다.
               const active = selectedTag === tag.name;
+              const isLast = i === visibleTags.length - 1;
               return (
-                <button
+                <span
                   key={tag.id != null ? tag.id : tag.name}
-                  type="button"
-                  onClick={() =>
-                    typeof onSelectTag === "function" && onSelectTag(tag.name)
-                  }
-                  className={
-                    "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs transition hover:bg-brand-light " +
-                    (active
-                      ? "bg-brand-light font-semibold text-brand"
-                      : "text-ink")
-                  }
+                  className="inline-flex items-baseline"
                 >
-                  {/* 태그 앞 컬러 점 (index 순환 팔레트) */}
-                  <span
-                    aria-hidden="true"
-                    className="h-2 w-2 flex-none rounded-full"
-                    style={{ backgroundColor: TAG_DOT[i % TAG_DOT.length] }}
-                  />
-                  <span className="truncate">#{trFn(tag.name)}</span>
-                  <span className="ml-auto font-mono text-[11px] tabular-nums text-ink-muted">
-                    {tag.count}
-                  </span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      typeof onSelectTag === "function" && onSelectTag(tag.name)
+                    }
+                    className={
+                      "rounded px-1 py-0.5 transition hover:bg-brand-light " +
+                      "focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand " +
+                      (active
+                        ? "bg-brand-light font-semibold text-brand"
+                        : "text-ink")
+                    }
+                  >
+                    #{trFn(tag.name)}
+                    <span
+                      className={
+                        "font-mono tabular-nums " +
+                        (active ? "text-brand" : "text-ink-muted")
+                      }
+                    >
+                      ({tag.count})
+                    </span>
+                  </button>
+                  {/* 태그 사이 구분 쉼표 (마지막 항목 뒤에는 없음).
+                      -ml-0.5: 버튼의 좌우 패딩 때문에 "#강(40) ," 처럼 떠 보이는 것을 당겨 붙인다. */}
+                  {!isLast ? (
+                    <span aria-hidden="true" className="-ml-0.5 text-ink-muted">
+                      ,
+                    </span>
+                  ) : null}
+                </span>
               );
             })}
           </div>

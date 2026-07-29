@@ -26,6 +26,8 @@ import KlookWidget from "@/components/KlookWidget";
 import CjBanner from "@/components/CjBanner";
 import Footer from "@/components/Footer";
 import MobileDrawer from "@/components/MobileDrawer";
+import MobileBrowseHandle from "@/components/MobileBrowseHandle";
+import ScrollFadeRow from "@/components/ScrollFadeRow";
 import EarthquakeAlert from "@/components/EarthquakeAlert";
 import LanguageSelector from "@/components/i18n/LanguageSelector";
 import { useI18n } from "@/components/i18n/LanguageProvider";
@@ -852,26 +854,33 @@ export default function MainMapView({
     <div className="flex h-screen flex-col bg-bg">
       {/* 상단 헤더 바 (좌: 로고/태그라인/LIVE 카운트, 우: 언어 선택)
           소프트 라이트 톤 — 상단만 은은한 하늘빛, 로고 옆 LIVE 상태 알약. 구조/기능은 그대로. */}
-      <header className="flex h-12 flex-shrink-0 items-center gap-2.5 border-b border-border bg-[linear-gradient(180deg,#F5F9FD,#ffffff)] px-4">
+      <header className="flex h-12 flex-shrink-0 items-center gap-2 border-b border-border bg-[linear-gradient(180deg,#F5F9FD,#ffffff)] px-3 sm:gap-2.5 sm:px-4">
         <LiveDot size="sm" />
-        {/* 브랜드 워드마크: Trip = 잉크, by = 옅게, Clip = 브랜드 청록 강조 */}
-        <span className="font-display text-[20px] font-bold tracking-tight text-ink">
+        {/* 브랜드 워드마크: Trip = 잉크, by = 옅게, Clip = 브랜드 청록 강조.
+            ⚠️ whitespace-nowrap/flex-none: 좁은 폭에서 "Trip by / Clip" 으로 줄바꿈되면
+               h-12 헤더를 넘쳐 로고가 깨진다(2026-07-29 모바일 실측에서 발견). */}
+        <span className="flex-none whitespace-nowrap font-display text-[20px] font-bold tracking-tight text-ink">
           Trip <span className="font-normal text-ink-muted">by</span>{" "}
           <span className="text-brand">Clip</span>
         </span>
         <span className="hidden text-xs text-ink-muted sm:inline">
           {t("tagline")}
         </span>
-        {/* 현재 표시 중인 라이브 수 (지역 + 라이브 채널) — 좁은 화면에선 숨김 */}
-        <span className="ml-1.5 hidden items-center gap-1.5 rounded-full border border-live/25 bg-live-light px-2.5 py-0.5 text-[11px] font-semibold text-live md:inline-flex">
+        {/* 현재 표시 중인 라이브 수 (지역 + 라이브 채널).
+            ⚠️ 2026-07-29: 예전엔 md 미만에서 숨겼는데(hidden md:inline-flex), 모바일에서
+               "지금 몇 개가 라이브인지"라는 핵심 정보가 통째로 사라졌다. 모바일에서도
+               항상 보이게 하고, 대신 좁은 폭에서는 태그라인(tagline)이 먼저 숨겨진다.
+            ⚠️ flex-none + nowrap: 이 배지가 줄바꿈/축소되지 않게 한다. */}
+        <span className="ml-0.5 inline-flex flex-none items-center gap-1.5 whitespace-nowrap rounded-full border border-live/25 bg-live-light px-2 py-0.5 text-[11px] font-semibold text-live sm:ml-1.5 sm:px-2.5">
           <span className="inline-block h-1.5 w-1.5 rounded-full bg-live" />
           LIVE{" "}
           <span className="font-mono tabular-nums">
             {totalLiveCount.toLocaleString()}
           </span>
         </span>
-        {/* 우측: 언어 변경 드롭다운 */}
-        <div className="ml-auto">
+        {/* 우측: 언어 변경 드롭다운.
+            min-w-0: 폭이 모자랄 때 로고·LIVE 배지 대신 이쪽이 먼저 줄어들게 한다. */}
+        <div className="ml-auto min-w-0">
           <LanguageSelector />
         </div>
       </header>
@@ -999,12 +1008,12 @@ export default function MainMapView({
           {/* 상단: 2D/3D 토글 + 레이어 토글 4종
               - 모바일(md 미만): 화면 폭을 넘기므로 "가로 스크롤 칩 행"으로 (버튼이 겹치지 않게 축소 금지)
               - 데스크톱(md 이상): 기존과 동일하게 우측 상단 정렬 + 줄바꿈 */}
-          <div
+          <ScrollFadeRow
             className={
               "absolute z-[1000] flex gap-2 [&>button]:flex-shrink-0 " +
-              // 모바일: 좌우 여백 안에서 가로 스크롤 (스크롤바는 숨김)
+              // 모바일: 좌우 여백 안에서 가로 스크롤 (스크롤바는 숨김 + 양끝 페이드로 "더 있다" 표시)
               "no-scrollbar left-2 right-2 top-2 overflow-x-auto pb-1 " +
-              // 데스크톱: 우측 상단 고정 + 줄바꿈
+              // 데스크톱: 우측 상단 고정 + 줄바꿈 (스크롤이 없으므로 페이드도 자동으로 꺼진다)
               "md:left-auto md:right-3 md:top-3 md:flex-wrap md:justify-end md:overflow-visible md:pb-0"
             }
           >
@@ -1049,18 +1058,17 @@ export default function MainMapView({
             >
               🔥 {t("disaster")}
             </button>
-          </div>
+          </ScrollFadeRow>
 
-          {/* 모바일 전용: 카테고리 목록(지역/방송/태그) 열기 버튼.
-              하단 중앙 = 엄지로 누르기 쉬운 위치. 영상 바텀시트가 떠 있을 땐 가려지므로 숨긴다. */}
+          {/* 모바일 전용: 카테고리 목록(지역/방송/태그) 열기 손잡이.
+              화면 아래에 시트가 걸쳐 있는 모양 → 탭 또는 위로 끌어올리면 열린다.
+              영상 바텀시트가 떠 있을 땐 가려지므로 숨긴다. */}
           {!isPanelOpen && (
-            <button
-              type="button"
-              onClick={() => setTreeOpen(true)}
-              className="tap-target absolute bottom-3 left-1/2 z-[1000] flex -translate-x-1/2 items-center gap-2 rounded-md border border-border bg-surface px-5 py-2 text-sm font-semibold text-ink shadow-card transition active:scale-95 lg:hidden"
-            >
-              ☰ {t("browse")}
-            </button>
+            <MobileBrowseHandle
+              onOpen={() => setTreeOpen(true)}
+              label={t("browse")}
+              hint={t("dragToOpen")}
+            />
           )}
         </main>
 

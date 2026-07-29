@@ -25,7 +25,9 @@ export default function LanguageSelector() {
         value={locale}
         onChange={(e) => setLocale(e.target.value)}
         aria-label={t("language")}
-        className="max-w-[8.5rem] cursor-pointer rounded-md border border-border bg-surface px-2 py-1 text-xs text-ink transition hover:bg-bg focus:border-brand focus:outline-none"
+        // ⚠️ 모바일(좁은 폭)에서는 이 드롭다운이 먼저 줄어들어야 로고·LIVE 배지가
+        //    줄바꿈되지 않는다(2026-07-29 실측). 최대폭을 화면 크기별로 다르게 둔다.
+        className="max-w-[6.5rem] cursor-pointer rounded-md border border-border bg-surface px-2 py-1 text-xs text-ink transition hover:bg-bg focus:border-brand focus:outline-none sm:max-w-[8.5rem]"
       >
         {LANGUAGES.map((lang) => (
           <option key={lang.code} value={lang.code}>

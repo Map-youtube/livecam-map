@@ -15,7 +15,8 @@ export const messages = {
     earthquake: "Earthquakes",
     aurora: "Aurora",
     disaster: "Natural Disasters",
-    browse: "Browse",
+    browse: "Categories",
+    dragToOpen: "Drag up to open",
 
     region: "Regions",
     tags: "Tags",
@@ -51,7 +52,8 @@ export const messages = {
     earthquake: "지진",
     aurora: "오로라",
     disaster: "자연재해",
-    browse: "탐색",
+    browse: "카테고리 목록",
+    dragToOpen: "위로 끌어올려 열기",
 
     region: "지역",
     tags: "특성 태그",
@@ -87,7 +89,8 @@ export const messages = {
     earthquake: "地震",
     aurora: "オーロラ",
     disaster: "自然災害",
-    browse: "さがす",
+    browse: "カテゴリ一覧",
+    dragToOpen: "上にドラッグして開く",
 
     region: "地域",
     tags: "タグ",
@@ -123,7 +126,8 @@ export const messages = {
     earthquake: "地震",
     aurora: "极光",
     disaster: "自然灾害",
-    browse: "浏览",
+    browse: "分类目录",
+    dragToOpen: "向上拖动打开",
 
     region: "地区",
     tags: "标签",
@@ -159,7 +163,8 @@ export const messages = {
     earthquake: "Terremotos",
     aurora: "Aurora",
     disaster: "Desastres naturales",
-    browse: "Explorar",
+    browse: "Categorías",
+    dragToOpen: "Desliza hacia arriba",
 
     region: "Regiones",
     tags: "Etiquetas",
@@ -195,7 +200,8 @@ export const messages = {
     earthquake: "Séismes",
     aurora: "Aurore",
     disaster: "Catastrophes naturelles",
-    browse: "Parcourir",
+    browse: "Catégories",
+    dragToOpen: "Glissez vers le haut",
 
     region: "Régions",
     tags: "Étiquettes",
@@ -231,7 +237,8 @@ export const messages = {
     earthquake: "Erdbeben",
     aurora: "Polarlicht",
     disaster: "Naturkatastrophen",
-    browse: "Entdecken",
+    browse: "Kategorien",
+    dragToOpen: "Nach oben ziehen",
 
     region: "Regionen",
     tags: "Tags",
@@ -267,7 +274,8 @@ export const messages = {
     earthquake: "Terremoti",
     aurora: "Aurora",
     disaster: "Disastri naturali",
-    browse: "Esplora",
+    browse: "Categorie",
+    dragToOpen: "Trascina verso l'alto",
 
     region: "Regioni",
     tags: "Tag",
@@ -303,7 +311,8 @@ export const messages = {
     earthquake: "Terremotos",
     aurora: "Aurora",
     disaster: "Desastres naturais",
-    browse: "Explorar",
+    browse: "Categorias",
+    dragToOpen: "Arraste para cima",
 
     region: "Regiões",
     tags: "Etiquetas",
@@ -339,7 +348,8 @@ export const messages = {
     earthquake: "Землетрясения",
     aurora: "Полярное сияние",
     disaster: "Стихийные бедствия",
-    browse: "Обзор",
+    browse: "Категории",
+    dragToOpen: "Потяните вверх",
 
     region: "Регионы",
     tags: "Теги",
@@ -375,7 +385,8 @@ export const messages = {
     earthquake: "भूकंप",
     aurora: "ध्रुवीय ज्योति",
     disaster: "प्राकृतिक आपदाएँ",
-    browse: "ब्राउज़ करें",
+    browse: "श्रेणियाँ",
+    dragToOpen: "खोलने के लिए ऊपर खींचें",
 
     region: "क्षेत्र",
     tags: "टैग",
@@ -411,7 +422,8 @@ export const messages = {
     earthquake: "ভূমিকম্প",
     aurora: "মেরুজ্যোতি",
     disaster: "প্রাকৃতিক দুর্যোগ",
-    browse: "ব্রাউজ করুন",
+    browse: "বিভাগসমূহ",
+    dragToOpen: "খুলতে উপরে টানুন",
 
     region: "অঞ্চল",
     tags: "ট্যাগ",
@@ -447,7 +459,8 @@ export const messages = {
     earthquake: "แผ่นดินไหว",
     aurora: "แสงออโรรา",
     disaster: "ภัยธรรมชาติ",
-    browse: "เรียกดู",
+    browse: "หมวดหมู่",
+    dragToOpen: "ลากขึ้นเพื่อเปิด",
 
     region: "ภูมิภาค",
     tags: "แท็ก",
@@ -483,7 +496,8 @@ export const messages = {
     earthquake: "Động đất",
     aurora: "Cực quang",
     disaster: "Thiên tai",
-    browse: "Duyệt",
+    browse: "Danh mục",
+    dragToOpen: "Kéo lên để mở",
 
     region: "Khu vực",
     tags: "Thẻ",
@@ -519,7 +533,8 @@ export const messages = {
     earthquake: "Gempa Bumi",
     aurora: "Aurora",
     disaster: "Bencana Alam",
-    browse: "Jelajahi",
+    browse: "Kategori",
+    dragToOpen: "Seret ke atas",
 
     region: "Wilayah",
     tags: "Tag",
@@ -555,7 +570,8 @@ export const messages = {
     earthquake: "الزلازل",
     aurora: "الشفق القطبي",
     disaster: "الكوارث الطبيعية",
-    browse: "تصفح",
+    browse: "الفئات",
+    dragToOpen: "اسحب لأعلى للفتح",
 
     region: "المناطق",
     tags: "الوسوم",
@@ -591,7 +607,8 @@ export const messages = {
     earthquake: "زمین‌لرزه‌ها",
     aurora: "شفق قطبی",
     disaster: "بلایای طبیعی",
-    browse: "مرور",
+    browse: "دسته‌بندی‌ها",
+    dragToOpen: "برای باز کردن بکشید",
 
     region: "مناطق",
     tags: "برچسب‌ها",
