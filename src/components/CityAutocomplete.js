@@ -27,6 +27,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getAdminIdToken } from "@/lib/clientAuth";
 
 // 공백 제거 + 소문자화 정규화 (띄어쓰기/대소문자 차이로 같은 도시를 다르게 저장하는 것 방지)
 function normalizeCity(s) {
@@ -52,7 +53,14 @@ export default function CityAutocomplete({
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/markers/cities");
+        // 2026-07-29: /api/markers/cities 에 관리자 인증이 추가됨(무인증 전체 스캔 방지) →
+        //   이 컴포넌트는 관리자 폼 전용이므로 토큰을 붙여 호출한다. 토큰이 없으면(로그인 전
+        //   렌더 등) 조용히 건너뛴다 — 자동완성은 부가 기능이라 실패해도 폼 자체는 동작한다.
+        const token = await getAdminIdToken();
+        if (!token) return;
+        const res = await fetch("/api/markers/cities", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         const data = await res.json();
         if (!cancelled && data && data.ok && Array.isArray(data.cities)) {
           setAllCities(data.cities);
