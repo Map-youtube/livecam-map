@@ -58,9 +58,22 @@ export default function AutoChannelList({ refreshSignal }) {
     setLoading(true);
     setError("");
     try {
+      // 2026-07-29: 두 목록 API 에 관리자 인증이 추가됨(무인증 전체 스캔 방지 —
+      //   호출 1회당 auto_markers 958 + auto_channels 241 = 1,199 읽기였다).
+      //   → 토큰을 붙여 호출한다. 토큰이 없으면(로그인 만료 등) 안내 후 중단.
+      const token = await getAdminIdToken();
+      if (!token) {
+        setError("로그인이 필요합니다. 다시 로그인해 주세요.");
+        setLoading(false);
+        return;
+      }
+      const authHeaders = { Authorization: `Bearer ${token}` };
       const [chRes, mkRes] = await Promise.all([
-        fetch("/api/auto-channels", { cache: "no-store" }),
-        fetch("/api/auto-channels/markers", { cache: "no-store" }),
+        fetch("/api/auto-channels", { cache: "no-store", headers: authHeaders }),
+        fetch("/api/auto-channels/markers", {
+          cache: "no-store",
+          headers: authHeaders,
+        }),
       ]);
       const chData = await chRes.json();
       const mkData = await mkRes.json();

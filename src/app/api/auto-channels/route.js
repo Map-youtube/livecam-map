@@ -44,8 +44,20 @@ function serialize(id, data) {
 }
 
 // ─── GET: 채널 목록 ──────────────────────────────────────────
-export async function GET() {
+// ⚠️ 2026-07-29 인증 추가 (Firestore 읽기 초과 전수조사): POST(등록)에는 관리자 검증이
+//    있었지만 GET 에는 없어서, 인증·캐시 없이 auto_channels 컬렉션 전체(실측 241개)를
+//    누구나 반복 조회할 수 있었다. 이 목록은 관리자 화면(AutoChannelList)에서만 쓰인다.
+//    같은 화면이 함께 부르는 /api/auto-channels/markers(958개)와 합쳐 호출 1회 = 1,199 읽기.
+export async function GET(request) {
   try {
+    const authResult = await verifyAdminRequest(request);
+    if (!authResult.valid) {
+      return Response.json(
+        { ok: false, channels: [], error: authResult.error || "로그인이 필요합니다" },
+        { status: 401 }
+      );
+    }
+
     const snapshot = await adminDb.collection(COLLECTION).get();
     const channels = snapshot.docs.map((d) => serialize(d.id, d.data()));
     channels.sort((a, b) =>
