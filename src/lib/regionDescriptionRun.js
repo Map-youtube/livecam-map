@@ -29,6 +29,7 @@ import {
   continentDescKey,
   countryDescKey,
   cityDescKey,
+  invalidateRegionDescriptionsSnapshot,
 } from "@/lib/regionDescriptions";
 import { generateRegionDescriptions } from "@/lib/regionDescriptionAi";
 
@@ -175,6 +176,15 @@ export async function runRegionDescriptionFill({ cap = 40 } = {}) {
     }
 
     // 항상 재검증한다(생성이 0이어도) → 외부에서 직접 써넣은 설명도 즉시 공개 페이지에 반영.
+    //
+    // ⚠️ 홈(/)은 전체 소개글 맵을 Firestore 시간제 스냅샷(live_snapshots/region_descriptions)
+    //    으로 읽으므로, 태그 재검증만으로는 갱신되지 않는다. 스냅샷도 함께 무효화해야
+    //    새로 만든 소개글이 기존과 동일한 타이밍(= 스캔 직후)에 홈에 반영된다.
+    try {
+      await invalidateRegionDescriptionsSnapshot();
+    } catch (snapErr) {
+      console.error("[regionDescriptionRun] 스냅샷 무효화 실패:", snapErr); // TODO: 배포 전 제거
+    }
     try {
       revalidateTag("region-descriptions");
     } catch (revalErr) {

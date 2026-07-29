@@ -16,8 +16,15 @@
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { adminDb } from "@/lib/firebaseAdmin";
+import { getTimedSnapshot } from "@/lib/liveSnapshot";
 
 export const REGION_DESC_COLLECTION = "region_descriptions";
+
+// 홈 화면이 쓰는 "전체 소개글 맵"을 담아두는 전역 공유 스냅샷 문서 id (live_snapshots/{id})
+const SNAPSHOT_DOC_ID = "region_descriptions";
+// 스냅샷 재계산 주기. 소개글은 하루 1회 자동 스캔 때만 늘어나고, 그때
+// invalidateRegionDescriptionsSnapshot() 이 즉시 무효화하므로 주기는 여유 있게 둔다.
+const SNAPSHOT_REFRESH_MS = 6 * 60 * 60 * 1000; // 6시간
 
 export function continentDescKey(continent) {
   return `continent__${String(continent || "").trim()}`;
@@ -47,8 +54,52 @@ async function fetchAllRegionDescriptions() {
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+// ⚠️ Firestore 읽기 절감(2026-07-29, 실측 대응):
+//    홈(/)이 렌더될 때마다 위 fetchAllRegionDescriptions 가 region_descriptions 컬렉션
+//    "전체"(현재 214개)를 스캔했다. unstable_cache 는 Vercel 서버리스 인스턴스별로 분리돼
+//    콜드 렌더마다 재조회되므로, 실측 24시간 QUERY 읽기 44,644건의 주된 몫이었다.
+//    (커밋 457fcbf 가 같은 문제를 대륙/국가/도시 SEO 페이지 3곳에서 고쳤으나 홈은 누락됐다.)
+//
+//    → 방송 목록·사이트맵과 동일한 "Firestore 시간제 스냅샷"(liveSnapshot)으로 전환한다.
+//      전체 스캔은 주기당 1회만 일어나고, 그 외 렌더는 스냅샷 문서 1개만 읽는다.
+//      214 읽기/렌더 → 1 읽기/렌더.
+//
+//    ⚠️ 반환값은 기존과 완전히 동일한 { key: {ko,en} } 맵이다(호출부·화면 변화 없음).
+//    ⚠️ 소개글이 새로 생성되면 regionDescriptionRun 이 이 스냅샷을 즉시 무효화하므로
+//       신선도는 기존(revalidateTag)과 동일하게 유지된다.
+//    ⚠️ 실측 크기 78.9KB (Firestore 1MB 한도의 7.7%) — 여유 있음.
+//    ⚠️ 스냅샷이 비었으면(계산 실패 등) 이전 정상값을 유지한다(getTimedSnapshot 규칙).
+// ─────────────────────────────────────────────────────────────
+async function fetchAllRegionDescriptionsShared() {
+  try {
+    const data = await getTimedSnapshot({
+      docId: SNAPSHOT_DOC_ID,
+      refreshMs: SNAPSHOT_REFRESH_MS,
+      compute: fetchAllRegionDescriptions, // 실패해도 {} 반환(throw 안 함)
+      // 값이 {ko,en} 객체라 기본 isEmpty(배열 판정)로는 판단이 어렵다 → 키 개수로 판정.
+      isEmpty: (v) => !v || typeof v !== "object" || Object.keys(v).length === 0,
+    });
+    return data && typeof data === "object" ? data : {};
+  } catch (error) {
+    console.error("[regionDescriptions] 스냅샷 조회 실패:", error); // TODO: 배포 전 제거
+    return {};
+  }
+}
+
+// 소개글이 새로 생성/수정됐을 때 스냅샷을 즉시 만료시킨다(다음 렌더에서 재계산).
+//   문서를 지우면 getTimedSnapshot 이 "저장값 없음"으로 보고 새로 계산해 저장한다.
+export async function invalidateRegionDescriptionsSnapshot() {
+  try {
+    await adminDb.collection("live_snapshots").doc(SNAPSHOT_DOC_ID).delete();
+  } catch (error) {
+    // 실패해도 최대 SNAPSHOT_REFRESH_MS 뒤에 자연히 갱신되므로 조용히 넘어간다.
+    console.error("[regionDescriptions] 스냅샷 무효화 실패:", error); // TODO: 배포 전 제거
+  }
+}
+
 export const getRegionDescriptions = unstable_cache(
-  fetchAllRegionDescriptions,
+  fetchAllRegionDescriptionsShared,
   ["region-descriptions"],
   { revalidate: 86400, tags: ["region-descriptions"] }
 );
