@@ -104,6 +104,7 @@ export async function scanChannels(channelDocs, opts = {}) {
     enrichFailed: 0,
     reused: 0, // 이미 있던 영상 재활용(AI 재호출 없음)
     skippedNoLocation: 0, // AI가 위치를 특정 못한 영상(월드 모음 등) — 숨김 캐시
+    skippedMembersOnly: 0, // AI가 제목에서 회원전용/멤버십 표시를 감지한 영상 — 숨김 캐시
     markedEnded: 0,
     aiCapReached: false,
   };
@@ -229,9 +230,11 @@ export async function scanChannels(channelDocs, opts = {}) {
         // 이미 있는 영상 → AI 재호출 없이 라이브 상태만 복원(비용 0)
         const patch = { last_checked_at: FieldValue.serverTimestamp() };
         if (data.is_live !== true) patch.is_live = true;
-        // 위치를 못 찾아 숨겨둔(ai_unlocatable) 영상은 다시 켜지 않는다.
+        // 위치를 못 찾아 숨겨둔(ai_unlocatable) 영상과 회원전용으로 판단해 숨겨둔
+        // (ai_members_only) 영상은 계속 라이브로 잡혀도 다시 켜지 않는다.
         if (
           data.ai_unlocatable !== true &&
+          data.ai_members_only !== true &&
           data.is_active !== true &&
           data.auto_disabled !== true
         )
@@ -285,7 +288,49 @@ export async function scanChannels(channelDocs, opts = {}) {
         typeof ai.lng === "number" &&
         !(ai.lat === 0 && ai.lng === 0);
 
+      // ⚠️ 회원전용(멤버십) 영상 제외(2026-07-29): YouTube 공식 API(videos.list)는 회원전용
+      //    여부를 알려주는 필드가 없다(embeddable 은 "임베드 가능"과 "멤버십 제한"이 다른
+      //    개념이라 별도로 false 가 되지 않는다). 그래서 지금까지는 위치까지 잘 특정돼 지도에
+      //    올라간 뒤, 방문자가 실제로 눌러 재생을 시도해야만(멤버가 아니라 재생 실패)
+      //    report-error 로 신고되어 사라졌다 — "떴다가 눌러야 사라지는" 반복의 원인.
+      //    → AI 가 이미 제목을 읽고 있으므로, 같은 호출에서 제목의 회원전용 표시
+      //    ('[MEMBERS ONLY]' 등)도 함께 판단하게 해 애초에 지도에 올리지 않는다.
+      //    ⚠️ 제목에 명시적 표시가 없는 회원전용 영상은 여전히 못 잡는다(휴리스틱 한계 —
+      //    YouTube 가 API 로 이 정보를 안 주는 이상 100% 탐지는 불가능하다). 그런 경우는
+      //    지금처럼 방문자 재생 시도 → report-error 로 걸러진다(변화 없음).
+      const membersOnly = ai.membersOnly === true;
+
       try {
+        if (membersOnly) {
+          // 위치를 알아도(구애받지 않고) 숨김 상태로만 캐시한다 — 지도에 올리지 않되,
+          // 다음 스캔에서 이 영상을 "신규"로 오인해 AI 를 다시 부르지 않게 한다(비용 0).
+          await ref.set({
+            location: ai.location || v.title || "",
+            description: ai.description || { ko: "", en: "" },
+            description_confirmed: true,
+            youtube_video_id: v.videoId,
+            youtube_url: `https://www.youtube.com/watch?v=${v.videoId}`,
+            youtube_title: v.title || "",
+            youtube_channel_name: v.channelName || ch.channel_name || "",
+            youtube_thumbnail_url: v.thumbnailUrl || getThumbnailUrl(v.videoId),
+            is_live: true,
+            is_active: false, // 숨김
+            auto_disabled: false,
+            disabled_reason: "members_only",
+            ai_members_only: true, // 회원전용 표식(재호출·재활성화 방지)
+            source_channel_id: ch.id,
+            source_channel_youtube_id: ch.channel_id,
+            ai_enriched: true,
+            ai_model: ai.model || "",
+            ai_enriched_at: now,
+            last_checked_at: now,
+            created_at: now,
+            updated_at: now,
+          });
+          report.skippedMembersOnly += 1;
+          continue;
+        }
+
         if (!located) {
           // 위치 미상 → 숨김 상태로 "캐시"만 한다(is_active:false).
           //   → 지도/목록엔 안 뜨고, 다음 스캔에서 다시 AI 를 부르지도 않는다(비용 0).

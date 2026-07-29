@@ -581,7 +581,14 @@ function AutoMarkerRow({ marker, onDelete, onSaved, authHeaders }) {
             </span>
             {marker.is_active === false ? (
               <span className="flex-none rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-ink-muted">
-                숨김(위치미상)
+                {/* 숨김 사유를 구분해서 보여준다(2026-07-29) — 예전엔 사유와 무관하게
+                    전부 "위치미상"으로 뭉뚱그려, 회원전용/재생불가로 숨겨진 것도
+                    위치를 못 찾은 것처럼 보였다. */}
+                {marker.ai_members_only
+                  ? "숨김(회원전용)"
+                  : marker.auto_disabled
+                    ? "숨김(재생불가)"
+                    : "숨김(위치미상)"}
               </span>
             ) : marker.is_live === true ? (
               <span className="flex-none rounded-full bg-live-light px-1.5 py-0.5 text-[10px] font-semibold text-live">

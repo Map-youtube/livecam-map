@@ -176,6 +176,10 @@ function normalizeAiItem(parsed, existingTags) {
       ko: String(descObj.ko || "").trim(),
       en: String(descObj.en || "").trim(),
     },
+    // 회원전용(멤버십) 라이브 추정 여부 — 2026-07-29 추가. AI 가 제목만 보고 판단하므로
+    // "제목에 그렇게 적혀있는 경우"만 잡는 휴리스틱이다(보장 아님). 자세한 이유는
+    // 이 값을 쓰는 autoMarkerScan.js 의 skippedMembersOnly 처리 주석 참고.
+    membersOnly: parsed.membersOnly === true,
     model: AUTO_MARKER_MODEL,
   };
 }
@@ -298,11 +302,14 @@ export async function enrichVideosToMarkers(videos = [], existingTags = []) {
       "4) tags 는 아래 '사이트 태그 목록'에 있는 것 중에서만 1~3개. 적합한 게 없으면 빈 배열([]). 목록에 없는 태그를 지어내지 마라.",
       "5) description 은 ko·en 각각 2~3문장, 사실 위주.",
       "6) 위치를 전혀 특정할 수 없으면 location/city/country/lat/lng 를 비우고 description 만 채운다. 절대 지어내지 마라.",
+      "7) membersOnly: 제목에 회원전용/멤버십 전용임을 나타내는 표시가 있으면 true.",
+      "   예: '[MEMBERS ONLY]', 'Members Only', '멤버십 전용', '멤버 전용', '회원전용', '구독자 전용',",
+      "   'Sponsors only', 자물쇠 이모지(🔒)가 제목 앞뒤에 붙은 경우. 확신 없으면 false(억지 추정 금지).",
       "",
       `사이트 태그 목록: ${tagListStr || "(없음)"}`,
       "",
       '반드시 아래 JSON 형식으로만 답하라(다른 텍스트 금지). results 배열의 각 원소는 입력 영상 1개에 대응:',
-      '{"results":[{"videoId":"","location":"","city":"","country":"","lat":null,"lng":null,"tags":[],"description":{"ko":"","en":""}}]}',
+      '{"results":[{"videoId":"","location":"","city":"","country":"","lat":null,"lng":null,"tags":[],"description":{"ko":"","en":""},"membersOnly":false}]}',
     ].join("\n");
 
     // 한 요청에 담는 영상 수. 출력 토큰(각 ko/en 설명 포함)을 고려해 8개.
