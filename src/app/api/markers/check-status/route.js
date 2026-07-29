@@ -156,11 +156,14 @@ export async function POST(request) {
     for (let i = 0; i < toDisable.length; i += 400) {
       const batch = adminDb.batch();
       for (const item of toDisable.slice(i, i + 400)) {
+        // ⚠️ updated_at 필수(2026-07-30 버그 수정) — report-error 와 동일 이유:
+        //    손님 화면이 읽는 청크 인덱스는 updated_at 변화로만 갱신을 감지한다.
         batch.update(item.ref, {
           auto_disabled: true,
           is_active: false,
           disabled_reason: item.reason,
           last_checked_at: FieldValue.serverTimestamp(),
+          updated_at: FieldValue.serverTimestamp(),
         });
       }
       await batch.commit();

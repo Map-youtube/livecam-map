@@ -229,7 +229,11 @@ export async function scanChannels(channelDocs, opts = {}) {
       if (data) {
         // 이미 있는 영상 → AI 재호출 없이 라이브 상태만 복원(비용 0)
         const patch = { last_checked_at: FieldValue.serverTimestamp() };
-        if (data.is_live !== true) patch.is_live = true;
+        let stateChanged = false;
+        if (data.is_live !== true) {
+          patch.is_live = true;
+          stateChanged = true;
+        }
         // 위치를 못 찾아 숨겨둔(ai_unlocatable) 영상과 회원전용으로 판단해 숨겨둔
         // (ai_members_only) 영상은 계속 라이브로 잡혀도 다시 켜지 않는다.
         if (
@@ -237,8 +241,16 @@ export async function scanChannels(channelDocs, opts = {}) {
           data.ai_members_only !== true &&
           data.is_active !== true &&
           data.auto_disabled !== true
-        )
+        ) {
           patch.is_active = true;
+          stateChanged = true;
+        }
+        // ⚠️ updated_at 필수(2026-07-30 버그 수정, report-error 와 동일 이유): is_live/is_active
+        //    가 실제로 바뀔 때만 찍는다 — 매 스캔 last_checked_at 만 도는 절대다수의 "변화 없음"
+        //    케이스까지 updated_at 을 건드리면 증분 동기화가 항상 "전부 바뀜"으로 보여
+        //    청크 인덱스가 스캔마다 통째로 재계산된다(비용 급증). 상태가 실제로 바뀐 문서만
+        //    updated_at 을 찍어야 증분 동기화의 "바뀐 것만" 전제가 유지된다.
+        if (stateChanged) patch.updated_at = FieldValue.serverTimestamp();
         reuseWriter.update(ref, patch).catch((e) => {
           console.error("[autoMarkerScan] 재활용 갱신 실패:", v.videoId, e); // TODO: 배포 전 제거
         });

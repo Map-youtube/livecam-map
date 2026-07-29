@@ -81,11 +81,21 @@ export async function POST(request, context) {
     }
 
     // 자동 비활성화 처리 (auto_disabled:true 라 다음 스캔에서도 다시 켜지지 않는다)
+    //
+    // ⚠️ updated_at 을 반드시 함께 갱신한다(2026-07-30 버그 수정). 손님 화면이 실제로 읽는
+    //    청크 인덱스(marker_index)는 "updated_at 이 바뀐 문서만" 변경된 것으로 감지해
+    //    반영한다(markerIndex.js syncMarkerIndex 의 where("updated_at", ">", since) 참고).
+    //    이 필드를 안 쓰면 여기서 auto_disabled/is_active 를 아무리 바꿔도 인덱스가 절대
+    //    감지하지 못해, 손님 화면엔 재생불가로 신고된 영상이 "영구히" 재생 가능한 것처럼
+    //    계속 보인다(관리자 목록은 Firestore 를 직접 읽어 정상으로 보이므로 눈치채기 어려웠다).
+    //    실제 증상: 방문자가 눌러 신고 → 그 세션에선 사라짐(클라이언트 상태) → 재접속/다른
+    //    방문자에게는 그대로 다시 뜸 → 또 눌러야 사라짐, 무한 반복.
     await docRef.update({
       auto_disabled: true,
       is_active: false,
       disabled_reason: reason,
       last_checked_at: FieldValue.serverTimestamp(),
+      updated_at: FieldValue.serverTimestamp(),
     });
 
     // 공개 캐시 즉시 무효화 → 손님 화면에서 바로 제외

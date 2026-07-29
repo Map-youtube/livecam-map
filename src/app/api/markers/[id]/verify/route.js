@@ -83,11 +83,14 @@ export async function POST(request, context) {
     // (영상 ID 는 남아있어 조회는 되지만 실제로는 라이브가 아님 → 재활성 시 재발 방지)
     if (ytInfo.liveBroadcastContent !== "live") {
       const reason = ytInfo.streamEnded ? "stream_ended" : "not_live";
+      // ⚠️ updated_at 필수(2026-07-30 버그 수정) — report-error 와 동일 이유:
+      //    손님 화면이 읽는 청크 인덱스는 updated_at 변화로만 갱신을 감지한다.
       await docRef.update({
         auto_disabled: true,
         is_active: false,
         disabled_reason: reason,
         last_checked_at: FieldValue.serverTimestamp(),
+        updated_at: FieldValue.serverTimestamp(),
       });
       // 손님 화면에서 확실히 제외되도록 캐시 무효화
       try {
@@ -110,11 +113,15 @@ export async function POST(request, context) {
     }
 
     // ─── 정상(현재 라이브/재생 가능) → 복원 + 최신 제목/썸네일 갱신 ─
+    // ⚠️ updated_at 필수(2026-07-30 버그 수정) — 이걸 안 쓰면 관리자가 "재생확인"으로
+    //    복원해도 손님 화면(청크 인덱스)에는 반영되지 않아 계속 안 보이는 반대 방향
+    //    문제가 생긴다.
     await docRef.update({
       auto_disabled: false,
       is_active: true,
       disabled_reason: null,
       last_checked_at: FieldValue.serverTimestamp(),
+      updated_at: FieldValue.serverTimestamp(),
       youtube_title: ytInfo.title,
       youtube_thumbnail_url: ytInfo.thumbnailUrl,
     });
