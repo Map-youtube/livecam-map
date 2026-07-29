@@ -8,10 +8,9 @@
 // ⚠️ 인증/로그인 로직을 넣지 않는다 (공개 화면).
 // ─────────────────────────────────────────────────────────────
 
-import { unstable_cache } from "next/cache";
-import { adminDb } from "@/lib/firebaseAdmin";
 import { getMapMarkers } from "@/lib/getMapMarkers";
 import { getLiveChannels } from "@/lib/getLiveChannels";
+import { getPublicTags } from "@/lib/getPublicTags";
 import { getRegionDescriptions } from "@/lib/regionDescriptions";
 import MainMapView from "@/components/MainMapView";
 
@@ -51,32 +50,11 @@ function slimMarkerForClient(marker) {
   return out;
 }
 
-// 태그 목록 조회 (id, name 만 사용 → 타임스탬프 직렬화 문제 없음)
-//
-// ⚠️ Firestore 읽기 절감(2026-07-20 전체 재점검): 이 함수는 홈(/)이 렌더될 때마다 호출되는데,
-//    예전에는 캐시가 전혀 없어서 다른 데이터(getMapMarkers 등)가 캐시 히트인 "따뜻한" 렌더에서도
-//    tags 컬렉션을 매번 통째로 스캔했다(방문/크롤 렌더마다 tags 문서 수만큼 읽기). tags 는 거의
-//    안 바뀌므로 unstable_cache(10분)로 감싸 렌더마다 재조회를 막는다(관리자가 태그를 추가하면
-//    revalidateTag("tags") 로 즉시 갱신 가능하도록 태그도 부여).
-const getPublicTags = unstable_cache(
-  async () => {
-    try {
-      const snapshot = await adminDb.collection("tags").get();
-      const tags = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        name: (doc.data() && doc.data().name) || "",
-      }));
-      // 한국어 가나다순 정렬
-      tags.sort((a, b) => a.name.localeCompare(b.name, "ko"));
-      return tags;
-    } catch (error) {
-      console.error("[page] 태그 조회 실패:", error); // TODO: 배포 전 제거
-      return [];
-    }
-  },
-  ["public-tags"],
-  { revalidate: 600, tags: ["tags"] }
-);
+// ⚠️ 태그 목록 조회는 src/lib/getPublicTags.js 로 옮겼다(2026-07-29).
+//    이유: 예전에는 여기서 tags 컬렉션(53개)을 통째로 스캔했는데, unstable_cache 는 Vercel
+//    서버리스 인스턴스별로 분리돼 콜드 렌더마다 재조회됐다(지역 소개글과 동일한 원인).
+//    → Firestore 시간제 스냅샷 경유로 바꿔 53 읽기 → 1 읽기. 반환 형태·정렬은 동일하다.
+//    (관리자가 태그를 추가하면 /api/tags POST 가 스냅샷을 즉시 무효화한다.)
 
 export default async function Home() {
   // 마커(캐싱)·태그·자동 라이브 채널·지역 소개글을 병렬로 조회

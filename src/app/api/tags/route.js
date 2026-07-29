@@ -10,9 +10,11 @@
 // ⚠️ 유튜브/AI API 호출 없음 (Firestore 만 사용) → 추가 비용 없음.
 // ─────────────────────────────────────────────────────────────
 
+import { revalidateTag } from "next/cache";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { FieldValue } from "firebase-admin/firestore";
 import { verifyAdminRequest } from "@/lib/authUtils";
+import { invalidatePublicTagsSnapshot } from "@/lib/getPublicTags";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -109,6 +111,20 @@ export async function POST(request) {
       name,
       created_at: FieldValue.serverTimestamp(),
     });
+
+    // 홈 화면의 태그 목록 캐시 무효화 → 새 태그가 즉시 보이게 한다.
+    //   홈은 tags 를 Firestore 시간제 스냅샷(live_snapshots/public_tags)으로 읽으므로
+    //   태그 재검증만으로는 갱신되지 않는다. 스냅샷도 함께 만료시킨다.
+    try {
+      await invalidatePublicTagsSnapshot();
+    } catch (snapErr) {
+      console.error("[api/tags][POST] 스냅샷 무효화 실패:", snapErr); // TODO: 배포 전 제거
+    }
+    try {
+      revalidateTag("tags");
+    } catch (revalErr) {
+      console.error("[api/tags][POST] 재검증 실패:", revalErr); // TODO: 배포 전 제거
+    }
 
     return Response.json(
       {

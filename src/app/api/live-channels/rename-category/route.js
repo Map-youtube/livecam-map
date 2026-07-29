@@ -16,6 +16,7 @@ import { revalidateTag } from "next/cache";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { FieldValue } from "firebase-admin/firestore";
 import { verifyAdminRequest } from "@/lib/authUtils";
+import { invalidateLiveChannelsSnapshot } from "@/lib/getLiveChannels";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -86,6 +87,12 @@ export async function POST(request) {
     }
     await batch.commit();
 
+    // ⚠️ 채널 목록은 Firestore 시간제 스냅샷으로 읽으므로 스냅샷도 함께 만료시킨다.
+    try {
+      await invalidateLiveChannelsSnapshot();
+    } catch (snapErr) {
+      console.error("[api/live-channels/rename-category] 스냅샷 무효화 실패:", snapErr); // TODO: 배포 전 제거
+    }
     try {
       revalidateTag("live-channels");
     } catch (revalErr) {

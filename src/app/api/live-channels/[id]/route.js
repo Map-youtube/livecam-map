@@ -14,6 +14,7 @@ import { adminDb } from "@/lib/firebaseAdmin";
 import { FieldValue } from "firebase-admin/firestore";
 import { verifyAdminRequest } from "@/lib/authUtils";
 import { resolveYoutubeChannel } from "@/lib/liveChannelUtils";
+import { invalidateLiveChannelsSnapshot } from "@/lib/getLiveChannels";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -97,6 +98,12 @@ export async function PATCH(request, context) {
 
     await ref.update(update);
 
+    // ⚠️ 채널 목록은 Firestore 시간제 스냅샷으로 읽으므로 스냅샷도 함께 만료시킨다.
+    try {
+      await invalidateLiveChannelsSnapshot();
+    } catch (snapErr) {
+      console.error("[api/live-channels/[id]][PATCH] 스냅샷 무효화 실패:", snapErr); // TODO: 배포 전 제거
+    }
     try {
       revalidateTag("live-channels");
     } catch (revalErr) {
@@ -140,6 +147,13 @@ export async function DELETE(request, context) {
 
     await ref.delete();
 
+    // ⚠️ 채널 목록은 Firestore 시간제 스냅샷으로 읽으므로 스냅샷도 함께 만료시킨다.
+    //    (삭제된 채널이 스냅샷에 남아 계속 노출되는 것을 막는다)
+    try {
+      await invalidateLiveChannelsSnapshot();
+    } catch (snapErr) {
+      console.error("[api/live-channels/[id]][DELETE] 스냅샷 무효화 실패:", snapErr); // TODO: 배포 전 제거
+    }
     try {
       revalidateTag("live-channels");
     } catch (revalErr) {
