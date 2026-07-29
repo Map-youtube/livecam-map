@@ -2,8 +2,10 @@
 
 > 🔴 **이 문서는 2026-07-11 기준입니다. 최신 상태는 `HANDOVER-2026-07-28.md` 를 먼저 보세요.**
 > 그 이후 큰 변경: 마커 청크 인덱스 도입, Firestore 읽기 사고 4회 대응, 지진 알림 팝업 +
-> 지진 상세 SEO 페이지, 자동채널 스캔 300초→48초 최적화, Gemini 503 재시도 수정.
+> 지진 상세 SEO 페이지, 자동채널 스캔 300초→48초 최적화, Gemini 503 재시도 수정,
+> 지역 미특정 마커 숨김, **서치콘솔 색인 192건 · 애드센스 재신청(7/28) · 방문 봇/유입 분석 · 비용 추이 차트 수정(7/29)**.
 > 두 문서가 충돌하면 **`HANDOVER-2026-07-28.md` 가 우선**입니다.
+> 사고로 만들어진 **보고 원칙·금지 사항·Firestore 비용 규칙은 `CLAUDE.md` §2-A/§2-B/§2-C** 에 있습니다(매 세션 자동 로드).
 
 > 최종 업데이트: **2026-07-11**
 > 대상 도메인: `tripbyclip.com` (배포: Vercel) · 브랜치: `develop`(작업) / `master`(배포)
@@ -151,8 +153,13 @@ src/lib/
   - 레거시 `continent:"americas"` 마커 존재 → 표시 시 국가코드로 north/south america 정규화(`MainMapView`, `seoData.getNormalizedPublicMarkers`).
 - `tags`: {id,name}.
 - `translations` ★: 동적 번역 캐시. docId=`${target}_sha1(원문)`, {target,source,value,updated_at}. (문자열·언어별 최초 1회만 번역)
-- `api_usage/{YYYY-MM}` ★: {translate:{characters_used,calls}} 누적(모니터링용, 대시보드 표시는 미구현).
-- `analytics`: 미구현.
+- `api_usage/{YYYY-MM}` ★: {translate:{characters_used,calls}} 누적. (2026-07 기준 **대시보드 표시 구현됨**. 단
+  `recordApiUsage` 는 비용 필드를 안 쓰므로, 실제 비용은 GCP 실측 Firestore 초과분과 병합해 표시한다 —
+  `HANDOVER-2026-07-28.md` §6-1)
+- `analytics/{YYYY-MM-DD}`, `analytics/_summary`: **구현됨**. daily_visitors, countries, cities +
+  (2026-07-29 추가) `bots`/`pageTypes`/`sources`/`hours` 분류 집계. → `HANDOVER-2026-07-28.md` §6-A
+- `marker_index/{chunk_N, meta}` ★: **공개 마커 청크 인덱스**. 공개 화면 마커 조회는 전부 이걸 거친다
+  (컬렉션 전체 스캔 금지). → `src/lib/markerIndex.js`
 
 ---
 
@@ -205,7 +212,8 @@ src/lib/
 3. **`?markerId` 자동 포커스 미구현**: SEO/카드 링크가 `/?markerId=xxx`인데 메인 지도가 아직 안 읽음. `MainMapView`에 useSearchParams+focusMarker 붙이면 완성.
 4. **자동비활성 비율 높음**(306중 79 공개). 멀쩡한 영상이 재생불가로 빠지는지 `check-status`/`report-error` 로직 점검 여지.
 5. **기존 도시 중복 표기**: `St.Petersburg`/`St. Petersburg`, `Rio de Janeiro`/`RIO DE JANEIRO` 등(자동완성은 향후 중복 방지). 기존 것 정리 필요 시 관리 목록에서 수정.
-6. **통계/사용량 대시보드 미구현**: `api_usage.translate`는 축적되나 관리자 표시 없음. `analytics` 미구현.
+6. ~~**통계/사용량 대시보드 미구현**~~ → **2026-07 해결됨.** 방문자·API 사용량·비용 추이 + 봇/유입 분석까지 구현.
+   자세한 내용과 남은 제약(애드센스 수익 자동 연동 불가)은 `HANDOVER-2026-07-28.md` §6, §6-A, §6-B.
 7. **배포 전 정리**: `// TODO: 배포 전 제거` 콘솔로그 다수. 진단 파일 `public/klook-test.html`.
 8. **법적 페이지**: 변호사 미검토 템플릿(하단 명시). 보호책임자 "이름"은 `TripByClip 운영자` placeholder.
 9. **광고 개별 라벨 없음**(사용자 지시). 사이트 전체 고지는 푸터 `/affiliate-disclosure`로 유지. 미사용 i18n 키 `sponsoredLabel` 잔존(무해).
