@@ -21,8 +21,11 @@ export default function AutoChannelForm({ onRegistered }) {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [duplicateNotice, setDuplicateNotice] = useState("");
 
-  // channelStatus: idle | checking | available | duplicate | invalid | error
+  // channelStatus: idle | checking | available | invalid | error
+  //   ("duplicate" 는 값으로 남지 않는다 — 감지 즉시 입력창을 비우고 idle 로 되돌리며,
+  //    안내는 duplicateNotice 배너가 대신한다. 2026-07-29)
   const [channelStatus, setChannelStatus] = useState("idle");
   const [resolvedName, setResolvedName] = useState("");
   const [checkError, setCheckError] = useState("");
@@ -45,6 +48,8 @@ export default function AutoChannelForm({ onRegistered }) {
         setResolvedName("");
         setCheckError("");
         setExistingChannel(null);
+        // 새로 입력을 시작했으니 이전 중복 안내 배너는 지운다(다른 링크를 확인 중이므로).
+        setDuplicateNotice("");
       }
       try {
         const token = await getAdminIdToken();
@@ -65,9 +70,17 @@ export default function AutoChannelForm({ onRegistered }) {
           setChannelStatus("available");
           setResolvedName(data.channel_name || "");
         } else if (data.status === "duplicate") {
-          setChannelStatus("duplicate");
-          setResolvedName(data.channel_name || "");
-          setExistingChannel(data.existing || null);
+          // ⚠️ 2026-07-29: 이미 등록된 채널이면 "등록 성공" 때와 동일하게 입력창을 비운다.
+          //   (더 할 일이 없으니 폼을 다시 정리해준다는 의미) 안내 메시지는 성공/실패
+          //   배너와 같은 자리(상단, 지속 표시)에 남겨 사용자가 놓치지 않게 한다.
+          const name = data.channel_name || "";
+          setDuplicateNotice(
+            `이미 등록된 채널입니다${name ? `: ${name}` : ""}. 다시 등록할 필요가 없습니다.`
+          );
+          setChannelInput("");
+          setChannelStatus("idle");
+          setResolvedName("");
+          setExistingChannel(null);
         } else if (data.status === "invalid") {
           setChannelStatus("invalid");
           setCheckError(data.error || "채널을 찾을 수 없습니다.");
@@ -165,6 +178,12 @@ export default function AutoChannelForm({ onRegistered }) {
           ⚠️ {error}
         </div>
       )}
+      {/* 이미 등록된 채널 안내 — 등록 성공 배너와 같은 방식(지속 표시 + 입력창은 이미 비워짐). */}
+      {duplicateNotice && (
+        <div className="rounded-md border border-live/30 bg-live-light px-4 py-3 text-sm font-medium text-live">
+          ⛔ {duplicateNotice}
+        </div>
+      )}
 
       <Card>
         <StepHeader step={1} title="채널만 등록하면 끝" required>
@@ -205,13 +224,8 @@ export default function AutoChannelForm({ onRegistered }) {
           {channelStatus === "error" && (
             <p className="text-sm text-live">{checkError}</p>
           )}
-          {channelStatus === "duplicate" && (
-            <div className="rounded-md border border-live bg-live-light px-4 py-3 text-sm text-live">
-              <p className="font-bold">⛔ 이미 등록된 채널입니다.</p>
-              {resolvedName && <p className="mt-1">채널: {resolvedName}</p>}
-              <p className="mt-1">중복 등록을 막기 위해 등록 버튼이 비활성화됩니다.</p>
-            </div>
-          )}
+          {/* ⚠️ "duplicate" 상태는 더 이상 여기서 렌더되지 않는다(2026-07-29) — 감지 즉시
+              입력창을 비우고 상태를 idle 로 되돌리며, 안내는 위 duplicateNotice 배너가 맡는다. */}
         </CardContent>
       </Card>
 
@@ -228,7 +242,9 @@ export default function AutoChannelForm({ onRegistered }) {
         <p className="text-center text-[10px] leading-tight text-live">
           (등록 시 YouTube·Gemini 소모 — 그 채널을 즉시 1회 스캔해 영상을 채웁니다)
         </p>
-        {!canSubmit && !submitting && channelStatus !== "duplicate" && (
+        {/* channelStatus 는 이제 "duplicate" 로 남아있지 않으므로(감지 즉시 idle 로 리셋)
+            별도 제외 조건이 필요 없다. */}
+        {!canSubmit && !submitting && (
           <p className="text-center text-xs text-ink-muted">
             등록 가능한 채널로 확인되면 등록할 수 있습니다.
           </p>
