@@ -110,6 +110,25 @@ export default async function ChannelPage({ params }) {
   crumbs.push({ label: name });
 
   // JSON-LD: 라이브 영상이 있으면 VideoObject(BroadcastEvent)
+  //
+  // ⚠️ 2026-07-29 수정: 예전에는 uploadDate/startDate 에 new Date()(렌더 시각)를 넣었다.
+  //    ISR 로 페이지를 다시 그릴 때마다 값이 달라져 구글에는 "계속 새로 시작하는 방송"처럼
+  //    보이고, 캐시된 HTML 과도 어긋난다. → 채널 문서의 created_at(없으면 updated_at)을 써서
+  //    같은 채널이면 항상 같은 값이 나오게 한다. (마커 상세 페이지와 동일한 방식)
+  const channelStartIso = (() => {
+    try {
+      const ms =
+        typeof ch.created_at === "number"
+          ? ch.created_at
+          : typeof ch.updated_at === "number"
+            ? ch.updated_at
+            : null;
+      return ms ? new Date(ms).toISOString() : null;
+    } catch (error) {
+      return null;
+    }
+  })();
+
   const jsonLd = firstVideo
     ? {
         "@context": "https://schema.org",
@@ -118,12 +137,14 @@ export default async function ChannelPage({ params }) {
         description: `${name} 실시간 라이브 방송`,
         thumbnailUrl: firstVideo.thumbnailUrl || undefined,
         embedUrl: `https://www.youtube.com/embed/${firstVideo.videoId}`,
-        uploadDate: new Date().toISOString(),
+        contentUrl: `https://www.youtube.com/watch?v=${firstVideo.videoId}`,
+        uploadDate: channelStartIso || undefined,
         url: `${SITE_URL}/channel/${channelId}`,
         publication: {
           "@type": "BroadcastEvent",
+          name: firstVideo.title || name,
           isLiveBroadcast: true,
-          startDate: new Date().toISOString(),
+          startDate: channelStartIso || undefined,
         },
       }
     : {

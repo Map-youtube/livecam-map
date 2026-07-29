@@ -155,12 +155,74 @@ export default async function MarkerPage({ params }) {
       : undefined,
   };
 
+  // ─── JSON-LD 2: VideoObject + BroadcastEvent (라이브 스트림) ──────────────
+  // 왜 추가하나 (2026-07-29, 구글 공식 문서 확인 후):
+  //   1) 구글 검색의 "라이브 배지(LIVE_BADGE)"·동영상 리치 결과 대상이 되려면 이 마크업이
+  //      필요하다. 지금까지 마커 상세 페이지는 TouristAttraction 만 있어서, 정작 이 페이지의
+  //      핵심 콘텐츠인 "실시간 영상"이 구조화 데이터로 전혀 표현되지 않았다.
+  //      (채널 페이지 /channel/[id] 에는 이미 있었는데 마커 페이지에는 빠져 있었다.)
+  //   2) 구글 Indexing API 는 공식적으로 "JobPosting" 과 "VideoObject 안의 BroadcastEvent"
+  //      두 가지만 지원한다. 즉 이 마크업이 있어야 Indexing API 를 규정대로 쓸 자격이 생긴다.
+  //      (문서: "The Indexing API can only be used to crawl pages with either JobPosting or
+  //       BroadcastEvent embedded in a VideoObject.")
+  //
+  // ⚠️ 날짜를 렌더 시각(new Date())으로 넣지 않는다. 페이지를 다시 그릴 때마다 값이 바뀌면
+  //    구글에 "매번 새 방송"처럼 보이고, 캐시된 HTML 과도 어긋난다.
+  //    → 마커의 created_at(이 라이브를 처음 수집한 시점)을 안정적인 기준으로 쓴다.
+  //      24시간 상시 송출 캠은 "방송 시작 시각"이 따로 없으므로, 우리가 이 스트림을 라이브로
+  //      기록하기 시작한 시점이 가장 정확히 말할 수 있는 값이다.
+  // ⚠️ endDate 는 넣지 않는다. 구글 규격상 "방송이 끝난 뒤"에만 필요한데, 이 페이지는 공개
+  //    (=라이브) 마커만 렌더되고 종료되면 404 가 되므로 항상 진행 중 상태다.
+  const videoStartIso = (() => {
+    try {
+      const ms =
+        typeof marker.created_at === "number"
+          ? marker.created_at
+          : typeof marker.updated_at === "number"
+            ? marker.updated_at
+            : null;
+      return ms ? new Date(ms).toISOString() : null;
+    } catch (error) {
+      return null;
+    }
+  })();
+
+  const videoJsonLd =
+    videoId && videoStartIso
+      ? {
+          "@context": "https://schema.org",
+          "@type": "VideoObject",
+          name: marker.youtube_title || name,
+          description:
+            descKo ||
+            descEn ||
+            `${[cityName, countryLabel].filter(Boolean).join(", ")} 실시간 라이브캠`,
+          thumbnailUrl: thumb || undefined,
+          embedUrl: `https://www.youtube.com/embed/${videoId}`,
+          contentUrl: `https://www.youtube.com/watch?v=${videoId}`,
+          url: `${SITE_URL}/marker/${markerId}`,
+          uploadDate: videoStartIso,
+          publication: {
+            "@type": "BroadcastEvent",
+            name: marker.youtube_title || name,
+            isLiveBroadcast: true,
+            startDate: videoStartIso,
+          },
+        }
+      : null;
+
   return (
     <SeoPageShell>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
+      {videoJsonLd ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(videoJsonLd) }}
+        />
+      ) : null}
 
       <Breadcrumb items={crumbs} />
 
