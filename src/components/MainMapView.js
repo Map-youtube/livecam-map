@@ -1049,14 +1049,6 @@ export default function MainMapView({
                 title: t("earthquake"),
               },
               {
-                key: "aurora",
-                on: auroraEnabled,
-                onClick: () => setAuroraEnabled((v) => !v),
-                icon: "🌌",
-                label: t("aurora"),
-                title: t("aurora"),
-              },
-              {
                 key: "typhoon",
                 on: typhoonEnabled,
                 onClick: () => setTyphoonEnabled((v) => !v),
@@ -1071,6 +1063,17 @@ export default function MainMapView({
                 icon: "🔥",
                 label: t("disaster"),
                 title: t("disaster"),
+              },
+              // ⚠️ 오로라는 항상 맨 마지막에 둔다(2026-07-30 사용자 요청) — 이 배열 순서가
+              //    PC(가로 배치, flex-wrap justify-end)와 모바일(세로 배치, flex-col) 둘 다의
+              //    기준이라, 마지막 항목이 PC=맨 오른쪽 / 모바일=맨 아래쪽에 자연히 위치한다.
+              {
+                key: "aurora",
+                on: auroraEnabled,
+                onClick: () => setAuroraEnabled((v) => !v),
+                icon: "🌌",
+                label: t("aurora"),
+                title: t("aurora"),
               },
             ];
             return (
