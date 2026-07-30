@@ -27,7 +27,6 @@ import CjBanner from "@/components/CjBanner";
 import Footer from "@/components/Footer";
 import MobileDrawer from "@/components/MobileDrawer";
 import MobileBrowseHandle from "@/components/MobileBrowseHandle";
-import ScrollFadeRow from "@/components/ScrollFadeRow";
 import EarthquakeAlert from "@/components/EarthquakeAlert";
 import LanguageSelector from "@/components/i18n/LanguageSelector";
 import { useI18n } from "@/components/i18n/LanguageProvider";
@@ -53,6 +52,17 @@ const SHOW_AFFILIATE = process.env.NEXT_PUBLIC_SHOW_AFFILIATE === "true";
 function toggleBtnClass(on) {
   return (
     "rounded-full border px-3.5 py-1.5 text-sm font-medium shadow-sm backdrop-blur-sm transition " +
+    (on
+      ? "border-brand bg-brand text-white hover:bg-brand-hover"
+      : "border-border/70 bg-surface/90 text-ink hover:bg-white")
+  );
+}
+
+// 모바일 전용 세로 토글 버튼 스타일 — 폭 고정(전부 통일) + 기존(py-1.5)보다 낮은 높이(py-1).
+// 언어별로 라벨 길이가 크게 다르므로(예: "지진" vs "Стихийные бедствия") truncate 로 흘러넘침을 막는다.
+function mobileToggleBtnClass(on) {
+  return (
+    "flex w-[124px] items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium shadow-sm backdrop-blur-sm transition " +
     (on
       ? "border-brand bg-brand text-white hover:bg-brand-hover"
       : "border-border/70 bg-surface/90 text-ink hover:bg-white")
@@ -1006,59 +1016,88 @@ export default function MainMapView({
           )}
 
           {/* 상단: 2D/3D 토글 + 레이어 토글 4종
-              - 모바일(md 미만): 화면 폭을 넘기므로 "가로 스크롤 칩 행"으로 (버튼이 겹치지 않게 축소 금지)
+              - 모바일(md 미만): 지도 왼쪽 상단에 "세로 버튼열" (2026-07-30, 사용자 스케치 요청)
+                → 폭 고정(w-[124px])으로 전부 통일, 기존 가로줄보다 버튼 높이도 낮춤(py-1).
               - 데스크톱(md 이상): 기존과 동일하게 우측 상단 정렬 + 줄바꿈 */}
-          <ScrollFadeRow
-            className={
-              "absolute z-[1000] flex gap-2 [&>button]:flex-shrink-0 " +
-              // 모바일: 좌우 여백 안에서 가로 스크롤 (스크롤바는 숨김 + 양끝 페이드로 "더 있다" 표시)
-              "no-scrollbar left-2 right-2 top-2 overflow-x-auto pb-1 " +
-              // 데스크톱: 우측 상단 고정 + 줄바꿈 (스크롤이 없으므로 페이드도 자동으로 꺼진다)
-              "md:left-auto md:right-3 md:top-3 md:flex-wrap md:justify-end md:overflow-visible md:pb-0"
-            }
-          >
-            {/* 2D/3D 전환 (버튼 하나) */}
-            <button
-              type="button"
-              onClick={toggleMode}
-              className={toggleBtnClass(mode === "3d")}
-              title={t("view2d") + " ↔ " + t("view3d")}
-            >
-              {mode === "3d" ? `🗺️ ${t("view2d")}` : `🌐 ${t("view3d")}`}
-            </button>
-            <button
-              type="button"
-              onClick={() => setIssEnabled((v) => !v)}
-              className={toggleBtnClass(issEnabled)}
-              title={t("issTrack")}
-            >
-              🛰️ {t("issTrack")}
-            </button>
-            <button
-              type="button"
-              onClick={() => setEqEnabled((v) => !v)}
-              className={toggleBtnClass(eqEnabled)}
-              title={t("earthquake")}
-            >
-              🌍 {t("earthquake")}
-            </button>
-            <button
-              type="button"
-              onClick={() => setAuroraEnabled((v) => !v)}
-              className={toggleBtnClass(auroraEnabled)}
-              title={t("aurora")}
-            >
-              🌌 {t("aurora")}
-            </button>
-            <button
-              type="button"
-              onClick={() => setDisasterEnabled((v) => !v)}
-              className={toggleBtnClass(disasterEnabled)}
-              title={t("disaster")}
-            >
-              🔥 {t("disaster")}
-            </button>
-          </ScrollFadeRow>
+          {(() => {
+            const toggleItems = [
+              {
+                key: "mode",
+                on: mode === "3d",
+                onClick: toggleMode,
+                icon: mode === "3d" ? "🗺️" : "🌐",
+                label: mode === "3d" ? t("view2d") : t("view3d"),
+                title: t("view2d") + " ↔ " + t("view3d"),
+              },
+              {
+                key: "iss",
+                on: issEnabled,
+                onClick: () => setIssEnabled((v) => !v),
+                icon: "🛰️",
+                label: t("issTrack"),
+                title: t("issTrack"),
+              },
+              {
+                key: "eq",
+                on: eqEnabled,
+                onClick: () => setEqEnabled((v) => !v),
+                icon: "🌍",
+                label: t("earthquake"),
+                title: t("earthquake"),
+              },
+              {
+                key: "aurora",
+                on: auroraEnabled,
+                onClick: () => setAuroraEnabled((v) => !v),
+                icon: "🌌",
+                label: t("aurora"),
+                title: t("aurora"),
+              },
+              {
+                key: "disaster",
+                on: disasterEnabled,
+                onClick: () => setDisasterEnabled((v) => !v),
+                icon: "🔥",
+                label: t("disaster"),
+                title: t("disaster"),
+              },
+            ];
+            return (
+              <>
+                {/* 모바일 전용: 왼쪽 상단 세로 버튼열 */}
+                <div className="absolute left-2 top-2 z-[1000] flex flex-col gap-1.5 md:hidden">
+                  {toggleItems.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={item.onClick}
+                      className={mobileToggleBtnClass(item.on)}
+                      title={item.title}
+                    >
+                      <span className="flex-shrink-0">{item.icon}</span>
+                      <span className="truncate">{item.label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* 데스크톱 전용: 우측 상단 가로 배치 + 줄바꿈 (기존과 동일).
+                    flex-wrap 이라 넘치지 않고 줄바꿈되므로 가로 스크롤(ScrollFadeRow)이 필요 없다. */}
+                <div className="absolute right-3 top-3 z-[1000] hidden flex-wrap justify-end gap-2 md:flex">
+                  {toggleItems.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={item.onClick}
+                      className={toggleBtnClass(item.on)}
+                      title={item.title}
+                    >
+                      {item.icon} {item.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            );
+          })()}
 
           {/* 모바일 전용: 카테고리 목록(지역/방송/태그) 열기 손잡이.
               화면 아래에 시트가 걸쳐 있는 모양 → 탭 또는 위로 끌어올리면 열린다.

@@ -560,46 +560,6 @@ body {
   min-width: 44px;
 }
 
-/* 스크롤바 숨김 — 지도 위 토글 칩 행처럼 "가로로 밀어서 보는" 영역에 쓴다.
-   ⚠️ 이 클래스는 MainMapView 의 토글 바가 예전부터 참조하고 있었으나 정의가 없어
-      실제로는 아무 효과가 없었다(2026-07-29 확인). 이제 실제로 동작한다. */
-.no-scrollbar {
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* 구형 Edge */
-}
-.no-scrollbar::-webkit-scrollbar {
-  display: none; /* Chrome/Safari */
-}
-
-/* 가로 스크롤 가능 영역의 "더 있다" 힌트 — 오른쪽 끝을 부드럽게 페이드.
-   ⚠️ 배경이 지도(사진)라 불투명 그라디언트를 덮으면 지도가 가려진다.
-      → mask 로 "내용 자체를 서서히 투명하게" 만들어 잘린 느낌 대신 이어지는 느낌을 준다.
-   ⚠️ 끝까지 스크롤했을 때는 페이드가 없어야 하므로 JS 가 data-edge 로 상태를 준다. */
-.scroll-fade-x[data-edge="end"] {
-  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 28px), transparent 100%);
-  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 28px), transparent 100%);
-}
-.scroll-fade-x[data-edge="start"] {
-  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 28px, #000 100%);
-  mask-image: linear-gradient(to right, transparent 0, #000 28px, #000 100%);
-}
-.scroll-fade-x[data-edge="both"] {
-  -webkit-mask-image: linear-gradient(
-    to right,
-    transparent 0,
-    #000 28px,
-    #000 calc(100% - 28px),
-    transparent 100%
-  );
-  mask-image: linear-gradient(
-    to right,
-    transparent 0,
-    #000 28px,
-    #000 calc(100% - 28px),
-    transparent 100%
-  );
-}
-
 /* 지도 바깥 영역(타일이 없는 곳)의 색.
    ⚠️ 왜 필요한가 (2026-07-29 실측): 모바일(390×844)에서 초기 월드뷰는 경도 360°를 화면 폭에
       맞추므로 세계지도가 390×390 정사각형이 된다. 지도 영역은 724px 라서 위·아래로 각각
