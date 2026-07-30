@@ -2,8 +2,13 @@
 // 라이브 채널 상세 SEO 페이지 — /channel/[channelId]
 //
 // - 자동 라이브 채널(방송국 등) 1개의 목록 페이지: 채널명 + 분류(대/중/소) + 현재 라이브 영상.
-// - generateStaticParams: 활성 채널 전부 → 채널이 늘면 정적 페이지도 자동 생성
-//   (dynamicParams=true 라 신규 채널은 방문 시 즉시 렌더 + 사이트맵으로 색인).
+// - generateStaticParams: 빌드 시 사전 생성하지 않는다([]). dynamicParams=true 라 실제
+//   방문 시 on-demand 로 렌더 + 24시간 ISR 캐시된다(사이트맵에 이미 전체 채널이 올라가므로
+//   검색엔진 색인은 그대로 보장됨 — sitemap.js 참고).
+//   ⚠️ Firestore 읽기 절감(2026-07-30): 예전엔 활성 채널 전부(getLiveChannels)를 빌드마다
+//      사전 렌더해, 배포 1회당 채널 수만큼(최대 100+ 페이지) 읽기가 발생했다. 이 프로젝트는
+//      배포가 잦아(작업 완료마다 즉시 배포) 누적 비용이 컸다. marker/city/country 페이지와
+//      동일한 on-demand 패턴으로 통일 — 실제로 방문되는 채널만 렌더되므로 읽기가 줄어든다.
 // - 채널 데이터는 getLiveChannels(tag:"live-channels")를 쓰므로, 관리자가 채널을 추가/수정/삭제하면
 //   revalidateTag("live-channels")로 이 페이지도 함께 갱신된다. 삭제되면 notFound()(404).
 // - 라이브 영상은 getLiveChannelVideosCached(30분 캐시)를 공유 → 추가 YouTube 비용 없음.
@@ -27,17 +32,9 @@ export const dynamicParams = true;
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL || "https://www.tripbyclip.com";
 
-// ─── 정적 생성: 활성 채널 전부 ───────────────────────────────
+// ─── 정적 생성: 빌드 시 없음(on-demand) ─────────────────────
 export async function generateStaticParams() {
-  try {
-    const channels = await getLiveChannels();
-    return (Array.isArray(channels) ? channels : [])
-      .filter((c) => c && c.id)
-      .map((c) => ({ channelId: String(c.id) }));
-  } catch (error) {
-    console.error("[channel] generateStaticParams 실패:", error); // TODO: 배포 전 제거
-    return [];
-  }
+  return [];
 }
 
 // 분류 경로 라벨 배열 (대/중/소 중 값이 있는 것만)
