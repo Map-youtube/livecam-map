@@ -10,28 +10,32 @@
 // ─────────────────────────────────────────────────────────────
 
 // 지원 언어 목록 (표시 순서 = 배열 순서). label 은 "그 언어로 쓴 자기 이름".
-// flag 는 국기 이모지 — 여러 나라가 함께 쓰는 언어(영어/스페인어/포르투갈어/벵골어 등)는
-// 업계 관행대로 화자 수가 가장 많거나 대표성이 큰 나라 하나를 임의로 골랐다(2026-07-30).
+// country 는 국기 표시용 ISO alpha-2 코드(CountryFlag 컴포넌트가 flagcdn SVG 로 렌더).
+//   ⚠️ 2026-07-30: 처음엔 국기 "이모지"를 썼는데 PC(Windows)에서 국기 그림 대신
+//      "KR", "US" 같은 텍스트 코드로만 보인다는 신고를 받았다. 카테고리 트리(국가 목록)가
+//      이미 쓰던 flagcdn SVG 방식(CountryFlag)으로 통일해 PC/모바일 모두 실제 국기로 보이게 했다.
+// 여러 나라가 함께 쓰는 언어(영어/스페인어/포르투갈어/벵골어 등)는 업계 관행대로 화자 수가
+// 가장 많거나 대표성이 큰 나라 하나를 임의로 골랐다.
 //   ⚠️ 중국어(zh)=중국, 아랍어(ar)=사우디아라비아 는 국가간 민감성이 있어 사용자에게
 //      직접 확인 후 결정한 값이다(다른 선택지: 대만/중립 아이콘, UAE/중립 아이콘).
 export const LANGUAGES = [
-  { code: "en", label: "English", flag: "🇺🇸", rtl: false },
-  { code: "ko", label: "한국어", flag: "🇰🇷", rtl: false },
-  { code: "ja", label: "日本語", flag: "🇯🇵", rtl: false },
-  { code: "zh", label: "中文", flag: "🇨🇳", rtl: false },
-  { code: "es", label: "Español", flag: "🇪🇸", rtl: false },
-  { code: "fr", label: "Français", flag: "🇫🇷", rtl: false },
-  { code: "de", label: "Deutsch", flag: "🇩🇪", rtl: false },
-  { code: "it", label: "Italiano", flag: "🇮🇹", rtl: false },
-  { code: "pt", label: "Português", flag: "🇧🇷", rtl: false },
-  { code: "ru", label: "Русский", flag: "🇷🇺", rtl: false },
-  { code: "hi", label: "हिन्दी", flag: "🇮🇳", rtl: false },
-  { code: "bn", label: "বাংলা", flag: "🇧🇩", rtl: false },
-  { code: "th", label: "ไทย", flag: "🇹🇭", rtl: false },
-  { code: "vi", label: "Tiếng Việt", flag: "🇻🇳", rtl: false },
-  { code: "id", label: "Bahasa Indonesia", flag: "🇮🇩", rtl: false },
-  { code: "ar", label: "العربية", flag: "🇸🇦", rtl: true },
-  { code: "fa", label: "فارسی", flag: "🇮🇷", rtl: true },
+  { code: "en", label: "English", country: "us", rtl: false },
+  { code: "ko", label: "한국어", country: "kr", rtl: false },
+  { code: "ja", label: "日本語", country: "jp", rtl: false },
+  { code: "zh", label: "中文", country: "cn", rtl: false },
+  { code: "es", label: "Español", country: "es", rtl: false },
+  { code: "fr", label: "Français", country: "fr", rtl: false },
+  { code: "de", label: "Deutsch", country: "de", rtl: false },
+  { code: "it", label: "Italiano", country: "it", rtl: false },
+  { code: "pt", label: "Português", country: "br", rtl: false },
+  { code: "ru", label: "Русский", country: "ru", rtl: false },
+  { code: "hi", label: "हिन्दी", country: "in", rtl: false },
+  { code: "bn", label: "বাংলা", country: "bd", rtl: false },
+  { code: "th", label: "ไทย", country: "th", rtl: false },
+  { code: "vi", label: "Tiếng Việt", country: "vn", rtl: false },
+  { code: "id", label: "Bahasa Indonesia", country: "id", rtl: false },
+  { code: "ar", label: "العربية", country: "sa", rtl: true },
+  { code: "fa", label: "فارسی", country: "ir", rtl: true },
 ];
 
 // 빠른 조회용 코드 집합/맵

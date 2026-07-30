@@ -17,6 +17,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Check } from "lucide-react";
 import { LANGUAGES } from "@/lib/i18n/languages";
 import { useI18n } from "@/components/i18n/LanguageProvider";
+import CountryFlag from "@/components/CountryFlag";
 
 export default function LanguageSelector() {
   const { locale, setLocale, t } = useI18n();
@@ -66,7 +67,7 @@ export default function LanguageSelector() {
             : "border-border bg-surface/90 text-ink hover:bg-white")
         }
       >
-        <span aria-hidden="true">{current.flag}</span>
+        <CountryFlag code={current.country} />
         <span className="truncate">{current.label}</span>
         <ChevronDown
           size={13}
@@ -98,7 +99,7 @@ export default function LanguageSelector() {
                   }
                 >
                   <span className="flex min-w-0 items-center gap-2">
-                    <span aria-hidden="true">{lang.flag}</span>
+                    <CountryFlag code={lang.country} />
                     <span className="truncate">{lang.label}</span>
                   </span>
                   {selected && (

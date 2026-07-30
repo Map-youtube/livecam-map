@@ -18,6 +18,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/components/i18n/LanguageProvider";
+import CountryFlag from "@/components/CountryFlag";
 import { capitalizeWords } from "@/lib/textCase";
 import { normalizeCityName } from "@/lib/cityUtils";
 
@@ -54,33 +55,6 @@ const DEFAULT_MAJOR_ICON = { e: "📡", g: "from-[#94A3B8] to-[#64748B]" };
 //   index 순환이라 색에 아무 의미가 없었고("#강"은 파랑, "#공원"은 주황… 순서일 뿐),
 //   태그를 인라인으로 이어쓰는 형태로 바꾸면서 시각적 소음만 됐다.
 //   대륙/대분류 아이콘의 다색 팔레트는 "장식용 예외"로 의도된 것이라 그대로 둔다(위 주석 참고).
-
-// 국가 국기 — SVG(flagcdn, 무료 CDN). 이모지와 달리 Windows 포함 모든 기기에서
-// 실제 국기 그림으로 렌더된다.
-//   - 유효한 ISO alpha-2 코드면 SVG 국기, 로딩 실패/유효하지 않으면 대체 깃발(🏳️, 이모지).
-function CountryFlag({ code }) {
-  const cc = String(code || "").trim().toLowerCase();
-  const valid = /^[a-z]{2}$/.test(cc);
-  const [failed, setFailed] = useState(false);
-  if (!valid || failed) {
-    return (
-      <span className="mr-1.5 text-[13px]" aria-hidden="true">
-        🏳️
-      </span>
-    );
-  }
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={`https://flagcdn.com/${cc}.svg`}
-      alt=""
-      aria-hidden="true"
-      loading="lazy"
-      onError={() => setFailed(true)}
-      className="mr-1.5 inline-block h-[13px] w-[18px] flex-none rounded-[2px] object-cover align-[-1px] ring-1 ring-black/5"
-    />
-  );
-}
 
 // 대륙/대분류 앞 아이콘 칩 (없으면 렌더 안 함)
 function CatIcon({ icon }) {
@@ -424,7 +398,7 @@ export default function MainCategoryTree({
                           key={country}
                           label={
                             <>
-                              <CountryFlag code={country} />
+                              <CountryFlag code={country} className="mr-1.5" />
                               {countryLabel}
                             </>
                           }
