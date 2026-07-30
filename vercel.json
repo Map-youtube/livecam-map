@@ -3,6 +3,10 @@
     {
       "path": "/api/auto-channels/scan",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/indexnow",
+      "schedule": "30 2 * * *"
     }
   ]
 }
