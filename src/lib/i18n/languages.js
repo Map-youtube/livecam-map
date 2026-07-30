@@ -10,24 +10,28 @@
 // ─────────────────────────────────────────────────────────────
 
 // 지원 언어 목록 (표시 순서 = 배열 순서). label 은 "그 언어로 쓴 자기 이름".
+// flag 는 국기 이모지 — 여러 나라가 함께 쓰는 언어(영어/스페인어/포르투갈어/벵골어 등)는
+// 업계 관행대로 화자 수가 가장 많거나 대표성이 큰 나라 하나를 임의로 골랐다(2026-07-30).
+//   ⚠️ 중국어(zh)=중국, 아랍어(ar)=사우디아라비아 는 국가간 민감성이 있어 사용자에게
+//      직접 확인 후 결정한 값이다(다른 선택지: 대만/중립 아이콘, UAE/중립 아이콘).
 export const LANGUAGES = [
-  { code: "en", label: "English", rtl: false },
-  { code: "ko", label: "한국어", rtl: false },
-  { code: "ja", label: "日本語", rtl: false },
-  { code: "zh", label: "中文", rtl: false },
-  { code: "es", label: "Español", rtl: false },
-  { code: "fr", label: "Français", rtl: false },
-  { code: "de", label: "Deutsch", rtl: false },
-  { code: "it", label: "Italiano", rtl: false },
-  { code: "pt", label: "Português", rtl: false },
-  { code: "ru", label: "Русский", rtl: false },
-  { code: "hi", label: "हिन्दी", rtl: false },
-  { code: "bn", label: "বাংলা", rtl: false },
-  { code: "th", label: "ไทย", rtl: false },
-  { code: "vi", label: "Tiếng Việt", rtl: false },
-  { code: "id", label: "Bahasa Indonesia", rtl: false },
-  { code: "ar", label: "العربية", rtl: true },
-  { code: "fa", label: "فارسی", rtl: true },
+  { code: "en", label: "English", flag: "🇺🇸", rtl: false },
+  { code: "ko", label: "한국어", flag: "🇰🇷", rtl: false },
+  { code: "ja", label: "日本語", flag: "🇯🇵", rtl: false },
+  { code: "zh", label: "中文", flag: "🇨🇳", rtl: false },
+  { code: "es", label: "Español", flag: "🇪🇸", rtl: false },
+  { code: "fr", label: "Français", flag: "🇫🇷", rtl: false },
+  { code: "de", label: "Deutsch", flag: "🇩🇪", rtl: false },
+  { code: "it", label: "Italiano", flag: "🇮🇹", rtl: false },
+  { code: "pt", label: "Português", flag: "🇧🇷", rtl: false },
+  { code: "ru", label: "Русский", flag: "🇷🇺", rtl: false },
+  { code: "hi", label: "हिन्दी", flag: "🇮🇳", rtl: false },
+  { code: "bn", label: "বাংলা", flag: "🇧🇩", rtl: false },
+  { code: "th", label: "ไทย", flag: "🇹🇭", rtl: false },
+  { code: "vi", label: "Tiếng Việt", flag: "🇻🇳", rtl: false },
+  { code: "id", label: "Bahasa Indonesia", flag: "🇮🇩", rtl: false },
+  { code: "ar", label: "العربية", flag: "🇸🇦", rtl: true },
+  { code: "fa", label: "فارسی", flag: "🇮🇷", rtl: true },
 ];
 
 // 빠른 조회용 코드 집합/맵

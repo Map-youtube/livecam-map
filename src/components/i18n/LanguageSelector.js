@@ -66,7 +66,7 @@ export default function LanguageSelector() {
             : "border-border bg-surface/90 text-ink hover:bg-white")
         }
       >
-        <span aria-hidden="true">🌐</span>
+        <span aria-hidden="true">{current.flag}</span>
         <span className="truncate">{current.label}</span>
         <ChevronDown
           size={13}
@@ -97,7 +97,10 @@ export default function LanguageSelector() {
                       : "text-ink hover:bg-bg")
                   }
                 >
-                  <span className="truncate">{lang.label}</span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span aria-hidden="true">{lang.flag}</span>
+                    <span className="truncate">{lang.label}</span>
+                  </span>
                   {selected && (
                     <Check size={15} strokeWidth={2.5} className="flex-shrink-0" />
                   )}
