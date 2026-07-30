@@ -150,6 +150,8 @@ export default function MainMapView({
   const [issEnabled, setIssEnabled] = useState(false); // ISS
   const [eqEnabled, setEqEnabled] = useState(false); // 지진
   const [auroraEnabled, setAuroraEnabled] = useState(false); // 오로라
+  // 태풍 — 2026-07-30 자연재해에서 분리(예상경로·강풍반경을 그리는 전용 레이어)
+  const [typhoonEnabled, setTyphoonEnabled] = useState(false);
   const [disasterEnabled, setDisasterEnabled] = useState(false); // 자연재해
 
   // ─── 자동 라이브 채널 선택 상태 (방송/우주 패널) ────────────
@@ -960,6 +962,7 @@ export default function MainMapView({
             eqEnabled={eqEnabled}
             auroraEnabled={auroraEnabled}
             disasterEnabled={disasterEnabled}
+            typhoonEnabled={typhoonEnabled}
             onMarkerClick={handleMarkerClick}
             onMapClick={handleMapClick}
             onIssClick={handleIssClick}
@@ -1052,6 +1055,14 @@ export default function MainMapView({
                 icon: "🌌",
                 label: t("aurora"),
                 title: t("aurora"),
+              },
+              {
+                key: "typhoon",
+                on: typhoonEnabled,
+                onClick: () => setTyphoonEnabled((v) => !v),
+                icon: "🌀",
+                label: t("typhoon"),
+                title: t("typhoon"),
               },
               {
                 key: "disaster",

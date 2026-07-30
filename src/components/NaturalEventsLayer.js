@@ -124,7 +124,13 @@ export default function NaturalEventsLayer({ map, enabled = false }) {
     // ── 자연재해 로드 → 마커 그리기 ──
     async function load() {
       try {
-        const res = await fetch("/api/natural-events", { cache: "no-store" });
+        // ⚠️ severeStorms(태풍/열대저기압)는 제외한다(2026-07-30).
+        //    태풍은 예상경로·풍속 피해범위를 그리는 전용 레이어(TyphoonLayer)와 전용 버튼으로
+        //    분리했다. 여기서도 함께 그리면 같은 태풍이 두 번(아이콘 중복) 표시된다.
+        const res = await fetch(
+          "/api/natural-events?category=wildfires,volcanoes,floods,landslides,seaLakeIce",
+          { cache: "no-store" }
+        );
         const data = await res.json();
         if (cancelled) return;
 

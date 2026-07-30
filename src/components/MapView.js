@@ -51,6 +51,9 @@ const NaturalEventsLayer = dynamic(
   () => import("@/components/NaturalEventsLayer"),
   { ssr: false }
 );
+const TyphoonLayer = dynamic(() => import("@/components/TyphoonLayer"), {
+  ssr: false,
+});
 
 // Cesium 3D 렌더러 — 3D 전환 시에만 로드(대역폭 절약) + 로딩 스피너
 const CesiumMapView = dynamic(() => import("@/components/CesiumMapView"), {
@@ -73,6 +76,7 @@ function MapView(
     eqEnabled,
     auroraEnabled,
     disasterEnabled,
+    typhoonEnabled,
     onMarkerClick,
     onMapClick,
     onIssClick,
@@ -309,6 +313,7 @@ function MapView(
       <EarthquakeLayer map={leafletMap} enabled={eqEnabled} />
       <AuroraLayer map={leafletMap} enabled={auroraEnabled} />
       <NaturalEventsLayer map={leafletMap} enabled={disasterEnabled} />
+      <TyphoonLayer map={leafletMap} enabled={typhoonEnabled} />
     </div>
   );
 }
