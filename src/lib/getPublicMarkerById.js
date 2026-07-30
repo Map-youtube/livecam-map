@@ -15,8 +15,15 @@
 //   - 수동 마커(markers): is_active !== false && auto_disabled !== true
 //   - 자동 마커(auto_markers): is_live === true && is_active !== false &&
 //                              auto_disabled !== true && lat/lng 가 숫자
+//
+// ⚠️ Firestore 읽기 절감(2026-07-30, 전수조사): marker/[markerId]/page.js 는
+//    generateMetadata 와 본문에서 각각 이 함수를 호출한다. React cache() 로 감싸지
+//    않아 렌더 1회당 문서를 2번씩 읽고 있었다(getRegionText 는 같은 이유로 이미
+//    cache() 적용돼 있었는데 이 함수만 누락됨). React cache() 로 감싸 "같은 렌더
+//    안에서는 같은 id 조회 1번"이 되게 한다 — 반환값·동작은 완전히 동일하다.
 // ─────────────────────────────────────────────────────────────
 
+import { cache } from "react";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { normalizeContinent } from "@/lib/seoData";
 import { hasLocation } from "@/lib/hasLocation";
@@ -45,7 +52,7 @@ function serializeMarker(id, data) {
 }
 
 // 공개 마커 1개 조회 (없거나 비공개면 null)
-export async function getPublicMarkerById(id) {
+async function fetchPublicMarkerById(id) {
   try {
     if (!id || typeof id !== "string") return null;
 
@@ -87,3 +94,6 @@ export async function getPublicMarkerById(id) {
     return null;
   }
 }
+
+// 같은 렌더(요청) 안에서는 같은 id 를 한 번만 조회(generateMetadata + 본문 중복 제거)
+export const getPublicMarkerById = cache(fetchPublicMarkerById);

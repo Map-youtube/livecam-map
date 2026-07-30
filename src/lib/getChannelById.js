@@ -8,8 +8,15 @@
 //    id 를 알고 있으므로 live_channels/{id} 문서 1개만 직접 읽는다.
 //
 // 필터 규칙은 getLiveChannels.js 와 완전히 동일: is_active !== false
+//
+// ⚠️ Firestore 읽기 절감(2026-07-30, 전수조사): channel/[channelId]/page.js 는
+//    generateMetadata 와 본문에서 각각 이 함수를 호출한다. React cache() 로 감싸지
+//    않아 렌더 1회당 문서를 2번씩 읽고 있었다(getPublicMarkerById 와 동일한 누락 —
+//    getRegionText 에는 이미 적용돼 있던 패턴). cache() 로 감싸 "같은 렌더 안에서는
+//    같은 id 조회 1번"이 되게 한다 — 반환값·동작은 완전히 동일하다.
 // ─────────────────────────────────────────────────────────────
 
+import { cache } from "react";
 import { adminDb } from "@/lib/firebaseAdmin";
 
 function toPlainValue(value) {
@@ -35,7 +42,7 @@ function serializeChannel(id, data) {
 }
 
 // 공개 채널 1개 조회 (없거나 비활성이면 null)
-export async function getChannelById(id) {
+async function fetchChannelById(id) {
   try {
     if (!id || typeof id !== "string") return null;
     const snap = await adminDb.collection("live_channels").doc(id).get();
@@ -48,3 +55,6 @@ export async function getChannelById(id) {
     return null;
   }
 }
+
+// 같은 렌더(요청) 안에서는 같은 id 를 한 번만 조회(generateMetadata + 본문 중복 제거)
+export const getChannelById = cache(fetchChannelById);
