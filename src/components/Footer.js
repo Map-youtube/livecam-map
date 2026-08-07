@@ -12,6 +12,10 @@
 
 import Link from "next/link";
 import { useI18n } from "@/components/i18n/LanguageProvider";
+// ⚠️ seoData.js 가 아니라 continentUtils.js 에서 가져온다 — seoData.js 는 getMapMarkers→
+//    firebase-admin 체인을 물고 있어 서버 전용이고, 이 컴포넌트("use client")에서 import 하면
+//    500 에러가 난다(2026-08-05 실측). continentUtils.js 는 순수 상수/함수라 안전하다.
+import { VALID_CONTINENTS } from "@/lib/continentUtils";
 
 // 푸터 링크 공통 스타일.
 //   모바일: 터치 타깃 32px 확보(기존 14px → 2.3배). 좌우 패딩으로 누르는 폭도 넓힌다.
@@ -34,10 +38,33 @@ function Divider() {
 }
 
 export default function Footer() {
-  const { t } = useI18n();
+  const { t, tContinent } = useI18n();
 
   return (
     <footer className="flex-shrink-0 border-t border-border bg-surface px-3 py-1 text-ink-muted sm:px-4 sm:py-1.5">
+      {/* 지역 목록 링크 (2026-08-05 신설)
+          ⚠️ 왜 필요한가: 메인 지도 화면(이 컴포넌트가 렌더되는 곳)에는 그동안 실제 <a href> 링크가
+          하나도 없었다(오른쪽 카테고리 트리는 onSelectLocation() 콜백으로 지도만 이동시킬 뿐,
+          페이지 이동이 아니다 — 실측 확인). 그 결과 크롤러가 홈에서 대륙/국가/도시 정적
+          콘텐츠 페이지로 갈 방법이 전혀 없었고, 애드센스가 "가치가 별로 없는 콘텐츠"로
+          거절한 사유 중 하나로 추정된다(홈 화면이 텍스트 없는 지도 하나로만 보임).
+          → 실제 지도 UI/동작은 전혀 건드리지 않고, 푸터에 대륙별 실제 링크만 추가한다.
+          ⚠️ Link 는 Next.js 가 서버 렌더 시 진짜 <a href> 태그로 출력하므로(클라이언트 라우팅과
+             무관하게) 크롤러가 JS 실행 없이도 이 링크들을 발견할 수 있다. */}
+      <nav
+        aria-label={t("footerRegions")}
+        className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-center gap-x-2.5 gap-y-0.5 border-b border-border/60 pb-1 pt-0.5 text-center text-[10px] sm:justify-start sm:text-[11px]"
+      >
+        {VALID_CONTINENTS.map((c) => (
+          <Link
+            key={c}
+            href={`/${c}`}
+            className="hover:text-brand hover:underline"
+          >
+            {tContinent(c)}
+          </Link>
+        ))}
+      </nav>
       <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-x-2 text-center text-[10px] leading-tight sm:flex-row sm:justify-between sm:text-left sm:text-[11px]">
         {/* 저작권 + 지도 데이터 출처 (한 줄로 합침).
             ⚠️ "© OpenStreetMap contributors" 표기는 OSM 라이선스 요건이라 반드시 남긴다.

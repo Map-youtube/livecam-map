@@ -11,6 +11,21 @@
 //    (중동은 지리적으로 아시아에 속하지만, 본 서비스는 별도 대륙으로 분류한다.)
 // ─────────────────────────────────────────────────────────────
 
+// 서비스가 사용하는 6개 대륙(+중동) 코드.
+// ⚠️ 이 파일은 서버 전용 import 가 전혀 없어 클라이언트 컴포넌트에서도 안전하게 쓸 수 있다.
+//    (seoData.js 는 getMapMarkers→firebase-admin 체인을 물고 있어 서버 전용이라, 원래 거기
+//    있던 VALID_CONTINENTS 를 여기로 옮기고 seoData.js 는 재수출만 한다 — 2026-08-05,
+//    Footer.js 가 이 값이 필요해 seoData.js 를 import 했다가 500 에러가 난 것을 계기로 이동함)
+export const VALID_CONTINENTS = [
+  "asia",
+  "europe",
+  "north_america",
+  "south_america",
+  "africa",
+  "oceania",
+  "middleeast",
+];
+
 // ─── 국가코드 → 대륙 매핑 테이블 ───────────────────────────────
 // 대문자 alpha-2 코드를 키로 사용한다. 주요국 위주로 충분히 포함.
 const COUNTRY_TO_CONTINENT = {

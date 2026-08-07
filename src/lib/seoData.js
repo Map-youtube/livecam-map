@@ -20,18 +20,11 @@
 //    (Next.js 공식 권장 패턴: 시간 캐시=unstable_cache/fetch, 요청 중복제거=React cache).
 import { cache } from "react";
 import { getMapMarkers } from "@/lib/getMapMarkers";
-import { getContinentByCountry } from "@/lib/continentUtils";
+import { getContinentByCountry, VALID_CONTINENTS } from "@/lib/continentUtils";
 
-// 서비스가 사용하는 6개 대륙(+중동) 코드
-export const VALID_CONTINENTS = [
-  "asia",
-  "europe",
-  "north_america",
-  "south_america",
-  "africa",
-  "oceania",
-  "middleeast",
-];
+// ⚠️ VALID_CONTINENTS 의 실제 정의는 continentUtils.js 로 옮겼다(클라이언트 컴포넌트에서도
+//    안전하게 쓰기 위함). 이 파일을 이미 import 하던 9개 파일이 깨지지 않도록 여기서 재수출한다.
+export { VALID_CONTINENTS };
 
 // 대륙별 소개 문단(하드코딩) — 페이지 상단 인트로/메타 설명에 사용.
 //   콘텐츠 두께(SEO/애드센스)를 위해 고유한 3문장 소개로 작성한다.
